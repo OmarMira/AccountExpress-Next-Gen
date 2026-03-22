@@ -1,0 +1,11 @@
+src/App.tsx(9,10): error TS2614: Module '"./pages/BankReconciliation"' has no exported member 'BankReconciliation'. Did you mean to use 'import BankReconciliation from "./pages/BankReconciliation"' instead?
+src/components/bank/BankImport.tsx(9,3): error TS6133: 'Search' is declared but its value is never read.
+src/components/bank/BankImport.tsx(10,3): error TS6133: 'ChevronRight' is declared but its value is never read.
+src/components/bank/BankImport.tsx(19,3): error TS6133: 'Target' is declared but its value is never read.
+src/components/bank/BankImportWizard.tsx(6,3): error TS6133: 'AlertCircle' is declared but its value is never read.
+src/components/bank/BankImportWizard.tsx(16,3): error TS6133: 'Building2' is declared but its value is never read.
+src/components/bank/BankImportWizard.tsx(403,12): error TS2322: Type '{ detectedBankName: string; isOpen: boolean; onClose: () => void; onSuccess: () => void; }' is not assignable to type 'IntrinsicAttributes & BankAccountModalProps'.
+  Property 'detectedBankName' does not exist on type 'IntrinsicAttributes & BankAccountModalProps'.
+src/components/bank/ImportHistory.tsx(5,20): error TS6133: 'FileText' is declared but its value is never read.
+src/components/bank/ImportHistory.tsx(5,30): error TS6133: 'CheckCircle' is declared but its value is never read.
+src/pages/BankReconciliation.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
