@@ -72,6 +72,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
           body.bankAccountId || undefined,
           body.transactions,
           body.bankName || undefined,
+          body.accountNumber || undefined,
           body.importBatchId
         );
         return { success: true, ...result };
@@ -80,7 +81,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
           const parsed = JSON.parse(err.message);
           if (parsed.code === 'UNKNOWN_BANK') {
             set.status = 400;
-            return { error: 'UNKNOWN_BANK', bankName: parsed.bankName };
+            return { error: 'UNKNOWN_BANK', bankName: parsed.bankName, accountNumber: parsed.accountNumber };
           }
         } catch(e) {}
         set.status = 500;
@@ -97,6 +98,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         })),
         bankAccountId: t.Optional(t.String()),
         bankName: t.Optional(t.String()),
+        accountNumber: t.Optional(t.String()),
         fileName: t.String(),
         importBatchId: t.String(),
         companyId: t.String()
@@ -122,8 +124,25 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         params.push(query.status);
       }
       sql += ` ORDER BY transaction_date DESC`;
-      const txs = rawDb.query(sql).all(...params);
-      return { success: true, data: txs };
+      const txs = rawDb.query(sql).all(...params) as any[];
+
+      const enriched = txs.map(tx => {
+         const suggestions = suggestAccount(query.companyId, tx.description);
+         let suggestedCategory = null;
+         let confidenceScore = 0;
+         if (suggestions.length > 0) {
+            suggestedCategory = suggestions[0].accountId;
+            confidenceScore = suggestions[0].confidence;
+         }
+         return {
+            ...tx,
+            suggestedCategory,
+            confidenceScore,
+            isDuplicate: false
+         };
+      });
+
+      return { success: true, data: enriched };
     },
     {
       query: t.Object({

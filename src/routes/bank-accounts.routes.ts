@@ -24,6 +24,16 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
   .post('/', async ({ body, set }) => {
     const data = body as any;
     try {
+      if (data.companyId && data.accountNumber) {
+        const existing = await db.query.bankAccounts.findFirst({
+          where: and(
+            eq(bankAccounts.companyId, data.companyId),
+            eq(bankAccounts.accountNumber, data.accountNumber)
+          )
+        });
+        if (existing) return existing;
+      }
+
       const now = new Date().toISOString();
       const newAccount = {
         id: uuidv4(),

@@ -7,9 +7,9 @@ import { Database, Clock } from 'lucide-react';
 export const ImportHistory: React.FC = () => {
   const activeCompany = useAuthStore((state) => state.activeCompany);
 
-  const { data: transactions, isLoading } = useQuery({
+  const { data: transactions, isLoading, error } = useQuery({
     queryKey: ['bank-transactions-history', activeCompany?.id],
-    queryFn: () => fetchApi(`/bank/transactions?companyId=${activeCompany?.id}&limit=50`),
+    queryFn: () => fetchApi(`/bank/transactions?companyId=${activeCompany?.id}`),
     enabled: !!activeCompany?.id
   });
 
@@ -17,6 +17,17 @@ export const ImportHistory: React.FC = () => {
     return (
       <div className="p-12 bg-slate-900 border-2 border-slate-800 rounded-[3.5rem] flex items-center justify-center animate-pulse">
         <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-slate-900 border-2 border-slate-800 rounded-[3.5rem] p-12 text-center shadow-3xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-rose-500/5 blur-[120px] pointer-events-none"></div>
+        <p className="text-rose-400 font-black uppercase text-sm relative z-10">
+          Error al cargar el historial
+        </p>
       </div>
     );
   }

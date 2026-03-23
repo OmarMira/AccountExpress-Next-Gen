@@ -1,9 +1,8 @@
-import { Outlet, Navigate, Link, useLocation } from 'react-router-dom';
+import { Outlet, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { fetchApi } from '../lib/api';
+
 import { PermissionGate } from './PermissionGate';
 import { 
-  Building2, 
   LayoutDashboard, 
   BookOpen, 
   Receipt, 
@@ -11,7 +10,9 @@ import {
   Download,
   LogOut,
   Settings,
-  ShieldCheck
+  ShieldCheck,
+  Landmark,
+  ArrowLeftRight
 } from 'lucide-react';
 
 export function AppShell() {
@@ -20,6 +21,7 @@ export function AppShell() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const location = useLocation();
+  const navigate = useNavigate();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -29,16 +31,13 @@ export function AppShell() {
     return <Navigate to="/select-company" replace />;
   }
 
-  const handleLogout = async () => {
-    await fetchApi('/auth/logout', { method: 'POST' }).catch(() => {});
-    logout();
-  };
 
   const navItems = [
     { name: 'Resumen General', path: '/', icon: LayoutDashboard },
     { name: 'Plan de Cuentas', path: '/accounts', icon: BookOpen, module: 'accounts', action: 'read' },
     { name: 'Diario Contable', path: '/journal', icon: Receipt, module: 'journal', action: 'read' },
-    { name: 'Conciliación Bancaria', path: '/reconciliation', icon: Building2, module: 'banking', action: 'read' },
+    { name: 'Cuentas Bancarias', path: '/banks', icon: Landmark, module: 'banking', action: 'read' },
+    { name: 'Conciliación Bancaria', path: '/reconciliation', icon: ArrowLeftRight, module: 'banking', action: 'read' },
     { name: 'Reportes', path: '/reports', icon: FileText, module: 'reports', action: 'read' },
     { name: 'Exportar para CPA', path: '/export', icon: Download, module: 'reports', action: 'read' },
   ];
@@ -46,7 +45,7 @@ export function AppShell() {
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100 font-sans">
       {/* Sidebar */}
-      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col z-10">
+      <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-screen">
         <div className="h-16 flex items-center px-6 border-b border-gray-800 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
@@ -56,8 +55,8 @@ export function AppShell() {
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4">
-          <ul className="space-y-1 px-3">
+        <nav className="flex-1 flex flex-col justify-start px-3 py-4 space-y-1">
+          <ul className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const link = (
@@ -89,18 +88,21 @@ export function AppShell() {
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-gray-800 space-y-2">
-          {user?.isSuperAdmin && (
-             <Link to="/settings" className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
-               <Settings className="w-5 h-5" /> Configuración
-             </Link>
-          )}
+        <div className="border-t border-slate-800 pt-4 pb-4 px-3 space-y-1 flex-shrink-0">
           <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            onClick={() => navigate('/settings')}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm"
           >
-            <LogOut className="w-5 h-5" />
-            Cerrar sesión
+            <Settings className="w-4 h-4" />
+            <span>Configuración</span>
+          </button>
+
+          <button
+            onClick={() => { logout(); navigate('/login'); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Cerrar sesión</span>
           </button>
         </div>
       </div>

@@ -288,6 +288,7 @@ class StatementImportService {
         bankAccountId: string | undefined,
         txns: { date: string, description: string, amount: number, balance?: number }[],
         bankName: string | undefined,
+        accountNumber: string | undefined,
         batchId: string
     ) {
         let matchingAccountId = bankAccountId;
@@ -300,7 +301,7 @@ class StatementImportService {
         }
 
         if (!matchingAccountId) {
-            throw new Error(JSON.stringify({ code: 'UNKNOWN_BANK', bankName: bankName || 'Desconocido' }));
+            throw new Error(JSON.stringify({ code: 'UNKNOWN_BANK', bankName: bankName || 'Desconocido', accountNumber }));
         }
 
         let imported = 0;

@@ -10,6 +10,18 @@ export interface ParsedBankTransaction {
   balance?: number;
 }
 
+export interface ParsedBankStatement {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  accountType: string;
+  periodStart: string;    // ISO 8601
+  periodEnd: string;      // ISO 8601
+  beginningBalance: number;
+  endingBalance: number;
+  transactions: ParsedBankTransaction[];
+}
+
 function parseDateToISO(rawDate: string): string {
     // Basic cleanup
     let cleaned = rawDate.replace(/de/gi, '').replace(/,/g, '').trim();
@@ -41,7 +53,7 @@ function parseDateToISO(rawDate: string): string {
     return new Date().toISOString().split('T')[0];
 }
 
-export async function parseBankPDF(file: File): Promise<ParsedBankTransaction[]> {
+export async function parseBankPDF(file: File): Promise<ParsedBankStatement> {
     const arrayBuffer = await file.arrayBuffer();
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
@@ -173,5 +185,65 @@ export async function parseBankPDF(file: File): Promise<ParsedBankTransaction[]>
         }
     });
 
-    return results;
+    let bankName = "Desconocido";
+    if (/Bank of America/i.test(fullText)) {
+        bankName = "Bank of America";
+    }
+
+    let accountNumber = "0000000000";
+    const accMatch = fullText.match(/Account\s*(?:number|#)[:\s]*([0-9\s]{4,20})/i);
+    if (accMatch) {
+       const digits = accMatch[1].replace(/\s+/g, '');
+       accountNumber = digits.match(/.{1,4}/g)?.join(' ') || digits;
+    }
+
+    let accountHolder = "Titular Desconocido";
+    const accLineIndex = lines.findIndex(l => /Account\s*(?:number|#)/i.test(l));
+    if (accLineIndex >= 0) {
+        if (lines[accLineIndex].includes('!')) {
+            accountHolder = lines[accLineIndex].split('!')[0].trim();
+        } else if (accLineIndex + 1 < lines.length) {
+            accountHolder = lines[accLineIndex + 1].trim();
+        }
+    }
+
+    let accountType = "checking";
+    if (/Business Advantage|checking/i.test(fullText)) {
+        accountType = "checking";
+    }
+
+    let periodStart = new Date().toISOString().split('T')[0];
+    let periodEnd = new Date().toISOString().split('T')[0];
+    const periodMatch = fullText.match(/for\s+(\w+\s+\d+,\s+\d{4})\s+to\s+(\w+\s+\d+,\s+\d{4})/i);
+    if (periodMatch) {
+       const startD = new Date(periodMatch[1]);
+       const endD = new Date(periodMatch[2]);
+       if (!isNaN(startD.getTime())) periodStart = startD.toISOString().split('T')[0];
+       if (!isNaN(endD.getTime())) periodEnd = endD.toISOString().split('T')[0];
+    }
+
+    let beginningBalance = 0;
+    const begMatch = fullText.match(/Beginning balance[^$\n]*\$?\s*([\d,]+\.\d{2})/i);
+    if (begMatch) {
+       beginningBalance = parseFloat(begMatch[1].replace(/,/g, ''));
+    }
+    console.log('DEBUG beginningBalance:', beginningBalance);
+
+    let endingBalance = 0;
+    const endMatch = fullText.match(/Ending balance[^$\n]*\$?\s*([\d,]+\.\d{2})/i);
+    if (endMatch) {
+       endingBalance = parseFloat(endMatch[1].replace(/,/g, ''));
+    }
+
+    return {
+        bankName,
+        accountNumber,
+        accountHolder,
+        accountType,
+        periodStart,
+        periodEnd,
+        beginningBalance,
+        endingBalance,
+        transactions: results
+    };
 }

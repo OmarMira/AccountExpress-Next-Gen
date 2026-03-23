@@ -10,6 +10,7 @@ import BankReconciliation from './pages/BankReconciliation';
 import { Reports } from './pages/Reports';
 import { CpaExport } from './pages/CpaExport';
 import { Settings } from './pages/Settings';
+import { Banks } from './pages/Banks';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/journal" element={<Journal />} />
+          <Route path="/banks" element={<Banks />} />
           <Route path="/reconciliation" element={<BankReconciliation />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/export" element={<CpaExport />} />

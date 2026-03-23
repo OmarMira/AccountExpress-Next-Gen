@@ -7,7 +7,6 @@ import {
   Zap,
   ShieldCheck,
   Database,
-  Terminal as TerminalIcon,
   Layers,
   Sparkles,
   ArrowRight,
@@ -30,36 +29,34 @@ export const BankImport: React.FC = () => {
   };
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-700 pb-20">
+    <div className="space-y-6 animate-in fade-in duration-700 pb-4">
       {/* Header Hub */}
-      <div className="flex flex-col xl:flex-row items-center justify-between gap-8 border-b border-slate-800 pb-10">
+      <div className="flex flex-col xl:flex-row items-center justify-between gap-6 pb-2">
         <div className="flex items-center gap-6">
           <div className="p-4 bg-blue-600/10 rounded-2.5xl border border-blue-500/20 shadow-blue-900/10 shadow-lg group">
             <Bot className="w-10 h-10 text-blue-500 group-hover:scale-110 transition-transform duration-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-white tracking-tighter uppercase">Importar Extractos</h1>
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-2 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-blue-500" /> Sincronización de Libros Bancarios
+            <h1 className="text-2xl font-bold text-white tracking-tight">Importar Extractos</h1>
+            <p className="text-sm text-gray-400 mt-1 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-400" /> Sincronización de libros bancarios
             </p>
           </div>
         </div>
 
-        {/* Tab Switcher - Kinetic Design */}
-        <div className="flex gap-2 p-1.5 bg-slate-950 border border-slate-900 rounded-2.5xl shadow-3xl overflow-hidden">
+        {/* Tab Switcher */}
+        <div className="flex gap-2 p-1.5 bg-gray-900/50 border border-gray-800 rounded-2xl">
           <TabButton
             active={activeTab === 'import'}
             onClick={() => setActiveTab('import')}
-            label="IMPORTAR"
+            label="Importar"
             icon={Upload}
-            color="blue"
           />
           <TabButton
             active={activeTab === 'history'}
             onClick={() => setActiveTab('history')}
-            label="HISTORIAL"
+            label="Historial"
             icon={History}
-            color="indigo"
           />
         </div>
       </div>
@@ -67,34 +64,35 @@ export const BankImport: React.FC = () => {
       {/* Content Area */}
       <div className="relative">
         {activeTab === 'import' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 border-slate-800 animate-in slide-in-from-bottom-6 duration-700">
-            {/* Main Action Card - High stakes design */}
-            <div className="lg:col-span-2 p-12 bg-slate-900 border-2 border-slate-800 rounded-[3.5rem] shadow-3xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/5 blur-[120px] -mr-48 -mt-48 group-hover:bg-blue-500/10 transition-all duration-700"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 border-slate-800 animate-in slide-in-from-bottom-6 duration-700">
+            {/* Main Action Card */}
+            <div className="lg:col-span-2 p-8 bg-gray-900 border border-gray-800 rounded-3xl shadow-lg relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] -mr-40 -mt-40 group-hover:bg-indigo-500/10 transition-all duration-700"></div>
 
-              <div className="relative z-10 text-center py-10">
-                <div className="w-40 h-40 bg-slate-950 rounded-[3rem] border-2 border-slate-800 flex items-center justify-center mx-auto mb-10 shadow-2xl group-hover:scale-105 group-hover:border-blue-500/50 transition-all duration-500 relative">
-                  <div className="absolute inset-0 bg-blue-500/5 rounded-[3rem] animate-pulse"></div>
-                  <FileUp className="w-16 h-16 text-blue-500 relative z-10" />
+              <div className="relative z-10 text-center py-4">
+                <div className="w-20 h-20 bg-gray-950 rounded-2xl border border-gray-800 flex items-center justify-center mx-auto mb-5 shadow-xl group-hover:scale-105 group-hover:border-indigo-500/50 transition-all duration-500 relative">
+                  <div className="absolute inset-0 bg-indigo-500/5 rounded-2xl animate-pulse"></div>
+                  <FileUp className="w-8 h-8 text-indigo-400 relative z-10" />
                 </div>
-                <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-4">Sincroniza tus Activos</h2>
-                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest max-w-xl mx-auto mb-10">
-                  Carga archivos <span className="text-blue-400 font-medium">CSV / OFX / QFX / PDF</span>. Nuestro motor neuronal detectará anomalías, categorizará vía heurística y vinculará cada transacción al libro mayor.
+                <h2 className="text-lg font-bold text-white tracking-tight mb-2">Sincroniza tus Activos</h2>
+                <p className="text-sm text-gray-400 max-w-lg mx-auto mb-6 leading-relaxed">
+                  Sube tu extracto bancario en formato CSV, OFX, QFX o PDF.<br/>
+                  El sistema detectará el banco, categorizará cada transacción automáticamente y la vinculará a tu plan de cuentas.
                 </p>
 
                 <button
                   onClick={() => setShowWizard(true)}
-                  className="flex items-center gap-5 px-14 py-7 bg-blue-600 hover:bg-blue-500 text-white rounded-2.5xl font-black uppercase tracking-widest text-[11px] transition-all shadow-3xl shadow-blue-900/50 hover:-translate-y-1 active:scale-95 mx-auto group/btn cursor-pointer"
+                  className="flex justify-center items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 mx-auto group/btn"
                 >
-                  <Zap className="w-4 h-4 fill-current" />
-                  Ejecutar Importación de Élite
+                  <Zap className="w-4 h-4" />
+                  Importar Extracto Bancario
                   <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
                 </button>
               </div>
             </div>
 
             {/* Sidebar Guidelines - Forensic Style */}
-            <div className="space-y-6">
+            <div className="space-y-4">
               <GuidelineCard
                 step="01"
                 title="Extracción"
@@ -117,17 +115,16 @@ export const BankImport: React.FC = () => {
                 color="indigo"
               />
 
-              <div className="p-10 bg-slate-950 border border-slate-800 rounded-[2.5rem] text-center shadow-xl group">
-                <TerminalIcon className="w-8 h-8 text-slate-800 mx-auto mb-6 group-hover:text-blue-500 group-hover:scale-110 transition-all" />
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center justify-center gap-2">
-                    <Shield className="w-3 h-3 text-blue-600" /> Security Layer: AES-256
+              <div className="p-5 bg-gray-900 border border-gray-800 rounded-xl shadow-inner">
+                <div className="space-y-2.5">
+                  <p className="text-xs font-medium text-gray-400 flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-indigo-400" /> Security Layer: AES-256
                   </p>
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center justify-center gap-2">
-                    <Activity className="w-3 h-3 text-emerald-600" /> Sync Rate: Real-Time
+                  <p className="text-xs font-medium text-gray-400 flex items-center gap-2">
+                    <Activity className="w-3.5 h-3.5 text-emerald-400" /> Sync Rate: Real-Time
                   </p>
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center justify-center gap-2">
-                    <Cpu className="w-3 h-3 text-indigo-600" /> Neural Engine: Active
+                  <p className="text-xs font-medium text-gray-400 flex items-center gap-2">
+                    <Cpu className="w-3.5 h-3.5 text-purple-400" /> Neural Engine: Active
                   </p>
                 </div>
               </div>
@@ -152,18 +149,13 @@ export const BankImport: React.FC = () => {
   );
 };
 
-const TabButton = ({ active, onClick, label, icon: Icon, color }: { active: boolean, onClick: () => void, label: string, icon: any, color: string }) => {
-  const themes: any = {
-    blue: active ? 'bg-blue-600 shadow-blue-900/40' : 'hover:bg-blue-600/10',
-    indigo: active ? 'bg-indigo-600 shadow-indigo-900/40' : 'hover:bg-indigo-600/10',
-  };
-
+const TabButton = ({ active, onClick, label, icon: Icon }: { active: boolean, onClick: () => void, label: string, icon: any }) => {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 px-10 py-4 rounded-[1.4rem] font-black uppercase tracking-[0.2em] text-[10px] transition-all duration-500 border-2 ${active ? `${themes[color]} text-white border-transparent shadow-xl` : 'text-slate-500 border-transparent hover:text-white'}`}
+      className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-300 ${active ? 'bg-gray-800 text-white shadow-md' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
     >
-      <Icon className={`w-4 h-4 ${active ? 'animate-pulse' : 'text-slate-700'}`} />
+      <Icon className={`w-4 h-4 ${active ? 'text-indigo-400' : 'text-gray-500'}`} />
       {label}
     </button>
   );
@@ -171,22 +163,22 @@ const TabButton = ({ active, onClick, label, icon: Icon, color }: { active: bool
 
 const GuidelineCard = ({ step, title, desc, icon: Icon, color }: { step: string, title: string, desc: string, icon: any, color: string }) => {
   const themes: any = {
-    blue: 'text-blue-500 bg-blue-500/10 border-blue-500/20 shadow-blue-950/20',
-    emerald: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 shadow-emerald-950/20',
-    indigo: 'text-indigo-500 bg-indigo-600/10 border-indigo-500/20 shadow-indigo-950/20'
+    blue: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+    emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    indigo: 'text-purple-400 bg-purple-500/10 border-purple-500/20'
   };
 
   return (
-    <div className="p-8 bg-slate-900 border border-slate-800 rounded-[2.5rem] flex items-center gap-6 group hover:border-slate-700 transition-all duration-500 hover:-translate-x-1 shadow-xl">
-      <div className={`w-16 h-16 rounded-2.2xl flex items-center justify-center flex-shrink-0 transition-all duration-500 group-hover:scale-110 shadow-lg border ${themes[color]}`}>
-        <Icon className="w-8 h-8" />
+    <div className="p-4 bg-gray-800/40 border border-gray-700/50 rounded-xl flex items-start gap-4 group hover:bg-gray-800 transition-all duration-300 shadow-sm">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${themes[color]}`}>
+        <Icon className="w-4 h-4" />
       </div>
       <div>
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] border-b border-slate-800 pb-0.5">{step}</span>
-          <h4 className="text-sm font-black text-white uppercase tracking-tighter group-hover:text-blue-400 transition-colors">{title}</h4>
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="text-[10px] font-semibold text-gray-500">{step}</span>
+          <h4 className="text-xs font-semibold text-white">{title}</h4>
         </div>
-        <p className="text-[10px] font-black text-slate-500 leading-tight uppercase tracking-wide">{desc}</p>
+        <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>
       </div>
     </div>
   );
