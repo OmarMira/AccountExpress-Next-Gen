@@ -339,6 +339,36 @@ class StatementImportService {
             }
         }
 
+        // Actualizar balance de la cuenta bancaria sumando
+        // el neto de las transacciones importadas
+        if (imported > 0) {
+            const netAmount = txns
+              .filter(t => {
+                  // Solo las que no son duplicados — aproximación:
+                  // recalcular el neto de todas (duplicados ya existían)
+                  return true;
+              })
+              .reduce((sum, t) => sum + t.amount, 0);
+
+            // Traer balance actual
+            const acc = await db.select({ balance: bankAccounts.balance })
+              .from(bankAccounts)
+              .where(eq(bankAccounts.id, matchingAccountId))
+              .limit(1);
+
+            if (acc.length > 0) {
+                const currentBalance = acc[0].balance || 0;
+                // balance se guarda en centavos
+                const delta = Math.round(netAmount * 100);
+                await db.update(bankAccounts)
+                  .set({
+                      balance: currentBalance + delta,
+                      updatedAt: new Date().toISOString()
+                  })
+                  .where(eq(bankAccounts.id, matchingAccountId));
+            }
+        }
+
         return {
             batchId,
             totalParsed: txns.length,

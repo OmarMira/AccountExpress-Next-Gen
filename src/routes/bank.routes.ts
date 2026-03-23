@@ -66,6 +66,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       const session = token ? validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
+      console.log(JSON.stringify(body.transactions.slice(0,3), null, 2));
       try {
         const result = await statementImportService.processParsedBatch(
           body.companyId,

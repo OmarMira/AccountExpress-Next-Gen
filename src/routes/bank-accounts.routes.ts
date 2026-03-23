@@ -16,7 +16,10 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       ),
       orderBy: (bankAccounts, { asc }) => [asc(bankAccounts.accountName)]
     });
-    return accounts;
+    return accounts.map(a => ({
+      ...a,
+      balance: (a.balance || 0) / 100
+    }));
   }, {
     query: t.Object({ companyId: t.String() })
   })
@@ -42,6 +45,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
         bankName: data.bankName,
         accountNumber: data.accountNumber || null,
         accountType: data.accountType || 'checking',
+        balance: Math.round((data.balance || 0) * 100),
         glAccountId: data.glAccountId || null,
         isActive: 1,
         createdAt: now,
@@ -61,6 +65,10 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       bankName: t.String(),
       accountNumber: t.Optional(t.String()),
       accountType: t.Optional(t.String()),
+      balance: t.Optional(t.Number()),
+      currency: t.Optional(t.String()),
+      routingNumber: t.Optional(t.String()),
+      notes: t.Optional(t.String()),
       glAccountId: t.Optional(t.String())
     })
   })
@@ -79,6 +87,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       if (data.bankName !== undefined) updateData.bankName = data.bankName;
       if (data.accountNumber !== undefined) updateData.accountNumber = data.accountNumber;
       if (data.accountType !== undefined) updateData.accountType = data.accountType;
+      if (data.balance !== undefined) updateData.balance = Math.round(data.balance * 100);
       if (data.glAccountId !== undefined) updateData.glAccountId = data.glAccountId;
       if (data.isActive !== undefined) updateData.isActive = data.isActive ? 1 : 0;
 

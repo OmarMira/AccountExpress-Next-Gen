@@ -1,6 +1,5 @@
-
 import { BankImport } from '../components/bank/BankImport';
 
-export default function BankReconciliationPage() {
+export default function BankReconciliation() {
   return <BankImport />;
 }

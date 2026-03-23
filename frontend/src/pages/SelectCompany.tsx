@@ -23,7 +23,7 @@ export function SelectCompany() {
         body: JSON.stringify({ companyId: company.id })
       });
       setActiveCompany(company);
-      setPermissions(resp.permissions);
+      setPermissions(resp.permissions ?? {});
       navigate('/', { replace: true });
     } catch (e: any) {
       setError(e.message);

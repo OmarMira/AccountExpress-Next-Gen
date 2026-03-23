@@ -9,6 +9,7 @@ export const bankAccounts = sqliteTable('bank_accounts', {
   bankName: text('bank_name').notNull(),
   accountNumber: text('account_number'),
   accountType: text('account_type').notNull().default('checking'),
+  balance: integer('balance').notNull().default(0),
   glAccountId: text('gl_account_id').references(() => chartOfAccounts.id),
   isActive: integer('is_active').notNull().default(1),
   createdAt: text('created_at').notNull(),

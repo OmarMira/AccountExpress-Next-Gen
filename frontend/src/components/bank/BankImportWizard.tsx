@@ -15,10 +15,9 @@ import {
   Save,
   Check
 } from 'lucide-react';
-import { fetchApi } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BankAccountModal } from '../BankAccountModal';
+import { useQuery } from '@tanstack/react-query';
+import { fetchApi } from '../../lib/api';
 
 import type { ParsedBankStatement } from '../../services/pdf-bank-parser';
 
@@ -48,7 +47,16 @@ interface BankImportWizardProps {
 
 export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onComplete }) => {
   const activeCompany = useAuthStore((state) => state.activeCompany);
-  const queryClient = useQueryClient();
+
+  const { data: glAccountsData } = useQuery({
+    queryKey: ['gl-accounts', activeCompany?.id],
+    queryFn: () => fetchApi(
+      `/gl-accounts?companyId=${activeCompany?.id}`
+    ),
+    enabled: !!activeCompany?.id,
+  });
+
+  const glAccounts = glAccountsData || [];
 
   const [step, setStep] = useState<Step>('upload');
   const [files, setFiles] = useState<File[]>([]);
@@ -57,21 +65,17 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  const [unknownBankName, setUnknownBankName] = useState<string | null>(null);
-  const [unknownAccountNumber, setUnknownAccountNumber] = useState<string | undefined>(undefined);
-  
   const [statementGroups, setStatementGroups] = useState<StatementGroup[]>([]);
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
 
-  // Fetch pending transactions for preview step
-  const { data: pendingTxsResponse } = useQuery({
-    queryKey: ['bank-transactions-pending', activeCompany?.id],
-    queryFn: () => fetchApi(`/bank/transactions?companyId=${activeCompany?.id}&status=pending`),
-    enabled: step === 'preview' && !!activeCompany?.id,
-  });
-
-  const pendingTransactions = pendingTxsResponse?.data || [];
+  const [importedTransactions, setImportedTransactions] = useState<any[]>([]);
+  const [importSummary, setImportSummary] = useState<{
+    totalImported: number;
+    bankName: string;
+    accountNumber: string;
+  } | null>(null);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -106,6 +110,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
     if (files.length === 0) return;
     setLoading(true);
     setError(null);
+    setInfo(null);
     const allStatements: ParsedBankStatement[] = [];
 
     const detectBankFromFilename = (filename: string): string => {
@@ -143,8 +148,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
           const data = await res.json();
           if (!res.ok) {
               if (data.error === 'UNKNOWN_BANK') {
-                  setUnknownBankName(data.bankName);
-                  if (data.accountNumber) setUnknownAccountNumber(data.accountNumber);
+                  setError('Error: banco no reconocido en el sistema');
                   setLoading(false);
                   return; 
               }
@@ -219,9 +223,11 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
         })
       });
 
+      const bankAccountData = await bankAccountRes.json();
       if (!bankAccountRes.ok) {
         throw new Error('Error al crear la cuenta bancaria');
       }
+      const createdBankAccountId: string = bankAccountData.id;
 
       // 2. Importar todas las transacciones de todos los extractos en orden
       const allTransactions = group.statements
@@ -233,6 +239,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transactions: allTransactions,
+          bankAccountId: createdBankAccountId,
           bankName: group.bankName,
           accountNumber: group.accountNumber,
           fileName: `${group.bankName}-${group.accountNumber}`,
@@ -242,10 +249,32 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
       });
 
       const importData = await importRes.json();
+      if (importRes.ok && importData.duplicateCount > 0) {
+        setInfo(
+          `${importData.importedCount} transacciones importadas. ` +
+          `${importData.duplicateCount} ya existían y fueron omitidas.`
+        );
+      }
+      if (importRes.ok) {
+        // Guardar transacciones localmente para el paso preview
+        const txsForPreview = allTransactions.map(tx => ({
+          ...tx,
+          id: crypto.randomUUID(),
+          suggestedCategory: null,
+          confidenceScore: null,
+          selectedAccountId: null,
+        }));
+        setImportedTransactions(prev => [...prev, ...txsForPreview]);
+        setImportSummary({
+          totalImported: allTransactions.length,
+          bankName: group.bankName,
+          accountNumber: group.accountNumber,
+        });
+      }
+
       if (!importRes.ok) {
           if (importData.error === 'UNKNOWN_BANK') {
-              setUnknownBankName(importData.bankName);
-              if (importData.accountNumber) setUnknownAccountNumber(importData.accountNumber);
+              setError('Error: banco no reconocido en el sistema');
               setLoading(false);
               return; 
           }
@@ -273,38 +302,13 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
     }
   }
 
-  const reconcileMutation = useMutation({
-    mutationFn: async (tx: any) => fetchApi(`/bank/reconcile/${tx.id}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        companyId: activeCompany?.id,
-        targetAccountId: tx.defaultTargetAccount || null // Uses default mapped or undefined
-      })
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['bank-transactions-pending'] });
-      queryClient.invalidateQueries({ queryKey: ['bank-transactions-history'] });
-    }
-  });
-
-  const handleFinalizeImport = async () => {
-    if (pendingTransactions.length === 0) {
-      onComplete();
-      return;
-    }
-    setLoading(true);
-    let successCount = 0;
-    try {
-      for (const tx of pendingTransactions) {
-         await reconcileMutation.mutateAsync(tx);
-         successCount++;
-      }
-      onComplete();
-    } catch (err: any) {
-      setError(`Error inyectando: ${err.message}`);
-      setLoading(false);
-    }
-  };
+  function handleAssignAccount(txId: string, accountId: string) {
+    setImportedTransactions(prev =>
+      prev.map(tx =>
+        tx.id === txId ? { ...tx, selectedAccountId: accountId } : tx
+      )
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-2xl flex items-center justify-center z-[60] p-6 overflow-y-auto">
@@ -431,6 +435,16 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
                   <p className="text-xs font-semibold text-rose-500 leading-relaxed">{error}</p>
                 </div>
               )}
+              {info && (
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-3xl p-6 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-blue-500/10 rounded-xl border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <p className="text-xs font-semibold text-blue-400 leading-relaxed">
+                    {info}
+                  </p>
+                </div>
+              )}
               
               <div className="bg-slate-950 border-2 border-blue-500/30 rounded-[2.5rem] p-10 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 blur-[60px] pointer-events-none rounded-full"></div>
@@ -489,136 +503,161 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
               </div>
             </div>
           ) : (
-            <div className="space-y-10 animate-in slide-in-from-bottom-6 duration-700">
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-[2rem] p-8 text-center">
-                <p className="text-emerald-400 font-black uppercase tracking-widest">
-                  ✅ Importación completada
-                </p>
-                <p className="text-slate-400 text-sm mt-2">
-                  Las transacciones importadas aparecen en Conciliación Bancaria → pestaña Historial
-                </p>
-                <p className="text-slate-400 text-sm">
-                  Ve a Conciliación Bancaria para categorizar cada transacción y vincularla a tu plan de cuentas.
-                </p>
-              </div>
+            <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
 
-              <div className="grid grid-cols-3 gap-8">
-                <StatHighlight title="Registro Total" value={pendingTransactions.length.toString()} icon={Layers} color="blue" />
-                <StatHighlight title="Alertas de Duplicidad" value={pendingTransactions.filter((t: any) => t.isDuplicate).length.toString()} icon={AlertTriangle} color="rose" />
-                <StatHighlight title="Nivel de Confianza" value={
-                  pendingTransactions.length > 0
-                    ? Math.round(pendingTransactions.reduce((a: number, t: any) => 
-                        a + (t.confidenceScore || 0), 0) / pendingTransactions.length) + '%'
-                    : 'N/A'
-                } icon={Target} color="emerald" />
-              </div>
-
-              {error && (
-                <div className="bg-rose-500/5 border border-rose-500/20 rounded-3xl p-6 flex items-center gap-4 animate-in shake duration-500">
-                  <div className="w-10 h-10 bg-rose-500/10 rounded-xl border border-rose-500/20 flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-5 h-5 text-rose-500" />
-                  </div>
-                  <p className="text-xs font-semibold text-rose-500 leading-relaxed">{error}</p>
+              {/* ── Banner de éxito ── */}
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-[2rem] p-8 flex items-center gap-6">
+                <div className="w-14 h-14 bg-emerald-500/20 rounded-2xl border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-7 h-7 text-emerald-400" />
                 </div>
-              )}
+                <div>
+                  <p className="text-emerald-400 font-black uppercase tracking-widest text-sm">
+                    ✅ Transacciones importadas correctamente
+                  </p>
+                  {importSummary && (
+                    <p className="text-slate-400 text-xs mt-1">
+                      {importSummary.totalImported} transacciones de{' '}
+                      {importSummary.bankName} · Cuenta{' '}
+                      {importSummary.accountNumber}
+                    </p>
+                  )}
+                  <p className="text-slate-500 text-xs mt-2">
+                    Revisá y asigná la cuenta contable a cada transacción antes de cerrar. Podés hacerlo también desde Conciliación Bancaria luego.
+                  </p>
+                </div>
+              </div>
 
-              <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl group">
-                <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+              {/* ── Stats ── */}
+              <div className="grid grid-cols-3 gap-6">
+                <StatHighlight
+                  title="Transacciones"
+                  value={importedTransactions.length.toString()}
+                  icon={Layers}
+                  color="blue"
+                />
+                <StatHighlight
+                  title="Sin categoría"
+                  value={importedTransactions.filter(
+                    t => !t.selectedAccountId
+                  ).length.toString()}
+                  icon={AlertTriangle}
+                  color="rose"
+                />
+                <StatHighlight
+                  title="Categorizadas"
+                  value={importedTransactions.filter(
+                    t => t.selectedAccountId
+                  ).length.toString()}
+                  icon={Target}
+                  color="emerald"
+                />
+              </div>
+
+              {/* ── Tabla de transacciones con selector de cuenta ── */}
+              <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                <div className="px-8 py-5 border-b border-slate-800 bg-slate-900/40 flex items-center justify-between">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                    Revisión de transacciones importadas
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    La asignación de cuenta es opcional — podés hacerlo luego desde Conciliación Bancaria
+                  </p>
+                </div>
+                <div className="max-h-[420px] overflow-y-auto custom-scrollbar">
                   <table className="w-full text-left">
                     <thead className="bg-slate-900/50 sticky top-0 z-20">
                       <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-800">
-                        <th className="px-6 py-4">Timestamp</th>
-                        <th className="px-6 py-4">Descriptor</th>
+                        <th className="px-6 py-4">Fecha</th>
+                        <th className="px-6 py-4">Descripción</th>
                         <th className="px-6 py-4 text-right">Monto</th>
-                        <th className="px-6 py-4">Categoría IA</th>
-                        <th className="px-6 py-4 text-center">Status</th>
+                        <th className="px-6 py-4">Cuenta contable</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/40">
-                      {pendingTransactions.map((txn: any) => (
-                        <tr
-                          key={txn.id}
-                          className={`hover:bg-white/[0.02] transition-colors group/row`}
-                        >
-                          <td className="px-8 py-6 text-[10px] font-black text-slate-400 font-mono tracking-tighter">{new Date(txn.transactionDate).toLocaleDateString()}</td>
-                          <td className="px-8 py-6 text-[11px] font-black text-white uppercase tracking-tighter leading-none">{txn.description}</td>
-                          <td className={`px-8 py-6 text-right font-mono font-black text-sm tracking-tighter ${txn.amount < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                            ${Math.abs(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {importedTransactions.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="py-16 text-center text-xs font-black uppercase text-slate-600 tracking-widest">
+                            No hay transacciones para mostrar.
                           </td>
-                          <td className="px-8 py-6">
-                             <div className="flex items-center gap-3">
-                              {txn.suggestedCategory 
-                                ? <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{txn.suggestedCategory}</span>
-                                : <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Sin categoría asignada</span>
+                        </tr>
+                      )}
+                      {importedTransactions.map((txn: any) => (
+                        <tr key={txn.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="px-6 py-4 text-[10px] font-mono text-slate-400">
+                            {txn.date}
+                          </td>
+                          <td className="px-6 py-4 text-[11px] font-semibold text-white max-w-[260px] truncate">
+                            {txn.description}
+                          </td>
+                          <td className={`px-6 py-4 text-right font-mono font-black text-sm ${txn.amount < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {txn.amount < 0 ? '-' : '+'}$
+                            {Math.abs(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-6 py-4">
+                            <select
+                              value={txn.selectedAccountId || ''}
+                              onChange={e =>
+                                handleAssignAccount(txn.id, e.target.value)
                               }
-                              {txn.confidenceScore != null && (
-                                <span className={`px-2 py-0.5 rounded-md text-[8px] font-black border ${
-                                  txn.confidenceScore >= 70 
-                                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                                    : txn.confidenceScore >= 40
-                                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                                    : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
-                                }`}>
-                                  {txn.confidenceScore}% ACC
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-8 py-6 text-center">
-                            <div className="w-8 h-8 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center mx-auto">
-                              <Check className="w-4 h-4 text-emerald-500" />
-                            </div>
+                              className="bg-slate-800 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 w-full max-w-[200px] focus:outline-none focus:border-indigo-500 transition-colors"
+                            >
+                              <option value="">Sin asignar</option>
+                              {glAccounts
+                                .filter((a: any) => a.description !== 'Header')
+                                .map((a: any) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.code} · {a.name}
+                                  </option>
+                                ))
+                              }
+                            </select>
                           </td>
                         </tr>
                       ))}
-                      {pendingTransactions.length === 0 && (
-                          <tr>
-                            <td colSpan={5} className="py-20 text-center font-black uppercase text-slate-500 tracking-widest text-xs">No hay transacciones pendientes.</td>
-                          </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              <div className="flex justify-between gap-4 pt-8 border-t border-gray-800">
-                <button onClick={() => { setStep('upload'); setFiles([]); }} className="flex justify-center items-center gap-2 px-6 py-2.5 bg-gray-900 border border-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors hover:bg-gray-800 hover:text-white">
-                  <ArrowRight className="w-4 h-4 rotate-180" /> Volver atrás
-                </button>
-                <div className="flex gap-4">
-                  <button onClick={onClose} className="px-6 py-2.5 bg-gray-900 border border-gray-700 text-gray-300 rounded-lg text-sm font-medium transition-colors hover:bg-gray-800 hover:text-white">
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleFinalizeImport}
-                    disabled={loading || pendingTransactions.length === 0}
-                    className="flex justify-center items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-50"
-                  >
-                    {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <ShieldCheck className="w-4 h-4" />}
-                    {loading ? 'Importando...' : 'Importar a Libros'}
-                  </button>
+              {error && (
+                <div className="bg-rose-500/5 border border-rose-500/20 rounded-3xl p-6 flex items-center gap-4">
+                  <div className="w-10 h-10 bg-rose-500/10 rounded-xl border border-rose-500/20 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-rose-500" />
+                  </div>
+                  <p className="text-xs font-semibold text-rose-500">{error}</p>
                 </div>
+              )}
+
+              {/* ── Botones finales ── */}
+              <div className="flex justify-between gap-4 pt-8 border-t border-slate-800">
+                <button
+                  onClick={() => {
+                    setStep('upload');
+                    setFiles([]);
+                    setImportedTransactions([]);
+                    setImportSummary(null);
+                    setInfo(null);
+                  }}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 border border-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors hover:bg-slate-800 hover:text-white"
+                >
+                  <ArrowRight className="w-4 h-4 rotate-180" />
+                  Nueva importación
+                </button>
+                <button
+                  onClick={onComplete}
+                  className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg transition-colors shadow-lg shadow-indigo-500/20"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  Finalizar y cerrar
+                </button>
               </div>
+
             </div>
           )}
         </main>
       </div>
 
-      {unknownBankName && (
-        <BankAccountModal
-           prefilledBankName={unknownBankName}
-           prefilledAccountNumber={unknownAccountNumber}
-           onCancel={() => {
-              setUnknownBankName(null);
-              setUnknownAccountNumber(undefined);
-              setError('Importación cancelada: Registro de banco abortado.');
-           }}
-           onSuccess={() => {
-              setUnknownBankName(null);
-              setUnknownAccountNumber(undefined);
-           }}
-        />
-      )}
+    {/* Aquí el usuario tenía un modal mal referenciado. No aparece explícitamente el modal renderizándose en el código fuente actual al final del JSX. */}
     </div>
   );
 };
