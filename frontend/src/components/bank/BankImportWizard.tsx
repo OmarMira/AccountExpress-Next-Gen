@@ -256,17 +256,23 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
         );
       }
       if (importRes.ok) {
-        // Guardar transacciones localmente para el paso preview
-        const txsForPreview = allTransactions.map(tx => ({
-          ...tx,
-          id: crypto.randomUUID(),
-          suggestedCategory: null,
-          confidenceScore: null,
-          selectedAccountId: null,
+        // Traer las transacciones reales con sus IDs de la DB
+        const txRes = await fetch(
+          `/api/bank/transactions?companyId=${activeCompany?.id}`
+        );
+        const txData = await txRes.json();
+        const realTxs = (Array.isArray(txData) ? txData : txData.data ?? [])
+          .filter((tx: any) => tx.bank_account === createdBankAccountId)
+          .map((tx: any) => ({
+          id: tx.id,
+          date: tx.transaction_date,
+          description: tx.description,
+          amount: tx.amount,
+          selectedAccountId: tx.gl_account_id ?? null,
         }));
-        setImportedTransactions(prev => [...prev, ...txsForPreview]);
+        setImportedTransactions(prev => [...prev, ...realTxs]);
         setImportSummary({
-          totalImported: allTransactions.length,
+          totalImported: realTxs.length,
           bankName: group.bankName,
           accountNumber: group.accountNumber,
         });
@@ -302,12 +308,22 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
     }
   }
 
-  function handleAssignAccount(txId: string, accountId: string) {
+  async function handleAssignAccount(txId: string, accountId: string) {
     setImportedTransactions(prev =>
       prev.map(tx =>
         tx.id === txId ? { ...tx, selectedAccountId: accountId } : tx
       )
     );
+    try {
+      await fetch(`/api/bank/transactions/${txId}/assign`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ glAccountId: accountId, companyId: activeCompany?.id })
+      });
+    } catch (err) {
+      console.error('Error guardando asignación:', err);
+    }
   }
 
   return (

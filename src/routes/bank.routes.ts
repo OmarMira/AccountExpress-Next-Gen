@@ -4,7 +4,9 @@ import { suggestAccount } from "../services/bank/smart-match.service.ts";
 import { matchTransaction, ignoreTransaction } from "../services/bank/reconciliation.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { validateSession } from "../services/session.service.ts";
-import { rawDb } from "../db/connection.ts";
+import { db, rawDb } from "../db/connection.ts";
+import { eq, and } from "drizzle-orm";
+import { bankTransactions } from "../db/schema";
 
 export const bankRoutes = new Elysia({ prefix: "/bank" })
   // ─────────────────────────────────────────────────────────────
@@ -233,5 +235,36 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     {
       params: t.Object({ id: t.String() }),
       body: t.Object({ companyId: t.String() })
+    }
+  )
+
+  // ─────────────────────────────────────────────────────────────
+  // 6. ASSIGN GL ACCOUNT
+  // ─────────────────────────────────────────────────────────────
+  .patch(
+    "/transactions/:id/assign",
+    ({ params, body, cookie, set }) => {
+      const token = cookie["session"].value as string;
+      const session = token ? validateSession(token) : null;
+      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
+      
+      const b = body as any;
+      const companyId = b?.companyId;
+      const glAccountId = b?.glAccountId;
+      
+      if (!companyId || !glAccountId) { set.status = 400; return { error: "companyId y glAccountId requeridos" }; }
+
+      const existing = rawDb.query(
+        `SELECT id FROM bank_transactions WHERE id = ? AND company_id = ? LIMIT 1`
+      ).get(params.id, companyId);
+
+      if (!existing) { set.status = 404; return { error: "Transacción no encontrada" }; }
+
+      rawDb.run(
+        `UPDATE bank_transactions SET gl_account_id = ?, status = 'assigned' WHERE id = ?`,
+        [glAccountId, params.id]
+      );
+
+      return { success: true, message: "Cuenta asignada" };
     }
   );

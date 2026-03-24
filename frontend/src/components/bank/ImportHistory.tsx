@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import { fetchApi } from '../../lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
@@ -7,7 +7,7 @@ import { Database, Clock, ChevronDown } from 'lucide-react';
 export const ImportHistory: React.FC = () => {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const queryClient = useQueryClient();
-  const [, setAssigningId] = useState<string | null>(null);
+
 
   const { data: transactions, isLoading, error } = useQuery({
     queryKey: ['bank-transactions-history', activeCompany?.id],
@@ -27,13 +27,14 @@ export const ImportHistory: React.FC = () => {
     mutationFn: async ({ txId, accountId }: { txId: string; accountId: string }) =>
       fetchApi(`/bank/transactions/${txId}/assign`, {
         method: 'PATCH',
-        body: JSON.stringify({ glAccountId: accountId, companyId: activeCompany?.id })
+        body: JSON.stringify({ glAccountId: accountId, companyId: activeCompany?.id }),
+        headers: { 'Content-Type': 'application/json' }
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bank-transactions-history', activeCompany?.id] });
-      setAssigningId(null);
+      queryClient.invalidateQueries({ queryKey: ['bank-transactions', activeCompany?.id] });
     },
-    onError: (err: any) => alert(`Error: ${err.message}`)
+    onError: (err: any) => alert(`Error al asignar cuenta: ${err.message}`)
   });
 
   const formatDate = (raw: string) => {
@@ -104,8 +105,11 @@ export const ImportHistory: React.FC = () => {
                       <select
                         defaultValue={t.glAccountId || ''}
                         onChange={(e) => {
-                          if (e.target.value) assignMutation.mutate({ txId: t.id, accountId: e.target.value });
+                          if (e.target.value) {
+                            assignMutation.mutate({ txId: t.id, accountId: e.target.value });
+                          }
                         }}
+                        disabled={assignMutation.isPending}
                         className="w-full bg-slate-800 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 pr-8 appearance-none focus:outline-none focus:border-indigo-500 cursor-pointer"
                       >
                         <option value="">— Sin asignar —</option>

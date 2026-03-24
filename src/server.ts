@@ -4,7 +4,6 @@
 // ============================================================
 
 import { Elysia } from "elysia";
-import { cookie } from "@elysiajs/cookie";
 import { cors } from "@elysiajs/cors";
 import { authRoutes }          from "./routes/auth.routes.ts";
 import { bankAccountsRoutes } from './routes/bank-accounts.routes.ts';
@@ -27,7 +26,6 @@ export const app = new Elysia()
     methods: ["GET", "POST", "PATCH", "DELETE", "PUT"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }))
-  .use(cookie())
 
   // ── Health check ──────────────────────────────────────────
   .get("/health", () => ({

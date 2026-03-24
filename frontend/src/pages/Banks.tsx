@@ -2,17 +2,20 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Landmark, Plus, Trash2, X } from 'lucide-react';
+import { Landmark, Plus, Trash2, X, Pencil } from 'lucide-react';
+
+const emptyForm = {
+  accountName: '', bankName: '', accountNumber: '',
+  accountType: 'checking', routingNumber: '', balance: 0,
+  currency: 'USD', notes: ''
+};
 
 export function Banks() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({
-    accountName: '', bankName: '', accountNumber: '',
-    accountType: 'checking', routingNumber: '', balance: 0,
-    currency: 'USD', notes: ''
-  });
+  const [editingBank, setEditingBank] = useState<any | null>(null);
+  const [form, setForm] = useState({ ...emptyForm });
 
   const { data: banks = [], isLoading } = useQuery({
     queryKey: ['bank-accounts', activeCompany?.id],
@@ -28,9 +31,20 @@ export function Banks() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
       setShowModal(false);
-      setForm({ accountName: '', bankName: '', accountNumber: '',
-        accountType: 'checking', routingNumber: '', balance: 0,
-        currency: 'USD', notes: '' });
+      setForm({ ...emptyForm });
+    }
+  });
+
+  const editMutation = useMutation({
+    mutationFn: (data: typeof form & { id: string }) =>
+      fetchApi(`/bank-accounts/${data.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...data, companyId: activeCompany?.id })
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bank-accounts'] });
+      setEditingBank(null);
+      setForm({ ...emptyForm });
     }
   });
 
@@ -38,6 +52,95 @@ export function Banks() {
     mutationFn: (id: string) => fetchApi(`/bank-accounts/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bank-accounts'] })
   });
+
+  const openEdit = (b: any) => {
+    setEditingBank(b);
+    setForm({
+      accountName: b.accountName ?? '',
+      bankName: b.bankName ?? '',
+      accountNumber: b.accountNumber ?? '',
+      accountType: b.accountType ?? 'checking',
+      routingNumber: b.routingNumber ?? '',
+      balance: b.balance ?? 0,
+      currency: b.currency ?? 'USD',
+      notes: b.notes ?? ''
+    });
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingBank(null);
+    setForm({ ...emptyForm });
+  };
+
+  const handleSubmit = () => {
+    if (editingBank) {
+      editMutation.mutate({ ...form, id: editingBank.id });
+    } else {
+      createMutation.mutate(form);
+    }
+  };
+
+  const isPending = createMutation.isPending || editMutation.isPending;
+  const isModalOpen = showModal || !!editingBank;
+
+  const FormFields = () => (
+    <div className="p-6 overflow-y-auto flex-1 space-y-6">
+      <div className="grid grid-cols-2 gap-6">
+        {[
+          { label: 'Alias de la cuenta', key: 'accountName', placeholder: 'Ej: Cuenta Corriente Principal' },
+          { label: 'Banco emisor', key: 'bankName', placeholder: 'Ej: Bank of America' },
+          { label: 'Número de cuenta', key: 'accountNumber', placeholder: 'Últimos 4 dígitos o completo' },
+          { label: 'Número de ruta (ABA)', key: 'routingNumber', placeholder: 'Opcional' },
+        ].map(({ label, key, placeholder }) => (
+          <div key={key} className="space-y-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+            <input
+              type="text"
+              placeholder={placeholder}
+              value={(form as any)[key]}
+              onChange={e => setForm({ ...form, [key]: e.target.value })}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        ))}
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo de cuenta</label>
+          <select
+            value={form.accountType}
+            onChange={e => setForm({ ...form, accountType: e.target.value })}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+          >
+            <option value="checking">Corriente (Checking)</option>
+            <option value="savings">Ahorros (Savings)</option>
+            <option value="credit">Crédito</option>
+            <option value="other">Otra</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Moneda</label>
+          <select
+            value={form.currency}
+            onChange={e => setForm({ ...form, currency: e.target.value })}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+          >
+            <option value="USD">USD — Dólar</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="MXN">MXN — Peso mexicano</option>
+          </select>
+        </div>
+        <div className="space-y-2 col-span-2">
+          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo inicial</label>
+          <input
+            type="number"
+            value={form.balance}
+            onChange={e => setForm({ ...form, balance: parseFloat(e.target.value) || 0 })}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -60,9 +163,7 @@ export function Banks() {
       ) : banks.length === 0 ? (
         <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-16 text-center shadow-xl">
           <Landmark className="w-12 h-12 text-gray-500 opacity-20 mx-auto mb-4" />
-          <p className="text-gray-500 text-sm">
-            No hay cuentas bancarias registradas.
-          </p>
+          <p className="text-gray-500 text-sm">No hay cuentas bancarias registradas.</p>
         </div>
       ) : (
         <div className="bg-gray-800/50 rounded-xl overflow-hidden border border-gray-700/50 shadow-xl">
@@ -93,10 +194,18 @@ export function Banks() {
                       ${Number(b.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => openEdit(b)}
+                          className="p-1.5 text-gray-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-md transition-colors"
+                          title="Editar"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => { if (confirm('¿Desactivar esta cuenta?')) deleteMutation.mutate(b.id); }}
                           className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-md transition-colors"
+                          title="Eliminar"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -110,87 +219,32 @@ export function Banks() {
         </div>
       )}
 
-      {showModal && (
+      {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between p-6 border-b border-gray-800">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <Landmark className="w-5 h-5 text-indigo-400" />
-                Nueva Cuenta Bancaria
+                {editingBank ? 'Editar Cuenta Bancaria' : 'Nueva Cuenta Bancaria'}
               </h3>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white transition-colors">
+              <button onClick={closeModal} className="text-gray-400 hover:text-white transition-colors">
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-              {[
-                { label: 'Alias de la cuenta', key: 'accountName', placeholder: 'Ej: Cuenta Corriente Principal' },
-                { label: 'Banco emisor', key: 'bankName', placeholder: 'Ej: Bank of America' },
-                { label: 'Número de cuenta', key: 'accountNumber', placeholder: 'Últimos 4 dígitos o completo' },
-                { label: 'Número de ruta (ABA)', key: 'routingNumber', placeholder: 'Opcional' },
-              ].map(({ label, key, placeholder }) => (
-                <div key={key} className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
-                  <input
-                    type="text"
-                    placeholder={placeholder}
-                    value={(form as any)[key]}
-                    onChange={e => setForm({ ...form, [key]: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-              ))}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo de cuenta</label>
-                <select
-                  value={form.accountType}
-                  onChange={e => setForm({ ...form, accountType: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
-                >
-                  <option value="checking">Corriente (Checking)</option>
-                  <option value="savings">Ahorros (Savings)</option>
-                  <option value="credit">Crédito</option>
-                  <option value="other">Otra</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Moneda</label>
-                <select
-                  value={form.currency}
-                  onChange={e => setForm({ ...form, currency: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
-                >
-                  <option value="USD">USD — Dólar</option>
-                  <option value="EUR">EUR — Euro</option>
-                  <option value="MXN">MXN — Peso mexicano</option>
-                </select>
-              </div>
-              <div className="space-y-2 col-span-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo inicial</label>
-                <input
-                  type="number"
-                  value={form.balance}
-                  onChange={e => setForm({ ...form, balance: parseFloat(e.target.value) || 0 })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              </div>
-            </div>
+            <FormFields />
             <div className="p-6 border-t border-gray-800 bg-gray-900/80 flex justify-end gap-3 shrink-0 rounded-b-2xl">
-              <button 
-                onClick={() => setShowModal(false)} 
+              <button
+                onClick={closeModal}
                 className="px-6 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => createMutation.mutate(form)}
-                disabled={createMutation.isPending}
+                onClick={handleSubmit}
+                disabled={isPending}
                 className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {createMutation.isPending ? 'Guardando...' : 'Guardar Cuenta'}
+                {isPending ? 'Guardando...' : editingBank ? 'Guardar Cambios' : 'Guardar Cuenta'}
               </button>
             </div>
           </div>
