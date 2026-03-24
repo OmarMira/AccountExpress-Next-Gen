@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // REPORTS & EXPORT ROUTES
 // Routes for financial reports and CPA tax export
 // ============================================================
@@ -9,6 +9,7 @@ import { getIncomeStatement } from "../services/reports/income-statement.service
 import { getTrialBalance } from "../services/reports/trial-balance.service.ts";
 import { getCashFlow } from "../services/reports/cash-flow.service.ts";
 import { generateCpaSummary } from "../services/reports/cpa-summary.service.ts";
+import { buildCpaPdf } from "../services/reports/pdf-builder.service.ts";
 import { validateSession } from "../services/session.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 
@@ -96,6 +97,37 @@ export const reportsRoutes = new Elysia()
         }
       }, {
         body: t.Object({
+          companyId: t.String(),
+          periodId: t.String(),
+        })
+      })
+
+      .get("/cpa-summary/download", ({ query, cookie, set }) => {
+        const token = cookie["session"].value as string;
+        if (!validateSession(token)) {
+          set.status = 401;
+          return { success: false, error: "Unauthorized" };
+        }
+
+        const companyId = query.companyId;
+        const periodId  = query.periodId;
+
+        try {
+          const summary = generateCpaSummary(companyId, periodId);
+          const pdfBytes = buildCpaPdf(summary);
+
+          return new Response(pdfBytes, {
+            headers: {
+              "Content-Type": "application/pdf",
+              "Content-Disposition": `attachment; filename="tax-summary-${periodId}.pdf"`
+            }
+          });
+        } catch (err: any) {
+          set.status = 400;
+          return { success: false, error: err.message };
+        }
+      }, {
+        query: t.Object({
           companyId: t.String(),
           periodId: t.String(),
         })

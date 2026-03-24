@@ -55,8 +55,10 @@ export function CpaExport() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleDownload = () => {
+    if (!activeCompany?.id || !periodId) return;
+    const url = `http://localhost:3000/api/export/cpa-summary/download?companyId=${activeCompany.id}&periodId=${periodId}`;
+    window.open(url, "_blank");
   };
 
   const summaryData = cpaMutation.data?.data as CpaSummary | undefined;
@@ -98,10 +100,10 @@ export function CpaExport() {
 
           {summaryData && (
             <button 
-              onClick={handlePrint}
+              onClick={handleDownload}
               className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors shadow-lg whitespace-nowrap flex items-center gap-2"
             >
-              <Printer className="w-4 h-4" /> Imprimir PDF
+              <Printer className="w-4 h-4" /> Download PDF
             </button>
           )}
         </div>
