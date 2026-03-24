@@ -1,0 +1,236 @@
+// ============================================================
+// AI PANEL
+// Panel lateral de chat con Ollama/Mistral.
+// Se abre desde cualquier pantalla via AppShell.
+// ============================================================
+
+import { useState, useRef, useEffect } from 'react';
+import { useAuthStore } from '../store/authStore';
+import { X, Send, Bot, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+
+// ── Tipos ────────────────────────────────────────────────────
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface OllamaStatus {
+  ollamaRunning: boolean;
+  mistralReady: boolean;
+}
+
+// ── Comandos rápidos ──────────────────────────────────────────
+
+const QUICK_COMMANDS = [
+  { label: 'Analizar riesgos',     text: 'Analyze the current financial data and identify any risks or anomalies.' },
+  { label: 'Verificar balance',    text: 'Check if debits and credits are balanced in the recent journal entries.' },
+  { label: 'Resumen financiero',   text: 'Give me a brief summary of the current financial position of the company.' },
+  { label: 'Transacciones pendientes', text: 'What can you tell me about the pending bank transactions?' },
+];
+
+// ── Componente ────────────────────────────────────────────────
+
+interface AIPanelProps {
+  onClose: () => void;
+}
+
+export function AIPanel({ onClose }: AIPanelProps) {
+  const activeCompany = useAuthStore((s) => s.activeCompany);
+  const companyId     = activeCompany?.id ?? '';
+
+  const [messages, setMessages]     = useState<Message[]>([]);
+  const [input, setInput]           = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [status, setStatus]         = useState<OllamaStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const inputRef   = useRef<HTMLTextAreaElement>(null);
+
+  // ── Verificar estado de Ollama al montar ─────────────────
+
+  useEffect(() => {
+    fetch('/api/ai/status', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => setStatus(d.data))
+      .catch(() => setStatus({ ollamaRunning: false, mistralReady: false }))
+      .finally(() => setStatusLoading(false));
+  }, []);
+
+  // ── Auto-scroll ───────────────────────────────────────────
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // ── Enviar mensaje ────────────────────────────────────────
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim() || isStreaming || !status?.mistralReady) return;
+
+    const userMessage: Message = { role: 'user', content: text.trim() };
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    setInput('');
+    setIsStreaming(true);
+
+    // Placeholder para la respuesta del asistente
+    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+
+    try {
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          messages: updatedMessages,
+          companyId,
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error('Stream failed');
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'assistant', content: accumulated };
+          return updated;
+        });
+      }
+    } catch {
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: 'Error connecting to AI. Make sure Ollama is running.'
+        };
+        return updated;
+      });
+    } finally {
+      setIsStreaming(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(input);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────
+
+  return (
+    <div className="fixed right-0 top-0 h-full w-96 bg-gray-900 border-l border-gray-700 flex flex-col z-50 shadow-2xl">
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800">
+        <div className="flex items-center gap-2">
+          <Bot size={18} className="text-blue-400" />
+          <span className="text-white font-semibold text-sm">Asistente Contable</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Estado Ollama */}
+          {statusLoading ? (
+            <Loader2 size={14} className="text-gray-400 animate-spin" />
+          ) : status?.mistralReady ? (
+            <span className="flex items-center gap-1 text-green-400 text-xs">
+              <CheckCircle2 size={13} /> Mistral activo
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-red-400 text-xs">
+              <AlertCircle size={13} /> Ollama offline
+            </span>
+          )}
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Ollama offline warning */}
+      {!statusLoading && !status?.mistralReady && (
+        <div className="mx-4 mt-3 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-xs">
+          <p className="font-semibold mb-1">Ollama no está disponible</p>
+          <p>Ejecutá en tu terminal:</p>
+          <code className="block mt-1 bg-gray-900 px-2 py-1 rounded text-red-200">
+            ollama run mistral
+          </code>
+        </div>
+      )}
+
+      {/* Comandos rápidos — solo si no hay mensajes */}
+      {messages.length === 0 && status?.mistralReady && (
+        <div className="p-4 space-y-2">
+          <p className="text-gray-400 text-xs mb-3">Comandos rápidos:</p>
+          {QUICK_COMMANDS.map((cmd) => (
+            <button
+              key={cmd.label}
+              onClick={() => sendMessage(cmd.text)}
+              className="w-full text-left text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white px-3 py-2 rounded-lg transition-colors"
+            >
+              {cmd.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Mensajes */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
+              msg.role === 'user'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-800 border border-gray-700 text-gray-200'
+            }`}>
+              {msg.content === '' && msg.role === 'assistant' ? (
+                <Loader2 size={14} className="animate-spin text-gray-400" />
+              ) : (
+                msg.content
+              )}
+            </div>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="px-4 py-3 border-t border-gray-700 bg-gray-800">
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isStreaming || !status?.mistralReady}
+            placeholder={status?.mistralReady ? 'Preguntá algo... (Enter para enviar)' : 'Ollama offline'}
+            rows={2}
+            className="flex-1 bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 resize-none placeholder-gray-400 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={isStreaming || !input.trim() || !status?.mistralReady}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white p-2 rounded-lg transition-colors flex-shrink-0"
+          >
+            {isStreaming
+              ? <Loader2 size={18} className="animate-spin" />
+              : <Send size={18} />
+            }
+          </button>
+        </div>
+        <p className="text-gray-500 text-xs mt-1">Shift+Enter para nueva línea</p>
+      </div>
+
+    </div>
+  );
+}

@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Outlet, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-
+import { AIPanel } from './AIPanel';
 import { PermissionGate } from './PermissionGate';
 import { 
   LayoutDashboard, 
@@ -13,7 +14,8 @@ import {
   ShieldCheck,
   Landmark,
   ArrowLeftRight,
-  Users
+  Users,
+  Bot
 } from 'lucide-react';
 
 export function AppShell() {
@@ -23,6 +25,7 @@ export function AppShell() {
   const logout = useAuthStore((state) => state.logout);
   const location = useLocation();
   const navigate = useNavigate();
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -92,6 +95,14 @@ export function AppShell() {
 
         <div className="border-t border-slate-800 pt-4 pb-4 px-3 space-y-1 flex-shrink-0">
           <button
+            onClick={() => setAiPanelOpen(!aiPanelOpen)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm"
+          >
+            <Bot className="w-4 h-4" />
+            <span>Asistente IA</span>
+          </button>
+
+          <button
             onClick={() => navigate('/settings')}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm"
           >
@@ -146,6 +157,8 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      {aiPanelOpen && <AIPanel onClose={() => setAiPanelOpen(false)} />}
     </div>
   );
 }
