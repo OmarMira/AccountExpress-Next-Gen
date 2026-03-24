@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // DATABASE CONNECTION
 // Opens SQLite via Bun's built-in driver.
 // Enables WAL mode for concurrent reads + FK enforcement.
@@ -32,3 +32,4 @@ export const db = drizzle(sqlite, { schema });
 export const rawDb = sqlite;
 
 console.log(`[DB] Connected to SQLite at: ${DB_PATH}`);
+

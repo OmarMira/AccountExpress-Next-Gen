@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // TRIAL BALANCE
 // Unadjusted/Adjusted trial balance ensuring Total Debits = Total Credits
 // ============================================================
@@ -59,3 +59,4 @@ export function getTrialBalance(companyId: string, asOfDate: string): { items: T
 
   return { items, totalDebits: sumDebitsCents / 100, totalCredits: sumCreditsCents / 100 };
 }
+

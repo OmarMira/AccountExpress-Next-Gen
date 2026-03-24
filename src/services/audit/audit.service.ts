@@ -1,4 +1,4 @@
-import { db } from "../../db/connection.ts";
+﻿import { db } from "../../db/connection.ts";
 import { auditLogs } from "../../db/schema/system.schema.ts";
 import { eq, desc, asc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
@@ -122,3 +122,4 @@ export async function verifyChainIntegrity(companyId: string): Promise<Verificat
 
   return { valid: true, totalEntries: logs.length };
 }
+

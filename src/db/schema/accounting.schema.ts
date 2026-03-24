@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // ACCOUNTING CORE SCHEMA
 // Group B — 4 tables: US GAAP double-entry bookkeeping engine
 // Depends entirely on Group A (system.schema.ts).
@@ -157,3 +157,4 @@ export const bankTransactions = sqliteTable("bank_transactions", {
   importBatchId: text("import_batch_id"), // UUID of the CSV import batch
   createdAt: text("created_at").notNull(),
 });
+

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+﻿import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { companies } from './system.schema';
 import { chartOfAccounts } from './accounting.schema';
 
@@ -15,3 +15,4 @@ export const bankAccounts = sqliteTable('bank_accounts', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+

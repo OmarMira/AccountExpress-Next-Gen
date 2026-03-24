@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // US GAAP CHART OF ACCOUNTS SEED
 // Codes 1000–5999 following standard US GAAP classification.
 // All seeded accounts have is_system=1 (cannot be deleted).
@@ -137,3 +137,4 @@ export const GAAP_ACCOUNTS: AccountSeed[] = [
   { code: "5900", name: "Income Tax Expense",                 accountType: "expense",  normalBalance: "debit",  parentCode: null,   level: 1, taxCategory: "Form 1120/1040 - Tax", description: "Federal and state income tax expense (corporations/S-corps)" },
   { code: "5990", name: "Miscellaneous Expense",              accountType: "expense",  normalBalance: "debit",  parentCode: "5100", level: 2, taxCategory: "Schedule C - Other Expenses", description: "Small one-off expenses not classified elsewhere" },
 ];
+

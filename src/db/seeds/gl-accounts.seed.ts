@@ -1,4 +1,4 @@
-export const US_GAAP_ACCOUNTS = [
+﻿export const US_GAAP_ACCOUNTS = [
   // ASSETS
   { code: '1000', name: 'ASSETS',                          type: 'ASSET',     subtype: 'Header',              normalBalance: 'DEBIT',  isSystem: true },
   { code: '1010', name: 'Cash',                            type: 'ASSET',     subtype: 'Current Asset',       normalBalance: 'DEBIT',  isSystem: true },
@@ -44,3 +44,4 @@ export const US_GAAP_ACCOUNTS = [
   { code: '5200', name: 'Bank Fees & Charges',             type: 'EXPENSE',   subtype: 'Operating Expense',   normalBalance: 'DEBIT',  isSystem: false },
   { code: '5900', name: 'Other Expenses',                  type: 'EXPENSE',   subtype: 'Non-Operating',       normalBalance: 'DEBIT',  isSystem: false },
 ];
+

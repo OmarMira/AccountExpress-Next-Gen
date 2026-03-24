@@ -73,3 +73,4 @@ if (import.meta.main) {
     `\n✅ Account Express Bookkeeping Core running on http://localhost:${PORT}\n`
   );
 }
+

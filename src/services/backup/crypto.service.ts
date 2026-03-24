@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'fs/promises';
+﻿import { readFile, writeFile } from 'fs/promises';
 
 const MAGIC = new TextEncoder().encode("AEX1");
 
@@ -117,3 +117,4 @@ export async function hashFile(filePath: string): Promise<string> {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+

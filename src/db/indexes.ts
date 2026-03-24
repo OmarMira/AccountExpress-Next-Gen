@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // DATABASE INDEXES
 // All 8 mandatory performance indexes for multi-tenant queries.
 // Applied once after migrations run.
@@ -32,3 +32,4 @@ export const INDEXES: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_audit_logs_chain
      ON audit_logs(chain_index)`,
 ];
+

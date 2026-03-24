@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // SESSION SERVICE
 // Server-side sessions stored in DB (no JWT).
 // Token = UUID v4 stored in HttpOnly SameSite=Strict cookie.
@@ -133,3 +133,4 @@ export function listActiveSessions(userId: string) {
     )
     .all(userId);
 }
+

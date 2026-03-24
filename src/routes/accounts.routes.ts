@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // ACCOUNTS ROUTES — /accounts (Chart of Accounts)
 // ============================================================
 
@@ -76,3 +76,4 @@ export const accountsRoutes = new Elysia({ prefix: "/accounts" })
       return { error: err instanceof Error ? err.message : "Unknown error" };
     }
   });
+

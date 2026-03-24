@@ -1,4 +1,4 @@
-import { Elysia, t } from 'elysia';
+﻿import { Elysia, t } from 'elysia';
 import { db } from '../db/connection';
 import { chartOfAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -85,3 +85,4 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
       .where(eq(chartOfAccounts.id, id));
     return { message: 'Cuenta desactivada' };
   }, { query: t.Object({ companyId: t.String() }) });
+

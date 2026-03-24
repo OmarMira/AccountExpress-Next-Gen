@@ -1,4 +1,4 @@
-import { Elysia, t } from "elysia";
+﻿import { Elysia, t } from "elysia";
 import { BackupService } from "../../services/backup/BackupService";
 import { BackupScheduler } from "../../services/backup/BackupScheduler";
 
@@ -73,3 +73,4 @@ export const backupRoutes = new Elysia({ prefix: "/backup" })
   }, {
     body: t.Object({ hourUTC: t.Number() })
   });
+

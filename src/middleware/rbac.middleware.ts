@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+﻿import { Elysia } from "elysia";
 import { db } from "../db/connection.ts";
 import { roles, permissions, rolePermissions } from "../db/schema/system.schema.ts";
 import { eq, and } from "drizzle-orm";
@@ -37,3 +37,4 @@ export const requirePermission = (moduleName: string, actionName: string) => (ap
       return new Response(JSON.stringify({ error: `${moduleName}:${actionName} denied` }), { status: 403 });
     }
   });
+

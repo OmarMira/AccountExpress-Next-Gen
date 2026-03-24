@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // ROLE-PERMISSIONS MATRIX SEED
 // Maps each system role to its allowed permissions.
 // super_admin  → all 28
@@ -70,3 +70,4 @@ export const ROLE_PERMISSIONS_SEED = [
   ...buildMatrix(SYSTEM_ROLES_IDS.accountant,   ACCOUNTANT_PERMS),
   ...buildMatrix(SYSTEM_ROLES_IDS.auditor,      AUDITOR_PERMS),
 ];
+

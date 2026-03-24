@@ -1,4 +1,4 @@
-import { Elysia, t } from 'elysia';
+﻿import { Elysia, t } from 'elysia';
 import { db } from '../db/connection';
 import { bankAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -137,3 +137,4 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       return { error: 'Failed to deactivate bank account', details: error.message };
     }
   });
+

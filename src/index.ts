@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // APPLICATION BOOTSTRAPPER
 // Execution order: migrate → seed → start server
 // ============================================================
@@ -24,3 +24,4 @@ app.listen(PORT);
 
 console.log(`\n✅ Server ready: http://localhost:${PORT}`);
 console.log(`   Health check: http://localhost:${PORT}/health\n`);
+

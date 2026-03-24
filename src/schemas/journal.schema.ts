@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 // ============================================================
 // JOURNAL SCHEMAS — Input validation for journal routes
@@ -30,3 +30,4 @@ export const CreateJournalEntrySchema = z.object({
 });
 
 export type CreateJournalEntryInput = z.infer<typeof CreateJournalEntrySchema>;
+

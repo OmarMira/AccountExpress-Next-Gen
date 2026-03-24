@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // BANK CSV IMPORT SERVICE
 // Ingests CSV extracts from Chase, BofA, WellsFargo and Generic.
 // Provides mechanical deterministic duplicate prevention.
@@ -156,3 +156,4 @@ function normalizeDate(mmddyyyy: string): string {
   }
   return mmddyyyy; // Fallback
 }
+

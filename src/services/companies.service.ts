@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // COMPANIES SERVICE
 // Multi-tenant configuration bounding endpoints globally.
 // Companies are NEVER physically deleted, only archived (is_active = 0).
@@ -150,3 +150,4 @@ export function revokeUserFromCompany(companyId: string, targetUserId: string): 
     "UPDATE user_company_roles SET is_active = 0, revoked_at = ? WHERE id = ?"
   ).run(new Date().toISOString(), existing.id);
 }
+

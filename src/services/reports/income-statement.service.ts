@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // INCOME STATEMENT (Profit & Loss)
 // Measure revenues and expenses over a period.
 // ============================================================
@@ -92,3 +92,4 @@ export function getIncomeStatement(companyId: string, startDate: string, endDate
 
   return data;
 }
+

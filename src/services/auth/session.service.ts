@@ -1,4 +1,4 @@
-import { db } from "../../db/connection.ts";
+﻿import { db } from "../../db/connection.ts";
 import { sessions } from "../../db/schema/system.schema.ts";
 import { eq, lte } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
@@ -42,3 +42,4 @@ export async function cleanExpiredSessions(): Promise<void> {
     .set({ isValid: 0 })
     .where(lte(sessions.expiresAt, new Date().toISOString()));
 }
+

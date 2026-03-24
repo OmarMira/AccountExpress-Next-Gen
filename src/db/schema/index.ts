@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // SCHEMA INDEX
 // Re-exports all table definitions for Drizzle Kit and app use.
 // Import from here — never import directly from individual schema files
@@ -27,3 +27,4 @@ export {
   bankTransactions,
 } from "./accounting.schema.ts";
 export * from './bank-accounts.schema.ts';
+

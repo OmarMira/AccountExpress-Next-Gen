@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // FISCAL PERIOD SERVICE
 // Controls the open → closed → locked lifecycle per company.
 // RULES:
@@ -178,3 +178,4 @@ export function listPeriods(companyId: string, status?: PeriodStatus) {
     .query("SELECT * FROM fiscal_periods WHERE company_id = ? ORDER BY start_date DESC")
     .all(companyId);
 }
+

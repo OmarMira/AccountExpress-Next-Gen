@@ -247,24 +247,31 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       const token = cookie["session"].value as string;
       const session = token ? validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-      
-      const b = body as any;
-      const companyId = b?.companyId;
-      const glAccountId = b?.glAccountId;
-      
-      if (!companyId || !glAccountId) { set.status = 400; return { error: "companyId y glAccountId requeridos" }; }
+
+      if (!body.companyId || !body.glAccountId) {
+        set.status = 400;
+        return { error: "companyId y glAccountId requeridos" };
+      }
 
       const existing = rawDb.query(
         `SELECT id FROM bank_transactions WHERE id = ? AND company_id = ? LIMIT 1`
-      ).get(params.id, companyId);
+      ).get(params.id, body.companyId);
 
       if (!existing) { set.status = 404; return { error: "Transacción no encontrada" }; }
 
       rawDb.run(
         `UPDATE bank_transactions SET gl_account_id = ?, status = 'assigned' WHERE id = ?`,
-        [glAccountId, params.id]
+        [body.glAccountId, params.id]
       );
 
       return { success: true, message: "Cuenta asignada" };
+    },
+    {
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        companyId: t.String(),
+        glAccountId: t.String()
+      })
     }
   );
+

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // SMART MATCHER
 // Probabilistic analysis mapping generic Bank descriptions 
 // to exact COA account IDs via historical reconciliation records.
@@ -43,3 +43,4 @@ export function suggestAccount(
     confidence: Math.min((r.frequency / (highestFreq + 1)) * 100, 95) // Max 95% confidence cap structurally
   }));
 }
+

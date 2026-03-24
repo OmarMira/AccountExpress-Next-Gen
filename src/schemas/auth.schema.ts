@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 // ============================================================
 // AUTH SCHEMAS — Input validation for auth routes
@@ -21,3 +21,4 @@ export const ChangePasswordSchema = z.object({
 });
 
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
+

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CASH FLOW
 // Summarizes bank_transactions mapping inflows and outflows.
 // ============================================================
@@ -38,3 +38,4 @@ export function getCashFlow(companyId: string, startDate: string, endDate: strin
     endDate
   };
 }
+

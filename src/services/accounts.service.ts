@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CHART OF ACCOUNTS SERVICE
 // CRUD for the account tree. is_system=1 accounts are read-only.
 // Each company seeds the full US GAAP chart on creation.
@@ -186,3 +186,4 @@ export function getAccountBalance(companyId: string, accountId: string): number 
     return (creditCents - debitCents) / 100;
   }
 }
+

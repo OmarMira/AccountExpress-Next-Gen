@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // FISCAL PERIODS ROUTES — /fiscal-periods
 // ============================================================
 
@@ -94,3 +94,4 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
       return { error: err instanceof Error ? err.message : "Unknown error" };
     }
   });
+

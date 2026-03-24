@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // BALANCE SHEET
 // Represents the financial position at a specific point in time.
 // Assets = Liabilities + Equity
@@ -105,3 +105,4 @@ export function getBalanceSheet(companyId: string, asOfDate: string): BalanceShe
 
   return data;
 }
+

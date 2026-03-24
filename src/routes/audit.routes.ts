@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // AUDIT ROUTES — GET /audit (read-only + chain verification)
 // ============================================================
 
@@ -41,3 +41,4 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
     if (!entry) { set.status = 404; return { error: "Audit entry not found" }; }
     return entry;
   });
+

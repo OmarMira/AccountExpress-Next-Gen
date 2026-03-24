@@ -1,4 +1,4 @@
-import { hash, compare, genSalt } from "bcryptjs";
+﻿import { hash, compare, genSalt } from "bcryptjs";
 
 const BCRYPT_COST = 12;
 
@@ -11,3 +11,4 @@ export async function hashPassword(plain: string): Promise<{ hash: string; salt:
 export async function verifyPassword(plain: string, storedHash: string): Promise<boolean> {
   return compare(plain, storedHash);
 }
+

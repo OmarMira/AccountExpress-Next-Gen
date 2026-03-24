@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // COMPANIES ROUTES
 // Endpoints to manage companies and their isolated users.
 // ============================================================
@@ -216,3 +216,4 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       }
     }
   );
+

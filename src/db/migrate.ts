@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // MIGRATION RUNNER
 // Applies 14 ordered migrations in strict FK-dependency order.
 // Tracks applied migrations in _migrations table to be idempotent.
@@ -397,3 +397,4 @@ if (import.meta.main) {
   runMigrations();
   process.exit(0);
 }
+

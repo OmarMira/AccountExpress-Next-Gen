@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // SQLITE TRIGGERS
 // Last line of defense — enforced at DB level regardless of ORM.
 // Applied once after migrations run.
@@ -43,3 +43,4 @@ export const TRIGGERS: string[] = [
      SELECT RAISE(ABORT, 'Cannot modify a posted journal entry — create a reversing entry instead');
    END`,
 ];
+

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // SYSTEM INFRASTRUCTURE SCHEMA
 // Group A — 10 tables: security, multitenancy, audit
 // RULE: No file > 500 lines. One file = one responsibility group.
@@ -236,3 +236,4 @@ export const fiscalPeriods = sqliteTable("fiscal_periods", {
   closedAt: text("closed_at"),
   createdAt: text("created_at").notNull(),
 });
+

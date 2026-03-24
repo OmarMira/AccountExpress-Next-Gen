@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+﻿import { Elysia } from "elysia";
 import { db } from "../db/connection.ts";
 import { userCompanyRoles } from "../db/schema/system.schema.ts";
 import { eq, and, isNull } from "drizzle-orm";
@@ -38,3 +38,4 @@ export const tenantMiddleware = (app: Elysia) => app
       roleId: membership?.roleId || ""
     };
   });
+

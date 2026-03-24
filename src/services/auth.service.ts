@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // AUTH SERVICE
 // bcrypt password hashing (cost 12) and account lockout logic.
 // SECURITY RULES:
@@ -145,3 +145,4 @@ export function updateLastLogin(userId: string, ip: string): void {
     )
     .run(new Date().toISOString(), ip, new Date().toISOString(), userId);
 }
+

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // AUDIT SERVICE
 // Immutable SHA-256 chained audit log.
 // Every operation in the system MUST call createAuditEntry().
@@ -199,3 +199,4 @@ export function verifyAuditChain(companyId: string | null = null): ChainVerifica
     message: `Chain intact — ${rows.length} entries verified`,
   };
 }
+

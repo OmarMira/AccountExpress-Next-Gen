@@ -1,4 +1,4 @@
-import { db } from "../../db/connection";
+﻿import { db } from "../../db/connection";
 import { bankTransactions } from "../../db/schema/accounting.schema";
 import { bankAccounts } from "../../db/schema/bank-accounts.schema";
 import { and, eq } from "drizzle-orm";
@@ -381,3 +381,4 @@ class StatementImportService {
 }
 
 export const statementImportService = new StatementImportService();
+

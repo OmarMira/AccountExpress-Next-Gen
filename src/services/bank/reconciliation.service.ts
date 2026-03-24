@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // RECONCILIATION SERVICE
 // Translates abstract Bank Transactions into rigorous
 // Double-Entry Journal Entries automatically.
@@ -101,3 +101,4 @@ export function ignoreTransaction(
 
   transactionLock();
 }
+

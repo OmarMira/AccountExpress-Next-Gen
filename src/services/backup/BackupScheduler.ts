@@ -1,4 +1,4 @@
-import { BackupService } from './BackupService';
+﻿import { BackupService } from './BackupService';
 import { rawDb as db } from '../../db/connection';
 import { createAuditEntry } from '../audit.service';
 
@@ -121,3 +121,4 @@ export class BackupScheduler {
      return `Cada día a las ${info.scheduledHourUTC.toString().padStart(2, '0')}:00 UTC`;
   }
 }
+

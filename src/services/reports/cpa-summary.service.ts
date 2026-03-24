@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // CPA SUMMARY (TAX EXPORT)
 // Exposes restricted Tax formats strictly grouping data by IRS
 // tax_category bindings.
@@ -94,3 +94,4 @@ export function generateCpaSummary(companyId: string, periodId: string): CpaSumm
     taxes,
   };
 }
+
