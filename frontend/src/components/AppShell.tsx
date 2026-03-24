@@ -12,7 +12,8 @@ import {
   Settings,
   ShieldCheck,
   Landmark,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Users
 } from 'lucide-react';
 
 export function AppShell() {
@@ -40,6 +41,7 @@ export function AppShell() {
     { name: 'Conciliación Bancaria', path: '/reconciliation', icon: ArrowLeftRight, module: 'banking', action: 'read' },
     { name: 'Reportes', path: '/reports', icon: FileText, module: 'reports', action: 'read' },
     { name: 'Exportar para CPA', path: '/export', icon: Download, module: 'reports', action: 'read' },
+    { name: 'Usuarios y Roles', path: '/users', icon: Users, module: 'users', action: 'read' },
   ];
 
   return (

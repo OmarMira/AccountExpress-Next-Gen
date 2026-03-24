@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // JOURNAL ROUTES — CRUD /journal
 // ============================================================
 
@@ -7,11 +7,11 @@ import { validateSession } from "../services/session.service.ts";
 import {
   createDraft,
   post,
-  voidEntry,
   getEntryWithLines,
   listEntries,
   ValidationError,
 } from "../services/journal.service.ts";
+import { voidEntry } from "../services/journal-void.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 
 export const journalRoutes = new Elysia({ prefix: "/journal" })

@@ -15,6 +15,8 @@ import { auditRoutes }         from "./routes/audit.routes.ts";
 import { bankRoutes }          from "./routes/bank.routes.ts";
 import { reportsRoutes }       from "./routes/reports.routes.ts";
 import { glAccountsRoutes }    from "./routes/gl-accounts.routes.ts";
+import { dashboardRoutes }     from "./routes/dashboard.routes.ts";
+import { usersRoutes }         from "./routes/users.routes.ts";
 import { backupRoutes, backupScheduler } from "./api/routes/backup.routes.ts";
 
 const PORT = parseInt(process.env["PORT"] ?? "3000", 10);
@@ -47,6 +49,8 @@ export const app = new Elysia()
     .use(bankAccountsRoutes)
     .use(reportsRoutes)
     .use(glAccountsRoutes)
+    .use(dashboardRoutes)
+    .use(usersRoutes)
     .use(backupRoutes)
   )
 

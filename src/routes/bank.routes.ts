@@ -217,10 +217,11 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   )
 
   // ─────────────────────────────────────────────────────────────
-  // 5. IGNORE (bank:reconcile)
+  // 5. IGNORE & 6. ASSIGN
   // ─────────────────────────────────────────────────────────────
-  .use(requirePermission("bank", "reconcile"))
-  .post(
+  .group("", app => app
+    .use(requirePermission("bank", "reconcile"))
+    .post(
     "/ignore/:id",
     ({ params, body, cookie, request, set }) => {
       const token = cookie["session"].value as string;
@@ -273,5 +274,5 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         glAccountId: t.String()
       })
     }
-  );
+  ));
 

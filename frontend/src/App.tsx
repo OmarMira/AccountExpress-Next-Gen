@@ -11,6 +11,7 @@ import { Reports } from './pages/Reports';
 import { CpaExport } from './pages/CpaExport';
 import { Settings } from './pages/Settings';
 import { Banks } from './pages/Banks';
+import { Users } from './pages/Users';
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/export" element={<CpaExport />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/users" element={<Users />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
