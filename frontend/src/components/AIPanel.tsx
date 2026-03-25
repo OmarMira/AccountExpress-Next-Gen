@@ -45,6 +45,10 @@ export function AIPanel({ onClose }: AIPanelProps) {
   const [status, setStatus]         = useState<OllamaStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
 
+  const [downloading, setDownloading]   = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadDone, setDownloadDone] = useState(false);
+
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
 
@@ -63,6 +67,72 @@ export function AIPanel({ onClose }: AIPanelProps) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const detectOS = (): 'windows' | 'mac' | 'linux' => {
+    const ua = navigator.userAgent.toLowerCase();
+    if (ua.includes('win'))    return 'windows';
+    if (ua.includes('mac'))    return 'mac';
+    return 'linux';
+  };
+
+  const handleDownloadOllama = async () => {
+    const os = detectOS();
+
+    if (os === 'linux') return; // Linux usa comando, no descarga
+
+    const urls: Record<string, string> = {
+      windows: 'https://ollama.com/download/OllamaSetup.exe',
+      mac:     'https://ollama.com/download/Ollama-darwin.zip',
+    };
+
+    const filenames: Record<string, string> = {
+      windows: 'OllamaSetup.exe',
+      mac:     'Ollama-darwin.zip',
+    };
+
+    setDownloading(true);
+    setDownloadProgress(0);
+    setDownloadDone(false);
+
+    try {
+      const response = await fetch(urls[os]);
+      if (!response.ok || !response.body) throw new Error('Download failed');
+
+      const contentLength = Number(response.headers.get('Content-Length') ?? 0);
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (contentLength > 0) {
+          setDownloadProgress(Math.round((received / contentLength) * 100));
+        } else {
+          // Sin Content-Length: progreso indeterminado animado
+          setDownloadProgress((prev) => Math.min(prev + 2, 90));
+        }
+      }
+
+      // Construir blob y disparar descarga
+      const blob = new Blob(chunks as BlobPart[]);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = filenames[os];
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setDownloadProgress(100);
+      setDownloadDone(true);
+      setDownloading(false);
+    } catch {
+      setDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
 
   // ── Enviar mensaje ────────────────────────────────────────
 
@@ -167,18 +237,56 @@ export function AIPanel({ onClose }: AIPanelProps) {
           <p className="text-gray-400 text-xs">
             Para usar el asistente IA necesitás instalar Ollama en tu computadora.
           </p>
-          <a
-            href="https://ollama.com/download"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
-          >
-            Descargar Ollama
-          </a>
-          <p className="text-gray-500 text-xs text-center">
-            Después de instalarlo, ejecutá:<br />
-            <code className="text-gray-300">ollama pull mistral</code>
-          </p>
+          {detectOS() === 'linux' ? (
+            <div className="space-y-2">
+              <p className="text-gray-400 text-xs">Ejecutá en tu terminal:</p>
+              <code className="block bg-gray-900 text-green-400 text-xs px-3 py-2 rounded-lg">
+                curl -fsSL https://ollama.com/install.sh | sh
+              </code>
+            </div>
+          ) : downloadDone ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
+                <CheckCircle2 size={16} />
+                Descarga completa
+              </div>
+              <p className="text-gray-400 text-xs">
+                Abrí el archivo descargado para instalar Ollama.<br />
+                Después ejecutá: <code className="text-gray-300">ollama pull mistral</code>
+              </p>
+              <button
+                onClick={() => { setDownloadDone(false); setDownloadProgress(0); }}
+                className="text-xs text-gray-500 hover:text-gray-300 underline"
+              >
+                Descargar de nuevo
+              </button>
+            </div>
+          ) : downloading ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                <span>Descargando Ollama...</span>
+                <span>{downloadProgress}%</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${downloadProgress}%` }}
+                />
+              </div>
+              {downloadProgress < 100 && (
+                <p className="text-gray-500 text-xs text-center animate-pulse">
+                  Instalador descargándose, por favor esperá...
+                </p>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={handleDownloadOllama}
+              className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+            >
+              Descargar Ollama ({detectOS() === 'windows' ? 'Windows' : 'macOS'})
+            </button>
+          )}
         </div>
       )}
 
