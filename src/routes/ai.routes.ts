@@ -134,20 +134,41 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
     query: t.Object({ os: t.String() })
   })
 
-  // ── POST /ai/pull-model — descarga Mistral automáticamente ──
+  // ── POST /ai/pull-model — inicia descarga de Mistral en Ollama ──
   .post("/pull-model", async ({ set }) => {
     try {
-      const proc = Bun.spawn(["ollama", "pull", "mistral"], {
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      // Verificar que Ollama está corriendo
+      const ping = await fetch("http://localhost:11434/api/tags").catch(() => null);
+      if (!ping?.ok) {
+        set.status = 503;
+        return { success: false, error: "Ollama no está corriendo" };
+      }
 
-      // No esperamos — corre en background
-      proc.exited.catch((err) => {
-        console.error("[AI] ollama pull mistral failed:", err);
-      });
+      // Lanzar el pull en un task asíncrono independiente.
+      // Ollama REQUIERE que el cliente drene el stream para que la descarga progrese.
+      // No usamos await aquí — el endpoint retorna inmediatamente.
+      (async () => {
+        try {
+          const res = await fetch("http://localhost:11434/api/pull", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: "mistral", stream: true }),
+          });
+          if (!res.body) return;
+          // Drenar el stream para que Ollama procese la descarga
+          const reader = res.body.getReader();
+          while (true) {
+            const { done } = await reader.read();
+            if (done) break;
+            // Descartamos el valor — solo importa mantener la conexión
+          }
+          console.log("[AI] Mistral pull completed");
+        } catch (err: any) {
+          console.error("[AI] Mistral pull failed:", err.message);
+        }
+      })();
 
-      return { success: true, message: "Pull started" };
+      return { success: true, message: "Pull initiated" };
     } catch (err: any) {
       set.status = 500;
       return { success: false, error: err.message };
