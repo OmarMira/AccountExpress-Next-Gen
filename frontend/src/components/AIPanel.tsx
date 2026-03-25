@@ -157,13 +157,46 @@ export function AIPanel({ onClose }: AIPanelProps) {
         </div>
       </div>
 
-      {/* Ollama offline warning */}
-      {!statusLoading && !status?.mistralReady && (
-        <div className="mx-4 mt-3 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-xs">
-          <p className="font-semibold mb-1">Ollama no está disponible</p>
-          <p>Ejecutá en tu terminal:</p>
-          <code className="block mt-1 bg-gray-900 px-2 py-1 rounded text-red-200">
-            ollama run mistral
+      {/* Ollama offline — botón de instalación */}
+      {!statusLoading && !status?.ollamaRunning && (
+        <div className="mx-4 mt-4 p-4 bg-gray-800 border border-gray-700 rounded-xl space-y-3">
+          <div className="flex items-center gap-2 text-yellow-400">
+            <AlertCircle size={16} />
+            <span className="text-sm font-semibold">Ollama no está instalado</span>
+          </div>
+          <p className="text-gray-400 text-xs">
+            Para usar el asistente IA necesitás instalar Ollama en tu computadora.
+          </p>
+          <a
+            href="https://ollama.com/download"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
+          >
+            Descargar Ollama
+          </a>
+          <p className="text-gray-500 text-xs text-center">
+            Después de instalarlo, ejecutá:<br />
+            <code className="text-gray-300">ollama pull mistral</code>
+          </p>
+        </div>
+      )}
+
+      {/* Ollama instalado pero modelo no disponible */}
+      {!statusLoading && status?.ollamaRunning && !status?.mistralReady && (
+        <div className="mx-4 mt-4 p-4 bg-gray-800 border border-gray-700 rounded-xl space-y-3">
+          <div className="flex items-center gap-2 text-yellow-400">
+            <AlertCircle size={16} />
+            <span className="text-sm font-semibold">Modelo no descargado</span>
+          </div>
+          <p className="text-gray-400 text-xs">
+            Ollama está corriendo pero Mistral no está disponible todavía.
+          </p>
+          <p className="text-gray-500 text-xs">
+            Ejecutá en tu terminal:
+          </p>
+          <code className="block bg-gray-900 text-green-400 text-xs px-3 py-2 rounded-lg">
+            ollama pull mistral
           </code>
         </div>
       )}
