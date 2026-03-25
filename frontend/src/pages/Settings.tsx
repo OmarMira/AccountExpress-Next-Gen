@@ -40,34 +40,54 @@ export function Settings() {
   };
 
   // --- Users State ---
-  const { data: users = [] } = useQuery({
-    queryKey: ['company-users', activeCompany?.id],
-    queryFn: () => fetchApi(`/companies/${activeCompany?.id}/users`),
-    enabled: activeTab === 'users' && !!activeCompany
+  const { data: usersData, refetch: refetchUsers } = useQuery({
+    queryKey: ['users', activeCompany?.id],
+    queryFn: () => fetchApi(`/users?companyId=${activeCompany?.id}`),
+    enabled: activeTab === 'users' && !!activeCompany,
+    select: (res: any) => res.data ?? [],
   });
+  const users: any[] = usersData ?? [];
 
-  const [inviteUserId, setInviteUserId] = useState('');
-  const [inviteRoleId, setInviteRoleId] = useState('accountant');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    firstName: '',
+    lastName: '',
+    username: '',
+    email: '',
+    password: '',
+    roleId: 'admin',
+  });
+  const [createError, setCreateError] = useState('');
 
-  const inviteUserMutation = useMutation({
-    mutationFn: async () => fetchApi(`/companies/${activeCompany?.id}/users`, {
+  const createUserMutation = useMutation({
+    mutationFn: async () => fetchApi('/users', {
       method: 'POST',
-      body: JSON.stringify({ userId: inviteUserId, roleId: inviteRoleId })
+      body: JSON.stringify({
+        ...createForm,
+        companyId: activeCompany?.id,
+      }),
     }),
     onSuccess: () => {
-      alert("Usuario invitado con éxito");
-      setInviteUserId('');
-      queryClient.invalidateQueries({ queryKey: ['company-users'] });
+      setShowCreateForm(false);
+      setCreateForm({ firstName: '', lastName: '', username: '', email: '', password: '', roleId: 'admin' });
+      setCreateError('');
+      refetchUsers();
     },
-    onError: (err: any) => alert(`Error: ${err.message}`)
+    onError: (err: any) => setCreateError(err.message ?? 'Error al crear usuario'),
   });
 
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError('');
+    createUserMutation.mutate();
+  };
+
   const revokeUserMutation = useMutation({
-    mutationFn: async (userId: string) => fetchApi(`/companies/${activeCompany?.id}/users/${userId}`, {
-      method: 'DELETE'
+    mutationFn: async (userId: string) => fetchApi(`/users/${userId}`, { method: 'PATCH',
+      body: JSON.stringify({ isActive: false }),
     }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['company-users'] }),
-    onError: (err: any) => alert(`Error al revocar: ${err.message}`)
+    onSuccess: () => refetchUsers(),
+    onError: (err: any) => alert(`Error: ${err.message}`),
   });
 
   // --- Fiscal Periods State ---
@@ -183,50 +203,157 @@ export function Settings() {
             </div>
           )}
 
-          {/* TAB: USERS */}
+              {/* TAB: USERS */}
           {activeTab === 'users' && (
             <div className="space-y-8">
-              <h2 className="text-xl font-bold text-white border-b border-gray-800 pb-3">Directorio de Accesos</h2>
-              
-              <div className="bg-gray-800/40 p-5 rounded-xl border border-gray-700/50">
-                <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <UserPlus className="w-4 h-4 text-emerald-500" /> Invitar a un Usuario Existente
-                </h3>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <input value={inviteUserId} onChange={e => setInviteUserId(e.target.value)} type="text" placeholder="User ID interno" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-emerald-500 outline-none" />
-                  <select value={inviteRoleId} onChange={e => setInviteRoleId(e.target.value)} className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-gray-300 text-sm focus:border-emerald-500 outline-none">
-                    <option value="admin">Administrador</option>
-                    <option value="viewer">Solo Lectura</option>
-                  </select>
-                  <button onClick={() => inviteUserMutation.mutate()} disabled={!inviteUserId || inviteUserMutation.isPending} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg disabled:opacity-50">
-                    Vincular Usuario
-                  </button>
-                </div>
+              <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                <h2 className="text-xl font-bold text-white">Gestión de Usuarios</h2>
+                <button
+                  onClick={() => { setShowCreateForm(!showCreateForm); setCreateError(''); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  {showCreateForm ? 'Cancelar' : 'Nuevo Usuario'}
+                </button>
               </div>
 
+              {/* Formulario de alta */}
+              {showCreateForm && (
+                <form onSubmit={handleCreateUser} className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5 space-y-4">
+                  <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-emerald-400" /> Crear Nuevo Usuario
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Nombre *</label>
+                      <input
+                        required
+                        value={createForm.firstName}
+                        onChange={e => setCreateForm({ ...createForm, firstName: e.target.value })}
+                        placeholder="Juan"
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Apellido *</label>
+                      <input
+                        required
+                        value={createForm.lastName}
+                        onChange={e => setCreateForm({ ...createForm, lastName: e.target.value })}
+                        placeholder="Pérez"
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Correo electrónico *</label>
+                      <input
+                        required
+                        type="email"
+                        value={createForm.email}
+                        onChange={e => setCreateForm({ ...createForm, email: e.target.value })}
+                        placeholder="juan@empresa.com"
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Nombre de usuario *</label>
+                      <input
+                        required
+                        value={createForm.username}
+                        onChange={e => setCreateForm({ ...createForm, username: e.target.value })}
+                        placeholder="jperez"
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Contraseña temporal *</label>
+                      <input
+                        required
+                        type="password"
+                        minLength={8}
+                        value={createForm.password}
+                        onChange={e => setCreateForm({ ...createForm, password: e.target.value })}
+                        placeholder="Mínimo 8 caracteres"
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Rol *</label>
+                      <select
+                        value={createForm.roleId}
+                        onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })}
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-emerald-500 outline-none"
+                      >
+                        <option value="admin">Administrador</option>
+                        <option value="viewer">Solo Lectura</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {createError && (
+                    <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg">{createError}</p>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={createUserMutation.isPending}
+                      className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      {createUserMutation.isPending ? 'Creando...' : 'Crear Usuario'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Tabla de usuarios */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="text-gray-500 border-b border-gray-800 uppercase text-xs">
                     <tr>
                       <th className="py-3 px-4">Usuario</th>
                       <th className="py-3 px-4">Correo</th>
-                      <th className="py-3 px-4">Rol en Empresa</th>
+                      <th className="py-3 px-4">Rol</th>
+                      <th className="py-3 px-4">Estado</th>
                       <th className="py-3 px-4 text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800/50">
+                    {users.length === 0 && (
+                      <tr><td colSpan={5} className="py-6 text-center text-gray-500 text-sm">No hay usuarios. Creá el primero con el botón de arriba.</td></tr>
+                    )}
                     {users.map((u: any) => (
-                      <tr key={u.user_id} className="hover:bg-gray-800/30">
-                        <td className="py-3 px-4 text-gray-200">{u.username} {u.is_super_admin === 1 && <span className="ml-2 px-2 py-0.5 bg-indigo-500/20 text-indigo-400 rounded text-xs font-bold">SUPER</span>}</td>
+                      <tr key={u.id} className="hover:bg-gray-800/30">
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-gray-200">{u.first_name} {u.last_name}</div>
+                          <div className="text-xs text-gray-500">{u.username}</div>
+                        </td>
                         <td className="py-3 px-4 text-gray-400">{u.email}</td>
-                        <td className="py-3 px-4 font-mono text-emerald-400">{u.role_id}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            u.role_id === 'admin'
+                              ? 'bg-indigo-500/20 text-indigo-400'
+                              : 'bg-amber-500/20 text-amber-400'
+                          }`}>
+                            {u.role_id === 'admin' ? 'Administrador' : 'Solo Lectura'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            u.is_active !== 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-600/40 text-gray-400'
+                          }`}>
+                            {u.is_active !== 0 ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </td>
                         <td className="py-3 px-4 text-right">
-                          <button 
-                            onClick={() => confirm("¿Seguro de revocar acceso?") && revokeUserMutation.mutate(u.user_id)}
-                            disabled={user?.id === u.user_id || u.is_super_admin === 1}
-                            className="text-rose-400 hover:text-rose-300 disabled:opacity-30 disabled:hover:text-rose-400 transition-colors flex items-center gap-1 justify-end ml-auto"
+                          <button
+                            onClick={() => confirm('\u00bfDesactivar este usuario?') && revokeUserMutation.mutate(u.id)}
+                            disabled={user?.id === u.id || u.is_super_admin === 1}
+                            className="text-rose-400 hover:text-rose-300 disabled:opacity-30 transition-colors flex items-center gap-1 justify-end ml-auto"
                           >
-                            <XCircle className="w-4 h-4" /> Revocar
+                            <XCircle className="w-4 h-4" /> Desactivar
                           </button>
                         </td>
                       </tr>
