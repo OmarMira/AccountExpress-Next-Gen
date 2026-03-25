@@ -76,9 +76,7 @@ export function AIPanel({ onClose }: AIPanelProps) {
   const handleDownloadOllama = async () => {
     const os = detectOS();
     if (os === 'linux') return;
-
     setDownloadStarted(true);
-    setDownloadDone(false);
 
     // Descarga nativa del browser — sin cargar en RAM
     const a = document.createElement('a');
@@ -87,11 +85,6 @@ export function AIPanel({ onClose }: AIPanelProps) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-
-    // Dar feedback visual luego de iniciar la descarga
-    setTimeout(() => {
-      setDownloadStarted(true);
-    }, 2000);
   };
 
   // ── Enviar mensaje ────────────────────────────────────────
