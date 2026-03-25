@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+@theme {
+  --animate-slide: slide 1.5s ease-in-out infinite;
+
+  @keyframes slide {
+    0% { margin-left: -40%; width: 40%; }
+    100% { margin-left: 100%; width: 40%; }
+  }
+}
+
 @layer base {
   html, body {
     @apply h-full antialiased bg-gray-900 text-gray-100 selection:bg-indigo-500/30;

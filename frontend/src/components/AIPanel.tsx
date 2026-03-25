@@ -45,9 +45,10 @@ export function AIPanel({ onClose }: AIPanelProps) {
   const [status, setStatus]         = useState<OllamaStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
 
-  const [downloading, setDownloading]   = useState(false);
+  const [downloading, setDownloading]       = useState(false);
+  const [downloadStarted, setDownloadStarted] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
-  const [downloadDone, setDownloadDone] = useState(false);
+  const [downloadDone, setDownloadDone]     = useState(false);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
@@ -80,22 +81,18 @@ export function AIPanel({ onClose }: AIPanelProps) {
 
     if (os === 'linux') return; // Linux usa comando, no descarga
 
-    const urls: Record<string, string> = {
-      windows: 'https://ollama.com/download/OllamaSetup.exe',
-      mac:     'https://ollama.com/download/Ollama-darwin.zip',
-    };
-
     const filenames: Record<string, string> = {
       windows: 'OllamaSetup.exe',
       mac:     'Ollama-darwin.zip',
     };
 
+    setDownloadStarted(true);
     setDownloading(true);
     setDownloadProgress(0);
     setDownloadDone(false);
 
     try {
-      const response = await fetch(urls[os]);
+      const response = await fetch(`/api/ai/download-ollama?os=${os}`, { credentials: 'include' });
       if (!response.ok || !response.body) throw new Error('Download failed');
 
       const contentLength = Number(response.headers.get('Content-Length') ?? 0);
@@ -261,23 +258,17 @@ export function AIPanel({ onClose }: AIPanelProps) {
                 Descargar de nuevo
               </button>
             </div>
-          ) : downloading ? (
+          ) : downloadStarted ? (
             <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                <span>Descargando Ollama...</span>
-                <span>{downloadProgress}%</span>
+              <div className="text-xs text-gray-400 mb-1">
+                Descargando Ollama...
               </div>
               <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${downloadProgress}%` }}
-                />
+                <div className="bg-blue-500 h-2 rounded-full animate-slide" />
               </div>
-              {downloadProgress < 100 && (
-                <p className="text-gray-500 text-xs text-center animate-pulse">
-                  Instalador descargándose, por favor esperá...
-                </p>
-              )}
+              <p className="text-gray-500 text-xs text-center animate-pulse">
+                Instalador descargándose, por favor esperá...
+              </p>
             </div>
           ) : (
             <button

@@ -97,4 +97,39 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
       ),
       companyId: t.String()
     })
+  })
+
+  // ── GET /ai/download-ollama — proxy de descarga ───────────
+  .get("/download-ollama", async ({ query, set }) => {
+    const os = query.os as string;
+
+    const urls: Record<string, string> = {
+      windows: "https://ollama.com/download/OllamaSetup.exe",
+      mac:     "https://ollama.com/download/Ollama-darwin.zip",
+    };
+
+    const url = urls[os];
+    if (!url) {
+      set.status = 400;
+      return { error: "Invalid OS" };
+    }
+
+    const response = await fetch(url, { redirect: 'follow' });
+    if (!response.ok || !response.body) {
+      set.status = 502;
+      return { error: "Failed to fetch from ollama.com" };
+    }
+
+    const contentLength = response.headers.get("Content-Length");
+
+    return new Response(response.body, {
+      headers: {
+        "Content-Type":        "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${os === "windows" ? "OllamaSetup.exe" : "Ollama-darwin.zip"}"`,
+        ...(contentLength ? { "Content-Length": contentLength } : {}),
+        "Cache-Control": "no-cache",
+      },
+    });
+  }, {
+    query: t.Object({ os: t.String() })
   });
