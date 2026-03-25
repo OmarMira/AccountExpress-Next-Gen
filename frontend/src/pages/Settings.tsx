@@ -195,9 +195,8 @@ export function Settings() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input value={inviteUserId} onChange={e => setInviteUserId(e.target.value)} type="text" placeholder="User ID interno" className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-emerald-500 outline-none" />
                   <select value={inviteRoleId} onChange={e => setInviteRoleId(e.target.value)} className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-gray-300 text-sm focus:border-emerald-500 outline-none">
-                    <option value="admin">Administrador (Admin)</option>
-                    <option value="accountant">Contador Público (CPA)</option>
-                    <option value="viewer">Solo Lectura (Viewer)</option>
+                    <option value="admin">Administrador</option>
+                    <option value="viewer">Solo Lectura</option>
                   </select>
                   <button onClick={() => inviteUserMutation.mutate()} disabled={!inviteUserId || inviteUserMutation.isPending} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg disabled:opacity-50">
                     Vincular Usuario
@@ -249,32 +248,16 @@ export function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   {
-                    id: 'super_admin',
-                    name: 'Super Administrador',
-                    color: 'indigo',
-                    badge: 'SUPER',
-                    description: 'Acceso total al sistema. Puede gestionar empresas, usuarios, y toda la configuración.',
-                    permissions: ['Todas las operaciones contables', 'Gestión de usuarios y roles', 'Configuración del sistema', 'Respaldos y auditoría', 'Cierre de periodos fiscales'],
-                  },
-                  {
                     id: 'admin',
                     name: 'Administrador',
-                    color: 'violet',
+                    color: 'indigo',
                     badge: 'ADMIN',
-                    description: 'Acceso completo a la empresa asignada. Puede invitar y gestionar otros usuarios.',
-                    permissions: ['Todas las operaciones contables', 'Gestión de usuarios de la empresa', 'Conciliación bancaria', 'Exportar para CPA', 'Cierre de periodos'],
-                  },
-                  {
-                    id: 'accountant',
-                    name: 'Contador Público (CPA)',
-                    color: 'emerald',
-                    badge: 'CPA',
-                    description: 'Acceso operativo completo. Puede registrar asientos, conciliar y generar reportes.',
-                    permissions: ['Plan de cuentas (lectura/escritura)', 'Diario contable', 'Conciliación bancaria', 'Reportes y exportación', 'Sin acceso a configuración'],
+                    description: 'Acceso completo a la empresa. Puede gestionar usuarios, registrar asientos, conciliar y cerrar periodos.',
+                    permissions: ['Todas las operaciones contables', 'Gestión de usuarios', 'Conciliación bancaria', 'Exportar para CPA', 'Cierre de periodos'],
                   },
                   {
                     id: 'viewer',
-                    name: 'Solo Lectura (Viewer)',
+                    name: 'Solo Lectura',
                     color: 'amber',
                     badge: 'VIEWER',
                     description: 'Acceso de consulta únicamente. No puede crear ni modificar ningún registro.',
