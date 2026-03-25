@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Settings as SettingsIcon, Building, Users, Calendar, KeyRound, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database } from 'lucide-react';
+import { Settings as SettingsIcon, Building, Users, Calendar, KeyRound, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield } from 'lucide-react';
 import { BackupPanel } from '../components/BackupPanel';
 
 export function Settings() {
@@ -11,7 +11,7 @@ export function Settings() {
   const setActiveCompany = useAuthStore((state) => state.setActiveCompany);
   const queryClient = useQueryClient();
   
-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'periods' | 'security' | 'backups'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'security' | 'backups'>('company');
 
   // --- Company Form State ---
   const [companyForm, setCompanyForm] = useState({
@@ -130,6 +130,9 @@ export function Settings() {
           <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'users' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
             <Users className="w-5 h-5" /> Gestión de Usuarios
           </button>
+          <button onClick={() => setActiveTab('roles')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'roles' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
+            <Shield className="w-5 h-5" /> Roles y Permisos
+          </button>
           <button onClick={() => setActiveTab('periods')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'periods' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
             <Calendar className="w-5 h-5" /> Periodos Fiscales
           </button>
@@ -231,6 +234,72 @@ export function Settings() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: ROLES */}
+          {activeTab === 'roles' && (
+            <div className="space-y-6">
+              <div className="border-b border-gray-800 pb-3">
+                <h2 className="text-xl font-bold text-white">Roles y Permisos del Sistema</h2>
+                <p className="text-sm text-gray-400 mt-1">Los roles son fijos a nivel del sistema. Asigná el rol adecuado a cada usuario al vincularlo a la empresa.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  {
+                    id: 'super_admin',
+                    name: 'Super Administrador',
+                    color: 'indigo',
+                    badge: 'SUPER',
+                    description: 'Acceso total al sistema. Puede gestionar empresas, usuarios, y toda la configuración.',
+                    permissions: ['Todas las operaciones contables', 'Gestión de usuarios y roles', 'Configuración del sistema', 'Respaldos y auditoría', 'Cierre de periodos fiscales'],
+                  },
+                  {
+                    id: 'admin',
+                    name: 'Administrador',
+                    color: 'violet',
+                    badge: 'ADMIN',
+                    description: 'Acceso completo a la empresa asignada. Puede invitar y gestionar otros usuarios.',
+                    permissions: ['Todas las operaciones contables', 'Gestión de usuarios de la empresa', 'Conciliación bancaria', 'Exportar para CPA', 'Cierre de periodos'],
+                  },
+                  {
+                    id: 'accountant',
+                    name: 'Contador Público (CPA)',
+                    color: 'emerald',
+                    badge: 'CPA',
+                    description: 'Acceso operativo completo. Puede registrar asientos, conciliar y generar reportes.',
+                    permissions: ['Plan de cuentas (lectura/escritura)', 'Diario contable', 'Conciliación bancaria', 'Reportes y exportación', 'Sin acceso a configuración'],
+                  },
+                  {
+                    id: 'viewer',
+                    name: 'Solo Lectura (Viewer)',
+                    color: 'amber',
+                    badge: 'VIEWER',
+                    description: 'Acceso de consulta únicamente. No puede crear ni modificar ningún registro.',
+                    permissions: ['Ver plan de cuentas', 'Ver diario contable', 'Ver reportes', 'Sin escritura', 'Sin acceso bancario'],
+                  },
+                ].map((role) => (
+                  <div key={role.id} className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5 hover:border-gray-600 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-gray-400" />
+                        <span className="font-semibold text-white text-sm">{role.name}</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold bg-${role.color}-500/20 text-${role.color}-400`}>{role.badge}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mb-3 leading-relaxed">{role.description}</p>
+                    <ul className="space-y-1">
+                      {role.permissions.map((p) => (
+                        <li key={p} className="flex items-center gap-2 text-xs text-gray-300">
+                          <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" />
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
             </div>
           )}
