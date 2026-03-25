@@ -45,10 +45,7 @@ export function AIPanel({ onClose }: AIPanelProps) {
   const [status, setStatus]         = useState<OllamaStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
 
-  const [downloading, setDownloading]       = useState(false);
   const [downloadStarted, setDownloadStarted] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [downloadDone, setDownloadDone]     = useState(false);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
@@ -78,57 +75,23 @@ export function AIPanel({ onClose }: AIPanelProps) {
 
   const handleDownloadOllama = async () => {
     const os = detectOS();
-
-    if (os === 'linux') return; // Linux usa comando, no descarga
-
-    const filenames: Record<string, string> = {
-      windows: 'OllamaSetup.exe',
-      mac:     'Ollama-darwin.zip',
-    };
+    if (os === 'linux') return;
 
     setDownloadStarted(true);
-    setDownloading(true);
-    setDownloadProgress(0);
     setDownloadDone(false);
 
-    try {
-      const response = await fetch(`/api/ai/download-ollama?os=${os}`, { credentials: 'include' });
-      if (!response.ok || !response.body) throw new Error('Download failed');
+    // Descarga nativa del browser — sin cargar en RAM
+    const a = document.createElement('a');
+    a.href = `/api/ai/download-ollama?os=${os}`;
+    a.download = os === 'windows' ? 'OllamaSetup.exe' : 'Ollama-darwin.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-      const contentLength = Number(response.headers.get('Content-Length') ?? 0);
-      const reader = response.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let received = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        if (contentLength > 0) {
-          setDownloadProgress(Math.round((received / contentLength) * 100));
-        } else {
-          // Sin Content-Length: progreso indeterminado animado
-          setDownloadProgress((prev) => Math.min(prev + 2, 90));
-        }
-      }
-
-      // Construir blob y disparar descarga
-      const blob = new Blob(chunks as BlobPart[]);
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = filenames[os];
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setDownloadProgress(100);
-      setDownloadDone(true);
-      setDownloading(false);
-    } catch {
-      setDownloading(false);
-      setDownloadProgress(0);
-    }
+    // Dar feedback visual luego de iniciar la descarga
+    setTimeout(() => {
+      setDownloadStarted(true);
+    }, 2000);
   };
 
   // ── Enviar mensaje ────────────────────────────────────────
@@ -241,18 +204,18 @@ export function AIPanel({ onClose }: AIPanelProps) {
                 curl -fsSL https://ollama.com/install.sh | sh
               </code>
             </div>
-          ) : downloadDone ? (
+          ) : downloadStarted ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-green-400 text-sm font-medium">
-                <CheckCircle2 size={16} />
-                Descarga completa
+              <div className="flex items-center gap-2 text-blue-400 text-sm font-medium">
+                <Loader2 size={16} className="animate-spin" />
+                Descarga iniciada
               </div>
               <p className="text-gray-400 text-xs">
-                Abrí el archivo descargado para instalar Ollama.<br />
-                Después ejecutá: <code className="text-gray-300">ollama pull mistral</code>
+                Revisá tu carpeta de Downloads.<br />
+                Una vez instalado ejecutá: <code className="text-gray-300">ollama pull mistral</code>
               </p>
               <button
-                onClick={() => { setDownloadDone(false); setDownloadProgress(0); }}
+                onClick={() => setDownloadStarted(false)}
                 className="text-xs text-gray-500 hover:text-gray-300 underline"
               >
                 Descargar de nuevo

@@ -85,9 +85,9 @@ export function Dashboard() {
           </div>
 
           {/* Cash Flow */}
-          <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-6 shadow-lg md:col-span-2 lg:col-span-2 hover:border-gray-600 transition-colors">
+          <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-6 shadow-lg md:col-span-2 lg:col-span-2 hover:border-gray-600 transition-colors flex flex-col">
             <p className="text-sm font-medium text-gray-400 mb-5">Flujo de Caja Mensual</p>
-            <div className="flex flex-col sm:flex-row items-stretch justify-between gap-4 h-full">
+            <div className="flex flex-col md:flex-row items-stretch justify-between gap-4 flex-1">
               <div className="flex-1 bg-gray-900/50 rounded-xl p-4 border border-gray-800 relative overflow-hidden group">
                 <div className="flex items-center gap-2 text-emerald-400 mb-2">
                   <ArrowUpRight className="w-4 h-4" />
