@@ -132,4 +132,24 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
     });
   }, {
     query: t.Object({ os: t.String() })
+  })
+
+  // ── POST /ai/pull-model — descarga Mistral automáticamente ──
+  .post("/pull-model", async ({ set }) => {
+    try {
+      const proc = Bun.spawn(["ollama", "pull", "mistral"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      // No esperamos — corre en background
+      proc.exited.catch((err) => {
+        console.error("[AI] ollama pull mistral failed:", err);
+      });
+
+      return { success: true, message: "Pull started" };
+    } catch (err: any) {
+      set.status = 500;
+      return { success: false, error: err.message };
+    }
   });

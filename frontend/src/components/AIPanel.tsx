@@ -46,6 +46,8 @@ export function AIPanel({ onClose }: AIPanelProps) {
   const [statusLoading, setStatusLoading] = useState(true);
 
   const [downloadStarted, setDownloadStarted] = useState(false);
+  const [pulling, setPulling]               = useState(false);
+  const [pullError, setPullError]           = useState<string | null>(null);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
@@ -59,6 +61,44 @@ export function AIPanel({ onClose }: AIPanelProps) {
       .catch(() => setStatus({ ollamaRunning: false, mistralReady: false }))
       .finally(() => setStatusLoading(false));
   }, []);
+
+  // Auto-pull Mistral si Ollama corre pero modelo no está
+  useEffect(() => {
+    if (!statusLoading && status?.ollamaRunning && !status?.mistralReady && !pulling) {
+      setPulling(true);
+      setPullError(null);
+      fetch('/api/ai/pull-model', { method: 'POST', credentials: 'include' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!d.success) {
+            setPullError(d.error ?? 'Error iniciando descarga');
+            setPulling(false);
+          }
+        })
+        .catch((err) => {
+          setPullError(err.message);
+          setPulling(false);
+        });
+    }
+  }, [statusLoading, status]);
+
+  // Polling cada 10 segundos hasta que Mistral esté listo
+  useEffect(() => {
+    if (!pulling) return;
+    const interval = setInterval(() => {
+      fetch('/api/ai/status', { credentials: 'include' })
+        .then((r) => r.json())
+        .then((d) => {
+          setStatus(d.data);
+          if (d.data?.mistralReady) {
+            setPulling(false);
+            clearInterval(interval);
+          }
+        })
+        .catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [pulling]);
 
   // ── Auto-scroll ───────────────────────────────────────────
 
@@ -237,22 +277,40 @@ export function AIPanel({ onClose }: AIPanelProps) {
         </div>
       )}
 
-      {/* Ollama instalado pero modelo no disponible */}
+      {/* Auto-pull Mistral en progreso */}
       {!statusLoading && status?.ollamaRunning && !status?.mistralReady && (
         <div className="mx-4 mt-4 p-4 bg-gray-800 border border-gray-700 rounded-xl space-y-3">
-          <div className="flex items-center gap-2 text-yellow-400">
-            <AlertCircle size={16} />
-            <span className="text-sm font-semibold">Modelo no descargado</span>
-          </div>
-          <p className="text-gray-400 text-xs">
-            Ollama está corriendo pero Mistral no está disponible todavía.
-          </p>
-          <p className="text-gray-500 text-xs">
-            Ejecutá en tu terminal:
-          </p>
-          <code className="block bg-gray-900 text-green-400 text-xs px-3 py-2 rounded-lg">
-            ollama pull mistral
-          </code>
+          {pullError ? (
+            <>
+              <div className="flex items-center gap-2 text-red-400">
+                <AlertCircle size={16} />
+                <span className="text-sm font-semibold">Error descargando modelo</span>
+              </div>
+              <p className="text-red-300 text-xs">{pullError}</p>
+              <button
+                onClick={() => { setPullError(null); setPulling(false); }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors"
+              >
+                Reintentar
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 text-blue-400">
+                <Loader2 size={16} className="animate-spin" />
+                <span className="text-sm font-semibold">Descargando Mistral...</span>
+              </div>
+              <p className="text-gray-400 text-xs">
+                Descargando el modelo de IA (~4 GB). Esto puede tardar varios minutos según tu conexión.
+              </p>
+              <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                <div className="bg-blue-500 h-2 rounded-full animate-slide" />
+              </div>
+              <p className="text-gray-500 text-xs text-center animate-pulse">
+                No cierres esta ventana...
+              </p>
+            </>
+          )}
         </div>
       )}
 
