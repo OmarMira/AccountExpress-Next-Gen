@@ -90,6 +90,16 @@ export function Settings() {
     onError: (err: any) => alert(`Error: ${err.message}`),
   });
 
+  const assignRoleMutation = useMutation({
+    mutationFn: async ({ userId, roleId }: { userId: string; roleId: string }) =>
+      fetchApi(`/users/${userId}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ companyId: activeCompany?.id, roleId }),
+      }),
+    onSuccess: () => refetchUsers(),
+    onError: (err: any) => alert(`Error al cambiar rol: ${err.message}`),
+  });
+
   // --- Fiscal Periods State ---
   const { data: periods = [] } = useQuery({
     queryKey: ['fiscal-periods', activeCompany?.id],
@@ -332,13 +342,15 @@ export function Settings() {
                         </td>
                         <td className="py-3 px-4 text-gray-400">{u.email}</td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                            u.role_id === 'admin'
-                              ? 'bg-indigo-500/20 text-indigo-400'
-                              : 'bg-amber-500/20 text-amber-400'
-                          }`}>
-                            {u.role_id === 'admin' ? 'Administrador' : 'Solo Lectura'}
-                          </span>
+                          <select
+                            value={u.role_id ?? 'viewer'}
+                            onChange={e => assignRoleMutation.mutate({ userId: u.id, roleId: e.target.value })}
+                            disabled={u.is_super_admin === 1 || assignRoleMutation.isPending}
+                            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs font-medium focus:border-indigo-500 outline-none disabled:opacity-40 cursor-pointer"
+                          >
+                            <option value="admin">Administrador</option>
+                            <option value="viewer">Solo Lectura</option>
+                          </select>
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-0.5 rounded text-xs font-bold ${
