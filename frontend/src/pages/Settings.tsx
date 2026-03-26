@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Settings as SettingsIcon, Building, Users, Calendar, KeyRound, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff } from 'lucide-react';
+import { Settings as SettingsIcon, Building, Users, Calendar, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff } from 'lucide-react';
 import { BackupPanel } from '../components/BackupPanel';
 
 export function Settings() {
@@ -11,7 +11,7 @@ export function Settings() {
   const setActiveCompany = useAuthStore((state) => state.setActiveCompany);
   const queryClient = useQueryClient();
   
-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'security' | 'backups'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups'>('company');
 
   // --- Company Form State ---
   const [companyForm, setCompanyForm] = useState({
@@ -125,27 +125,6 @@ export function Settings() {
     onError: (err: any) => alert(`Error al cerrar periodo: ${err.message}`)
   });
 
-  // --- Security State ---
-  const [passForm, setPassForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-  
-  const changePasswordMutation = useMutation({
-    mutationFn: async () => fetchApi(`/auth/change-password`, {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword: passForm.currentPassword, newPassword: passForm.newPassword })
-    }),
-    onSuccess: () => {
-      alert("Contraseña actualizada exitosamente");
-      setPassForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    },
-    onError: (err: any) => alert(`Error: ${err.message}`)
-  });
-
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passForm.newPassword !== passForm.confirmPassword) return alert("Las contraseñas no coinciden");
-    changePasswordMutation.mutate();
-  };
-
   // (Backup Hooks have been migrated to BackupPanel component)
 
   return (
@@ -172,9 +151,6 @@ export function Settings() {
           </button>
           <button onClick={() => setActiveTab('periods')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'periods' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
             <Calendar className="w-5 h-5" /> Periodos Fiscales
-          </button>
-          <button onClick={() => setActiveTab('security')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'security' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
-            <KeyRound className="w-5 h-5" /> Privacidad y Seguridad
           </button>
           <button onClick={() => setActiveTab('backups')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'backups' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
             <Database className="w-5 h-5" /> Respaldos del Sistema
@@ -514,32 +490,6 @@ export function Settings() {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* TAB: SECURITY */}
-          {activeTab === 'security' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold text-white border-b border-gray-800 pb-3">Credenciales de Acceso</h2>
-              <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-sm">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Contraseña Actual</label>
-                  <input type="password" value={passForm.currentPassword} onChange={e => setPassForm({...passForm, currentPassword: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Nueva Contraseña Segura</label>
-                  <input type="password" value={passForm.newPassword} onChange={e => setPassForm({...passForm, newPassword: e.target.value})} minLength={8} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Repetir Nueva Contraseña</label>
-                  <input type="password" value={passForm.confirmPassword} onChange={e => setPassForm({...passForm, confirmPassword: e.target.value})} minLength={8} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" required />
-                </div>
-                <div className="pt-4">
-                  <button type="submit" disabled={changePasswordMutation.isPending || !passForm.newPassword} className="flex items-center gap-2 w-full justify-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-lg">
-                    <KeyRound className="w-5 h-5" /> Aplicar Rotación de Credenciales
-                  </button>
-                </div>
-              </form>
             </div>
           )}
 
