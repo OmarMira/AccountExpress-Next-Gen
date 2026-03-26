@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Settings as SettingsIcon, Building, Users, Calendar, KeyRound, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Building, Users, Calendar, KeyRound, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff } from 'lucide-react';
 import { BackupPanel } from '../components/BackupPanel';
 
 export function Settings() {
@@ -55,9 +55,12 @@ export function Settings() {
     username: '',
     email: '',
     password: '',
+    confirmPassword: '',
     roleId: 'admin',
   });
   const [createError, setCreateError] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   const createUserMutation = useMutation({
     mutationFn: async () => fetchApi('/users', {
@@ -69,7 +72,7 @@ export function Settings() {
     }),
     onSuccess: () => {
       setShowCreateForm(false);
-      setCreateForm({ firstName: '', lastName: '', username: '', email: '', password: '', roleId: 'admin' });
+      setCreateForm({ firstName: '', lastName: '', username: '', email: '', password: '', confirmPassword: '', roleId: 'admin' });
       setCreateError('');
       refetchUsers();
     },
@@ -79,6 +82,10 @@ export function Settings() {
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError('');
+    if (createForm.password !== createForm.confirmPassword) {
+      setCreateError('Las contraseñas no coinciden');
+      return;
+    }
     createUserMutation.mutate();
   };
 
@@ -277,16 +284,50 @@ export function Settings() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Contraseña temporal *</label>
-                      <input
-                        required
-                        type="password"
-                        minLength={8}
-                        value={createForm.password}
-                        onChange={e => setCreateForm({ ...createForm, password: e.target.value })}
-                        placeholder="Mínimo 8 caracteres"
-                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
-                      />
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Contraseña *</label>
+                      <div className="relative">
+                        <input
+                          required
+                          type={showPass ? 'text' : 'password'}
+                          minLength={8}
+                          value={createForm.password}
+                          onChange={e => setCreateForm({ ...createForm, password: e.target.value })}
+                          placeholder="Mínimo 8 caracteres"
+                          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 pr-10 text-white text-sm focus:border-emerald-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPass(!showPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                        >
+                          {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Confirmar Contraseña *</label>
+                      <div className="relative">
+                        <input
+                          required
+                          type={showConfirmPass ? 'text' : 'password'}
+                          minLength={8}
+                          value={createForm.confirmPassword}
+                          onChange={e => setCreateForm({ ...createForm, confirmPassword: e.target.value })}
+                          placeholder="Repetir contraseña"
+                          className={`w-full bg-gray-900 border rounded-lg px-3 py-2 pr-10 text-white text-sm focus:outline-none ${
+                            createForm.confirmPassword && createForm.password !== createForm.confirmPassword
+                              ? 'border-rose-500 focus:border-rose-500'
+                              : 'border-gray-700 focus:border-emerald-500'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPass(!showConfirmPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                        >
+                          {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-400 mb-1">Rol *</label>
