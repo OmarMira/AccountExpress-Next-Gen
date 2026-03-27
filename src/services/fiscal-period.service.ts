@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // FISCAL PERIOD SERVICE
 // Controls the open → closed → locked lifecycle per company.
 // RULES:
@@ -29,20 +29,13 @@ export function openPeriod(opts: {
          AND period_type = ?
          AND status      != 'closed'
          AND status      != 'locked'
-         AND (
-           (start_date <= ? AND end_date >= ?)
-           OR
-           (start_date <= ? AND end_date >= ?)
-           OR
-           (start_date >= ? AND end_date <= ?)
-         )`
+         AND NOT (end_date < ? OR start_date > ?)`
     )
     .get(
       opts.companyId,
       opts.periodType,
-      opts.endDate,   opts.startDate,
-      opts.startDate, opts.startDate,
-      opts.startDate, opts.endDate
+      opts.startDate,  // end_date < startDate  → no overlap before
+      opts.endDate     // start_date > endDate   → no overlap after
     );
 
   if (overlapping) {
