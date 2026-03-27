@@ -1,4 +1,4 @@
-﻿import { BackupService } from './BackupService';
+import { BackupService } from './BackupService';
 import { rawDb as db } from '../../db/connection';
 import { createAuditEntry } from '../audit.service';
 
@@ -19,7 +19,11 @@ export class BackupScheduler {
 
   async start(): Promise<void> {
     this.timer = setInterval(() => this.checkSchedule(), 60 * 60 * 1000);
-    this.checkSchedule(); // check on start
+    try {
+      await this.checkSchedule(); // check on start
+    } catch (e) {
+      console.error("[BackupScheduler] Error during initial checkSchedule:", e);
+    }
   }
 
   async stop(): Promise<void> {

@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // BALANCE SHEET
 // Represents the financial position at a specific point in time.
 // Assets = Liabilities + Equity
@@ -93,9 +93,10 @@ export function getBalanceSheet(companyId: string, asOfDate: string): BalanceShe
   }
 
   // Strict Accounting Equation Verifier: Assets === Liabilities + Equity
+  // NOTE: comparison operates on cent integers BEFORE the /100 conversions below.
   if (data.assets.total !== (data.liabilities.total + data.equity.total)) {
     const diff = data.assets.total - (data.liabilities.total + data.equity.total);
-    throw new AccountingError(`CATASTROPHIC BALANCE SHEET ERROR: Equation unbalanced by ${diff / 100} cents.`);
+    throw new AccountingError(`CATASTROPHIC BALANCE SHEET ERROR: Equation unbalanced by ${diff} cents.`);
   }
 
   // Format finals back to floats

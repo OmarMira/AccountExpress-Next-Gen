@@ -18,7 +18,7 @@ export const dashboardRoutes = new Elysia({ prefix: "/dashboard" })
     try {
       // Get bank balance
       const bankResult = rawDb.query(`
-        SELECT SUM(current_balance) as total FROM bank_accounts WHERE company_id = ?
+        SELECT SUM(balance) as total FROM bank_accounts WHERE company_id = ?
       `).get(companyId) as any;
 
       // Get pending transactions
