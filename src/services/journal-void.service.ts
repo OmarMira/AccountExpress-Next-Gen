@@ -62,9 +62,9 @@ export function voidEntry(
   const insertEntry  = rawDb.prepare(
     `INSERT INTO journal_entries
        (id, company_id, entry_number, entry_date, description, reference,
-        status, is_adjusting, is_reversing, period_id, created_by, posted_by, posted_at,
+        status, is_adjusting, is_reversing, reverses_id, period_id, created_by, posted_by, posted_at,
         entry_hash, prev_hash, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'posted', 0, 1, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, 'posted', 0, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertLine   = rawDb.prepare(
     `INSERT INTO journal_lines
@@ -81,6 +81,7 @@ export function voidEntry(
     insertEntry.run(
       revId, entry.company_id, revNumber, revInputForHash.entryDate,
       revInputForHash.description, revInputForHash.reference,
+      entryId,          // reverses_id ← ID of the original entry being reversed
       entry.period_id, voidedBy, voidedBy, now,
       revHash, prevHash, now, now
     );

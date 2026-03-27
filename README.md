@@ -23,5 +23,5 @@ Nuevo Sistema Solo Contabilidad
 ```
 
 ### Credenciales iniciales:
-  Usuario: admin
-  Contraseña: ChangeMe@2026!
+  Usuario: valor de ADMIN_USERNAME en tu .env
+  Contraseña: valor de ADMIN_PASSWORD en tu .env

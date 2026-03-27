@@ -3,11 +3,20 @@ import { users } from "../src/db/schema";
 import { hashPassword } from "../src/services/auth/password.service";
 
 async function main() {
-  const { hash, salt } = await hashPassword("Admin123!");
+  const username = process.env.ADMIN_USERNAME;
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!username || !password) {
+    throw new Error(
+      "Error: ADMIN_USERNAME y ADMIN_PASSWORD deben estar definidas en el archivo .env"
+    );
+  }
+
+  const { hash, salt } = await hashPassword(password);
 
   await db.insert(users).values({
     id: crypto.randomUUID(),
-    username: "admin",
+    username,
     email: "admin@accountexpress.local",
     passwordHash: hash,
     passwordSalt: salt,
@@ -22,8 +31,8 @@ async function main() {
   });
 
   console.log("✅ Usuario creado:");
-  console.log("   Username: admin");
-  console.log("   Password: Admin123!");
+  console.log(`   Username: ${username}`);
+  console.log("   Password: (valor de ADMIN_PASSWORD en .env)");
 }
 
 main().catch(console.error);
