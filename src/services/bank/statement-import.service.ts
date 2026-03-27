@@ -1,4 +1,4 @@
-﻿import { db } from "../../db/connection";
+import { db } from "../../db/connection";
 import { bankTransactions } from "../../db/schema/accounting.schema";
 import { bankAccounts } from "../../db/schema/bank-accounts.schema";
 import { and, eq } from "drizzle-orm";
@@ -69,7 +69,11 @@ class StatementImportService {
                 const header = lines[0].toLowerCase();
                 
                 // Detect Chase
-                if (header.includes("transaction date") && header.includes("post date") && header.includes("description") && header.includes("amount")) {
+                const cols = header.split(',').map((c: string) => c.trim());
+                const hasTransactionDate = cols.some((c: string) => c === "transaction date");
+                const hasPostDate = cols.some((c: string) => c === "post date");
+ 
+                if (hasTransactionDate && hasPostDate) {
                     format = "CSV-Chase";
                     extractedBankName = "CHASE";
                     txns = this.parseChaseCSV(lines);
