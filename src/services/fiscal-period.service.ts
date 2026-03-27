@@ -80,6 +80,22 @@ export function closePeriod(periodId: string, closedByUserId: string): void {
       `Cannot close period: ${pendingTransactions.c} bank transaction(s) still pending reconciliation`
     );
   }
+ 
+  // Check no draft journal entries remain in this period
+  const pendingDrafts = rawDb
+    .query(
+      `SELECT COUNT(*) as c FROM journal_entries
+       WHERE period_id = ?
+         AND status = 'draft'`
+    )
+    .get(periodId) as { c: number };
+ 
+  if (pendingDrafts.c > 0) {
+    throw new Error(
+      `Cannot close period: ${pendingDrafts.c} journal entry/entries ` +
+      `still in draft status. Post or delete them before closing.`
+    );
+  }
 
   rawDb
     .prepare(
