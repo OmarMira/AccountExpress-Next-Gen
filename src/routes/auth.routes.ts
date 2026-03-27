@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // AUTH ROUTES — POST /auth/login, /logout, /change-password
 // ============================================================
 
@@ -11,6 +11,7 @@ import {
   isAccountLocked,
   updateLastLogin,
   hashPassword,
+  DUMMY_HASH,
 } from "../services/auth.service.ts";
 import {
   createSession,
@@ -41,6 +42,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         } | null;
 
       if (!user) {
+        await verifyPassword(body.password, DUMMY_HASH);
         set.status = 401;
         return { error: "Invalid credentials" };
       }

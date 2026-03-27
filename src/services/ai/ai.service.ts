@@ -31,7 +31,7 @@ export function buildFinancialContext(companyId: string): object {
   try {
     // Balance bancario
     const bank = rawDb.query(
-      `SELECT SUM(current_balance) as total FROM bank_accounts WHERE company_id = ?`
+      `SELECT SUM(balance) as total FROM bank_accounts WHERE company_id = ?`
     ).get(companyId) as any;
 
     // Transacciones pendientes
@@ -48,14 +48,14 @@ export function buildFinancialContext(companyId: string): object {
 
     // Últimos 10 asientos del diario
     const journal = rawDb.query(
-      `SELECT je.date, je.description, je.reference,
+      `SELECT je.entry_date as date, je.description, je.reference,
               SUM(jl.debit_amount)  as total_debits,
               SUM(jl.credit_amount) as total_credits
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
        WHERE je.company_id = ?
        GROUP BY je.id
-       ORDER BY je.date DESC LIMIT 10`
+       ORDER BY je.entry_date DESC LIMIT 10`
     ).all(companyId) as any[];
 
     // Verificar balance de partida doble (últimos 30 días)
@@ -64,12 +64,12 @@ export function buildFinancialContext(companyId: string): object {
        FROM journal_lines jl
        INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
        WHERE je.company_id = ?
-         AND je.date >= date('now', '-30 days')`
+         AND je.entry_date >= date('now', '-30 days')`
     ).get(companyId) as any;
 
     // Top 5 cuentas por actividad
     const topAccounts = rawDb.query(
-      `SELECT ca.account_code, ca.account_name, ca.account_type,
+      `SELECT ca.code as account_code, ca.name as account_name, ca.account_type,
               SUM(jl.debit_amount + jl.credit_amount) as activity
        FROM journal_lines jl
        INNER JOIN journal_entries je ON je.id = jl.journal_entry_id

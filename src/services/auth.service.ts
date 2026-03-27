@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // AUTH SERVICE
 // bcrypt password hashing (cost 12) and account lockout logic.
 // SECURITY RULES:
@@ -145,4 +145,9 @@ export function updateLastLogin(userId: string, ip: string): void {
     )
     .run(new Date().toISOString(), ip, new Date().toISOString(), userId);
 }
+
+// ── Timing Attack Mitigation ──────────────────────────────────
+// Used when a user is not found to ensure bcrypt still runs.
+export const DUMMY_HASH =
+  "$2b$12$invalidhashfortimingprotectiononly000000000000000000000";
 
