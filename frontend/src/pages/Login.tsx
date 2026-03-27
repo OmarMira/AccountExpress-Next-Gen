@@ -60,21 +60,6 @@ export function Login() {
     }
   };
 
-  const handleBypass = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const data = await fetchApi('/auth/bypass', { method: 'POST' });
-      setAuth(data.user);
-      setAvailableCompanies(data.companies);
-      navigate('/select-company', { replace: true });
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       {error && !lockedUntil && (
@@ -130,17 +115,6 @@ export function Login() {
             className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Ingresando...' : 'Ingresar'}
-          </button>
-        </div>
-        
-        <div className="pt-4 border-t border-gray-700">
-          <button
-            type="button"
-            onClick={handleBypass}
-            disabled={loading}
-            className="w-full flex justify-center py-2 px-4 border border-emerald-500/50 rounded-md shadow-sm text-sm font-bold tracking-widest text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 focus:ring-offset-gray-900 transition-colors uppercase"
-          >
-            SALTAR LOGIN (DEV)
           </button>
         </div>
       </form>
