@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // AUDIT ROUTES — GET /audit (read-only + chain verification)
 // ============================================================
 
@@ -21,7 +21,13 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
     if ((query.module as string))    { sql += " AND module = ?";     params.push((query.module as string)); }
     if ((query.action as string))    { sql += " AND action = ?";     params.push((query.action as string)); }
 
-    sql += ` ORDER BY chain_index DESC LIMIT ${(query.limit as string) ? parseInt((query.limit as string)) : 100} OFFSET ${(query.offset as string) ? parseInt((query.offset as string)) : 0}`;
+    const limitVal  = parseInt((query.limit  as string)) || 100;
+    const offsetVal = parseInt((query.offset as string)) || 0;
+    const safeLimit  = Number.isFinite(limitVal)  && limitVal > 0  ? limitVal : 100;
+    const safeOffset = Number.isFinite(offsetVal) && offsetVal >= 0 ? offsetVal : 0;
+ 
+    sql += " ORDER BY chain_index DESC LIMIT ? OFFSET ?";
+    params.push(safeLimit, safeOffset);
 
     return rawDb.query(sql).all(...params);
   })
