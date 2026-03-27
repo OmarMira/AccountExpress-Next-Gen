@@ -155,7 +155,13 @@ export function listEntries(
   if (opts?.status)   { sql += " AND e.status = ?";    params.push(opts.status); }
   if (opts?.periodId) { sql += " AND e.period_id = ?"; params.push(opts.periodId); }
   sql += " GROUP BY e.id ORDER BY e.entry_date DESC, e.entry_number DESC";
-  sql += ` LIMIT ${opts?.limit ?? 100} OFFSET ${opts?.offset ?? 0}`;
+  
+  const safeLimit = Number.isFinite(opts?.limit) && (opts?.limit ?? 0) > 0 ? opts!.limit! : 100;
+  const safeOffset = Number.isFinite(opts?.offset) && (opts?.offset ?? 0) >= 0 ? opts!.offset! : 0;
+  
+  sql += " LIMIT ? OFFSET ?";
+  params.push(safeLimit, safeOffset);
+  
   return rawDb.query(sql).all(...params);
 }
 

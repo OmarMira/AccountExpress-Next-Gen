@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // COMPANIES SERVICE
 // Multi-tenant configuration bounding endpoints globally.
 // Companies are NEVER physically deleted, only archived (is_active = 0).
@@ -6,6 +6,7 @@
 
 import { rawDb } from "../db/connection.ts";
 import { v4 as uuidv4 } from "uuid";
+import { seedGaapForCompany } from "./accounts.service.ts";
 
 // ── Types ────────────────────────────────────────────────────
 export interface CompanyInput {
@@ -60,6 +61,9 @@ export function createCompany(input: CompanyInput): string {
     input.phone ?? null, input.email ?? null, input.fiscalYearStart, input.currency,
     now, now
   );
+
+  // Seed default GAAP chart of accounts
+  seedGaapForCompany(id);
 
   return id;
 }

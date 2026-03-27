@@ -1,4 +1,4 @@
-﻿import { encryptFile, decryptFile, hashFile } from './crypto.service';
+import { encryptFile, decryptFile, hashFile } from './crypto.service';
 import { readdir, stat, unlink, readFile, writeFile, mkdir, copyFile } from 'fs/promises';
 import { join } from 'path';
 
@@ -39,6 +39,9 @@ export class BackupService {
   }
 
   async createBackup(password: string): Promise<BackupResult> {
+    if (!password || password.trim().length < 8) {
+      throw new Error("Backup password must be at least 8 characters long.");
+    }
     await this.ensureDir();
     const now = new Date();
     const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
