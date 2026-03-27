@@ -14,10 +14,14 @@ export function sha256(data: string): string {
 
 export function nextEntryNumber(companyId: string): string {
   const row = rawDb
-    .query(`SELECT COUNT(*) as c FROM journal_entries WHERE company_id = ?`)
-    .get(companyId) as { c: number };
+    .query(
+      `SELECT MAX(CAST(SUBSTR(entry_number, 9) AS INTEGER)) as maxSeq
+       FROM journal_entries
+       WHERE company_id = ?`
+    )
+    .get(companyId) as { maxSeq: number | null };
   const year = new Date().getFullYear();
-  const seq  = String(row.c + 1).padStart(4, "0");
+  const seq  = String((row.maxSeq ?? 0) + 1).padStart(4, "0");
   return `JE-${year}-${seq}`;
 }
 
