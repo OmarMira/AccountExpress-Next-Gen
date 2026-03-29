@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // ROLE-PERMISSIONS MATRIX SEED
 // Maps each system role to its allowed permissions.
 // super_admin  → all 28
@@ -38,6 +38,7 @@ const ACCOUNTANT_PERMS = [
   permId("journal",  "export"),
   permId("journal",  "approve"),
   permId("journal",  "close"),
+  permId("journal",  "void"),
   permId("bank",     "create"),
   permId("bank",     "read"),
   permId("bank",     "export"),
@@ -47,6 +48,7 @@ const ACCOUNTANT_PERMS = [
   permId("accounts", "update"),
   permId("reports",  "read"),
   permId("reports",  "export"),
+  permId("periods",  "close"),
 ];
 
 // ── AUDITOR: read + export only across all modules ───────────

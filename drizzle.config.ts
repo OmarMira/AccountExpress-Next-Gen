@@ -3,9 +3,9 @@ import type { Config } from "drizzle-kit";
 export default {
   schema: "./src/db/schema/index.ts",
   out: "./drizzle/migrations",
-  dialect: "sqlite",
+  dialect: "postgresql",
   dbCredentials: {
-    url: process.env["DATABASE_PATH"] ?? "./data/bookkeeping.db",
+    url: process.env["DATABASE_URL"] ?? "postgresql://postgres:postgres@localhost:5432/bookkeeping",
   },
   verbose: true,
   strict: true,

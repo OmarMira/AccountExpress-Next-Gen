@@ -1,4 +1,4 @@
-﻿import { Elysia } from "elysia";
+import { Elysia } from "elysia";
 import { db } from "../db/connection.ts";
 import { userCompanyRoles } from "../db/schema/system.schema.ts";
 import { eq, and, isNull } from "drizzle-orm";
@@ -15,7 +15,7 @@ export const tenantMiddleware = (app: Elysia) => app
       where: and(
         eq(userCompanyRoles.userId, user),
         eq(userCompanyRoles.companyId, companyId),
-        eq(userCompanyRoles.isActive, 1),
+        eq(userCompanyRoles.isActive, true),
         isNull(userCompanyRoles.revokedAt)
       )
     });
@@ -30,7 +30,7 @@ export const tenantMiddleware = (app: Elysia) => app
       where: and(
         eq(userCompanyRoles.userId, user),
         eq(userCompanyRoles.companyId, companyId),
-        eq(userCompanyRoles.isActive, 1),
+        eq(userCompanyRoles.isActive, true),
         isNull(userCompanyRoles.revokedAt)
       )
     });

@@ -1,0 +1,13 @@
+[DB] Connected to PostgreSQL
+========================================
+   LAYER 2: TIMING ATTACK RESISTANCE    
+========================================
+Time for Known User (Wrong pass): 100.73ms
+Time for Unknown User (Wrong pass): 1.36ms
+Difference: 99.37ms
+??? TIMING TEST FAILED: Response times differ too much.
+
+Testing Account Lockout...
+??? LOCKOUT TEST PASSED: Account locked after 5 failed attempts.
+========================================
+

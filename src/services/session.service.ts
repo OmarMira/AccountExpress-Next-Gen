@@ -1,136 +1,123 @@
-﻿// ============================================================
-// SESSION SERVICE
+// ============================================================
+// SESSION SERVICE — PostgreSQL 16 / Drizzle ORM
 // Server-side sessions stored in DB (no JWT).
-// Token = UUID v4 stored in HttpOnly SameSite=Strict cookie.
-// Sliding 8-hour expiration window reset on each valid request.
 // ============================================================
 
-import { rawDb } from "../db/connection.ts";
+import { db } from "../db/connection.ts";
+import { sessions } from "../db/schema/index.ts";
+import { eq, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 const SESSION_DURATION_HOURS = 8;
 
-function expiresAt(fromNow = SESSION_DURATION_HOURS): string {
-  return new Date(
-    Date.now() + fromNow * 60 * 60 * 1000
-  ).toISOString();
+function expiresAt(fromNow = SESSION_DURATION_HOURS): Date {
+  return new Date(Date.now() + fromNow * 60 * 60 * 1000);
 }
 
 // ── Create a new session ─────────────────────────────────────
-export function createSession(opts: {
+export async function createSession(opts: {
   userId:    string;
   companyId: string | null;
   ipAddress: string;
   userAgent: string | null;
-}): string {
+}): Promise<string> {
   const id  = uuidv4();
-  const now = new Date().toISOString();
+  const now = new Date();
 
-  rawDb
-    .prepare(
-      `INSERT INTO sessions
-         (id, user_id, company_id, ip_address, user_agent,
-          created_at, expires_at, last_active_at, is_valid)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
-    )
-    .run(
-      id,
-      opts.userId,
-      opts.companyId,
-      opts.ipAddress,
-      opts.userAgent,
-      now,
-      expiresAt(),
-      now
-    );
+  await db.insert(sessions).values({
+    id,
+    userId:       opts.userId,
+    companyId:    opts.companyId,
+    ipAddress:    opts.ipAddress,
+    userAgent:    opts.userAgent,
+    createdAt:    now,
+    expiresAt:    expiresAt(),
+    lastActiveAt: now,
+    isValid:      true,
+  });
 
-  return id; // returned as cookie value
+  return id;
 }
 
 // ── Validate & slide session window ─────────────────────────
-// Returns user data if valid, null otherwise.
 export interface ValidSession {
   sessionId: string;
   userId:    string;
   companyId: string | null;
 }
 
-export function validateSession(token: string): ValidSession | null {
-  const session = rawDb
-    .query(
-      `SELECT id, user_id, company_id, expires_at, is_valid
-       FROM sessions
-       WHERE id = ?`
-    )
-    .get(token) as {
-      id: string;
-      user_id: string;
-      company_id: string | null;
-      expires_at: string;
-      is_valid: number;
-    } | null;
+export async function validateSession(token: string): Promise<ValidSession | null> {
+  const [session] = await db
+    .select({
+      id:        sessions.id,
+      userId:    sessions.userId,
+      companyId: sessions.companyId,
+      expiresAt: sessions.expiresAt,
+      isValid:   sessions.isValid,
+    })
+    .from(sessions)
+    .where(eq(sessions.id, token))
+    .limit(1);
 
-  if (!session || !session.is_valid) return null;
-  if (new Date(session.expires_at) < new Date()) {
-    // Expired — invalidate it
-    rawDb
-      .prepare("UPDATE sessions SET is_valid = 0 WHERE id = ?")
-      .run(token);
+  if (!session || !session.isValid) return null;
+  if (session.expiresAt < new Date()) {
+    await db.update(sessions)
+      .set({ isValid: false })
+      .where(eq(sessions.id, token));
     return null;
   }
 
   // Slide the window
-  rawDb
-    .prepare(
-      "UPDATE sessions SET last_active_at = ?, expires_at = ? WHERE id = ?"
-    )
-    .run(new Date().toISOString(), expiresAt(), token);
+  await db.update(sessions)
+    .set({ lastActiveAt: new Date(), expiresAt: expiresAt() })
+    .where(eq(sessions.id, token));
 
   return {
     sessionId: session.id,
-    userId:    session.user_id,
-    companyId: session.company_id,
+    userId:    session.userId,
+    companyId: session.companyId,
   };
 }
 
 // ── Invalidate a specific session (logout) ───────────────────
-export function invalidateSession(token: string): void {
-  rawDb
-    .prepare("UPDATE sessions SET is_valid = 0 WHERE id = ?")
-    .run(token);
+export async function invalidateSession(token: string): Promise<void> {
+  await db.update(sessions)
+    .set({ isValid: false })
+    .where(eq(sessions.id, token));
 }
 
-// ── Invalidate all sessions for a user (admin force-logout) ──
-export function invalidateAllUserSessions(userId: string): number {
-  const result = rawDb
-    .prepare(
-      "UPDATE sessions SET is_valid = 0 WHERE user_id = ? AND is_valid = 1"
-    )
-    .run(userId);
-  return result.changes;
+// ── Invalidate all sessions for a user ──────────────────────
+export async function invalidateAllUserSessions(userId: string): Promise<number> {
+  const result = await db.update(sessions)
+    .set({ isValid: false })
+    .where(and(eq(sessions.userId, userId), eq(sessions.isValid, true)));
+  // postgres.js returns an array of affected rows; rowCount from the command tag
+  return (result as any).count ?? 0;
 }
 
 // ── Switch active company within a session ───────────────────
-export function switchSessionCompany(
+export async function switchSessionCompany(
   sessionId: string,
   companyId: string
-): void {
-  rawDb
-    .prepare(
-      "UPDATE sessions SET company_id = ?, last_active_at = ? WHERE id = ?"
-    )
-    .run(companyId, new Date().toISOString(), sessionId);
+): Promise<void> {
+  await db.update(sessions)
+    .set({ companyId, lastActiveAt: new Date() })
+    .where(eq(sessions.id, sessionId));
 }
 
-// ── List active sessions for a user (admin view) ─────────────
-export function listActiveSessions(userId: string) {
-  return rawDb
-    .query(
-      `SELECT id, company_id, ip_address, user_agent, created_at, expires_at, last_active_at
-       FROM sessions
-       WHERE user_id = ? AND is_valid = 1
-       ORDER BY last_active_at DESC`
-    )
-    .all(userId);
+// ── List active sessions for a user ─────────────────────────
+export async function listActiveSessions(userId: string) {
+  return db
+    .select({
+      id:           sessions.id,
+      companyId:    sessions.companyId,
+      ipAddress:    sessions.ipAddress,
+      userAgent:    sessions.userAgent,
+      createdAt:    sessions.createdAt,
+      expiresAt:    sessions.expiresAt,
+      lastActiveAt: sessions.lastActiveAt,
+    })
+    .from(sessions)
+    .where(and(eq(sessions.userId, userId), eq(sessions.isValid, true)))
+    .orderBy(sessions.lastActiveAt);
 }
-

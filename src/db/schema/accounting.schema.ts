@@ -1,17 +1,18 @@
-﻿// ============================================================
-// ACCOUNTING CORE SCHEMA
+// ============================================================
+// ACCOUNTING CORE SCHEMA — PostgreSQL 16
 // Group B — 4 tables: US GAAP double-entry bookkeeping engine
 // Depends entirely on Group A (system.schema.ts).
-// RULE: No file > 500 lines. One file = one responsibility group.
 // ============================================================
 
 import {
-  sqliteTable,
+  pgTable,
   text,
+  boolean,
   integer,
-  real,
+  numeric,
+  timestamp,
   check,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
   companies,
@@ -23,9 +24,9 @@ import {
 // 11. CHART_OF_ACCOUNTS
 // US GAAP standard plan, codes 1000–5999.
 // Hierarchical (parent_id self-reference for sub-accounts).
-// is_system=1 accounts cannot be deleted.
+// is_system=true accounts cannot be deleted.
 // ─────────────────────────────────────────────────────────────
-export const chartOfAccounts = sqliteTable("chart_of_accounts", {
+export const chartOfAccounts = pgTable("chart_of_accounts", {
   id: text("id").primaryKey(),
   companyId: text("company_id")
     .notNull()
@@ -36,35 +37,31 @@ export const chartOfAccounts = sqliteTable("chart_of_accounts", {
   normalBalance: text("normal_balance").notNull(), // debit|credit
   parentId: text("parent_id"),    // self-referencing FK (null = root account)
   level: integer("level").default(1).notNull(), // 1=root, 2=sub, 3=sub-sub…
-  isSystem: integer("is_system").default(0).notNull(), // 1 = seeded, cannot be deleted
-  isActive: integer("is_active").default(1).notNull(),
-  taxCategory: text("tax_category"),  // e.g. "Schedule C - Advertising"
+  isSystem: boolean("is_system").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  taxCategory: text("tax_category"),
   description: text("description"),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 });
 
 // ─────────────────────────────────────────────────────────────
 // 12. JOURNAL_ENTRIES
 // Header of each accounting entry.
-// N lines (journal_lines) per entry.
-// INVARIANT: SUM(debits) == SUM(credits) — enforced by JournalService.post()
-//            before any INSERT. Cannot be bypassed.
-// SHA-256 chain links entries in chronological order.
 // ─────────────────────────────────────────────────────────────
-export const journalEntries = sqliteTable("journal_entries", {
+export const journalEntries = pgTable("journal_entries", {
   id: text("id").primaryKey(),
   companyId: text("company_id")
     .notNull()
     .references(() => companies.id),
   entryNumber: text("entry_number").notNull(), // "JE-2026-0001" per company
-  entryDate: text("entry_date").notNull(),     // accounting date ISO 8601
+  entryDate: text("entry_date").notNull(),     // accounting date YYYY-MM-DD
   description: text("description").notNull(),
-  reference: text("reference"),               // external reference (check#, invoice#)
+  reference: text("reference"),
   status: text("status").default("draft").notNull(), // draft|posted|voided
-  isAdjusting: integer("is_adjusting").default(0).notNull(), // closing adjustment flag
-  isReversing: integer("is_reversing").default(0).notNull(), // reversal entry flag
-  reversesId: text("reverses_id"),            // FK to original entry being reversed
+  isAdjusting: boolean("is_adjusting").default(false).notNull(),
+  isReversing: boolean("is_reversing").default(false).notNull(),
+  reversesId: text("reverses_id"),
   periodId: text("period_id")
     .notNull()
     .references(() => fiscalPeriods.id),
@@ -72,25 +69,23 @@ export const journalEntries = sqliteTable("journal_entries", {
     .notNull()
     .references(() => users.id),
   postedBy: text("posted_by")
-    .references(() => users.id), // null until posted
-  postedAt: text("posted_at"),   // ISO 8601 UTC — null until posted
-  entryHash: text("entry_hash").notNull(), // SHA-256(header + all lines)
-  prevHash: text("prev_hash").notNull(),   // SHA-256 of prior journal entry (chain)
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
+    .references(() => users.id),
+  postedAt: timestamp("posted_at", { withTimezone: true }),
+  entryHash: text("entry_hash").notNull(),
+  prevHash: text("prev_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 });
 
 // ─────────────────────────────────────────────────────────────
 // 13. JOURNAL_LINES
 // Individual lines of each journal entry.
-// Each line affects exactly ONE account.
-// CHECK constraints enforce:
-//   - debit_amount >= 0
-//   - credit_amount >= 0
-//   - at least one > 0
-//   - NOT both > 0 (a line cannot be simultaneously debit and credit)
+// CRITICAL: debit_amount and credit_amount use numeric(15,2)
+//   — NOT real/float — to avoid floating-point rounding errors
+//   in financial calculations.
+// CHECK constraints enforce double-entry rules at DB level.
 // ─────────────────────────────────────────────────────────────
-export const journalLines = sqliteTable(
+export const journalLines = pgTable(
   "journal_lines",
   {
     id: text("id").primaryKey(),
@@ -99,18 +94,17 @@ export const journalLines = sqliteTable(
       .references(() => journalEntries.id),
     companyId: text("company_id")
       .notNull()
-      .references(() => companies.id), // denormalized for query performance
+      .references(() => companies.id),
     accountId: text("account_id")
       .notNull()
       .references(() => chartOfAccounts.id),
-    debitAmount: real("debit_amount").default(0).notNull(),
-    creditAmount: real("credit_amount").default(0).notNull(),
+    debitAmount: numeric("debit_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+    creditAmount: numeric("credit_amount", { precision: 15, scale: 2 }).default("0").notNull(),
     description: text("description"),
-    lineNumber: integer("line_number").notNull(), // order within entry
-    createdAt: text("created_at").notNull(),
+    lineNumber: integer("line_number").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => ({
-    // Enforce double-entry line rules at DB level
     checkDebitNonNegative: check(
       "chk_debit_non_negative",
       sql`${table.debitAmount} >= 0`
@@ -133,28 +127,26 @@ export const journalLines = sqliteTable(
 // ─────────────────────────────────────────────────────────────
 // 14. BANK_TRANSACTIONS
 // Bank movements imported (CSV) or captured manually.
-// Reconciliation connects each bank transaction to a journal_entry.
-// Without a verifiable bank transaction, it doesn't exist in the books.
-// All transactions must be "reconciled" or "ignored" before period close.
+// amount uses numeric(15,2) — NOT real/float.
 // ─────────────────────────────────────────────────────────────
-export const bankTransactions = sqliteTable("bank_transactions", {
+export const bankTransactions = pgTable("bank_transactions", {
   id: text("id").primaryKey(),
   companyId: text("company_id")
     .notNull()
     .references(() => companies.id),
-  bankAccount: text("bank_account").notNull(), // account name or masked number
-  transactionDate: text("transaction_date").notNull(), // bank-reported date
+  bankAccount: text("bank_account").notNull(),
+  transactionDate: text("transaction_date").notNull(), // YYYY-MM-DD
   description: text("description").notNull(),
-  amount: real("amount").notNull(),            // positive=income, negative=expense
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   transactionType: text("transaction_type").notNull(), // debit|credit
-  referenceNumber: text("reference_number"),   // bank reference / check number
-  status: text("status").default("pending").notNull(), // pending|matched|reconciled|ignored
+  referenceNumber: text("reference_number"),
+  status: text("status").default("pending").notNull(), // pending|matched|reconciled|ignored|assigned
+  glAccountId: text("gl_account_id").references(() => chartOfAccounts.id),
   journalEntryId: text("journal_entry_id")
-    .references(() => journalEntries.id), // null until reconciled
+    .references(() => journalEntries.id),
   matchedBy: text("matched_by")
-    .references(() => users.id),          // user who performed reconciliation
-  matchedAt: text("matched_at"),          // ISO 8601 UTC
-  importBatchId: text("import_batch_id"), // UUID of the CSV import batch
-  createdAt: text("created_at").notNull(),
+    .references(() => users.id),
+  matchedAt: timestamp("matched_at", { withTimezone: true }),
+  importBatchId: text("import_batch_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 });
-

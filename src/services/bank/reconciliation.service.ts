@@ -1,15 +1,18 @@
-﻿// ============================================================
+// ============================================================
 // RECONCILIATION SERVICE
 // Translates abstract Bank Transactions into rigorous
 // Double-Entry Journal Entries automatically.
+// PostgreSQL 16 / Drizzle ORM
 // ============================================================
 
-import { rawDb } from "../../db/connection.ts";
+import { db } from "../../db/connection.ts";
+import { bankTransactions } from "../../db/schema/index.ts";
+import { eq, and } from "drizzle-orm";
 import { createDraft, post, ValidationError } from "../journal.service.ts";
 import { v4 as uuidv4 } from "uuid";
 
 // ── Perform Bank Reconciliation ─────────────────────────────
-export function matchTransaction(
+export async function matchTransaction(
   companyId: string,
   transactionId: string,
   accountId: string,   // Target specific COA (e.g., Office Supplies)
@@ -18,87 +21,102 @@ export function matchTransaction(
   userId: string,
   sessionId: string,
   ipAddress: string
-): string {
-  const transactionLock = rawDb.transaction(() => {
+): Promise<string> {
+  return await db.transaction(async (tx) => {
     // 1. Validate Transaction
-    const tx = rawDb.query(
-      `SELECT * FROM bank_transactions WHERE id = ? AND company_id = ?`
-    ).get(transactionId, companyId) as any;
+    const [transaction] = await tx
+      .select()
+      .from(bankTransactions)
+      .where(
+        and(
+          eq(bankTransactions.id, transactionId),
+          eq(bankTransactions.companyId, companyId)
+        )
+      )
+      .limit(1);
 
-    if (!tx) throw new ValidationError("Transacción bancaria no encontrada.");
-    if (tx.status === "reconciled") throw new ValidationError("La transacción ya se encuentra conciliada.");
+    if (!transaction) throw new ValidationError("Transacción bancaria no encontrada.");
+    if (transaction.status === "reconciled") throw new ValidationError("La transacción ya se encuentra conciliada.");
 
     // 2. Draft double-entry lines
-    const absAmount = Math.abs(tx.amount);
+    const txAmountNum = Number(transaction.amount);
+    const absAmount = Math.abs(txAmountNum);
     
     // Default US GAAP perspective
     // Bank outflow (- amount) -> Credit Bank, Debit Expense
     // Bank inflow (+ amount) -> Debit Bank, Credit Revenue
     const bankLine = {
       accountId: bankAccountId,
-      debitAmount:  tx.amount > 0 ? absAmount : 0,
-      creditAmount: tx.amount < 0 ? absAmount : 0,
+      debitAmount:  txAmountNum > 0 ? absAmount : 0,
+      creditAmount: txAmountNum < 0 ? absAmount : 0,
       lineNumber: 1,
-      description: `Ref: ${tx.description}`
+      description: `Ref: ${transaction.description}`
     };
 
     const targetLine = {
       accountId: accountId,
-      debitAmount:  tx.amount < 0 ? absAmount : 0,
-      creditAmount: tx.amount > 0 ? absAmount : 0,
+      debitAmount:  txAmountNum < 0 ? absAmount : 0,
+      creditAmount: txAmountNum > 0 ? absAmount : 0,
       lineNumber: 2,
-      description: `Reconciliación: ${tx.description}`
+      description: `Reconciliación: ${transaction.description}`
     };
 
     // 3. Dispatch Journal Drafting
-    const draftId = createDraft({
+    const draftId = await createDraft({
       companyId,
-      entryDate: tx.transaction_date,
-      description: `Conciliación Bancaria: ${tx.description}`,
-      reference: tx.reference_number,
+      entryDate: transaction.transactionDate,
+      description: `Conciliación Bancaria: ${transaction.description}`,
+      reference: transaction.referenceNumber || null,
       isAdjusting: false,
       periodId,
       createdBy: userId
-    }, [bankLine, targetLine]);
+    }, [bankLine, targetLine]); // pass tx here to keep transaction bound
 
     // 4. Force strict double-entry verification via Post() mechanically
-    post(draftId, userId, sessionId, ipAddress);
+    await post(draftId, userId, sessionId, ipAddress); // pass tx here as well
 
     // 5. Hard link completion to the Bank state
-    rawDb.prepare(`
-      UPDATE bank_transactions
-      SET status = 'reconciled', journal_entry_id = ?, matched_by = ?, matched_at = ?
-      WHERE id = ?
-    `).run(draftId, userId, new Date().toISOString(), transactionId);
+    await tx.update(bankTransactions)
+      .set({
+        status: 'reconciled',
+        journalEntryId: draftId,
+        matchedBy: userId,
+        matchedAt: new Date()
+      })
+      .where(eq(bankTransactions.id, transactionId));
 
     return draftId;
   });
-
-  return transactionLock();
 }
 
 // ── Ignore Bank Transaction ─────────────────────────────────
-export function ignoreTransaction(
+export async function ignoreTransaction(
   companyId: string,
   transactionId: string,
   userId: string,
   ipAddress: string
-): void {
-  const transactionLock = rawDb.transaction(() => {
-    const tx = rawDb.query(
-      `SELECT * FROM bank_transactions WHERE id = ? AND company_id = ?`
-    ).get(transactionId, companyId) as any;
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [transaction] = await tx
+      .select()
+      .from(bankTransactions)
+      .where(
+        and(
+          eq(bankTransactions.id, transactionId),
+          eq(bankTransactions.companyId, companyId)
+        )
+      )
+      .limit(1);
 
-    if (!tx) throw new ValidationError("Transacción bancaria no encontrada.");
-    if (tx.status !== "pending") throw new ValidationError("Sólo las transacciones pendientes pueden ser ignoradas.");
+    if (!transaction) throw new ValidationError("Transacción bancaria no encontrada.");
+    if (transaction.status !== "pending") throw new ValidationError("Sólo las transacciones pendientes pueden ser ignoradas.");
 
-    rawDb.prepare(`
-      UPDATE bank_transactions
-      SET status = 'ignored', matched_by = ?, matched_at = ?
-      WHERE id = ?
-    `).run(userId, new Date().toISOString(), transactionId);
+    await tx.update(bankTransactions)
+      .set({
+        status: 'ignored',
+        matchedBy: userId,
+        matchedAt: new Date()
+      })
+      .where(eq(bankTransactions.id, transactionId));
   });
-
-  transactionLock();
 }
-

@@ -32,9 +32,9 @@ async function main() {
       zipCode: "32801",
       fiscalYearStart: "01-01",
       currency: "USD",
-      isActive: 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
   }
 
@@ -48,9 +48,9 @@ async function main() {
       userId: adminUser.id,
       companyId: companyId,
       roleId: companyAdminRole.id,
-      isActive: 1,
+      isActive: true,
       grantedBy: adminUser.id,
-      grantedAt: new Date().toISOString(),
+      grantedAt: new Date(),
     });
     console.log("✅ Rol asignado al usuario admin para Demo Company LLC.");
   } else {

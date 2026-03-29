@@ -1,50 +1,59 @@
 // ============================================================
 // AUDIT ROUTES — GET /audit (read-only + chain verification)
+// PostgreSQL 16 / Drizzle ORM
 // ============================================================
 
 import { Elysia } from "elysia";
-import { rawDb } from "../db/connection.ts";
+import { db, sql } from "../db/connection.ts";
+import { auditLogs } from "../db/schema/index.ts";
+import { eq, and, desc } from "drizzle-orm";
 import { validateSession } from "../services/session.service.ts";
 import { verifyAuditChain } from "../services/audit.service.ts";
 
 export const auditRoutes = new Elysia({ prefix: "/audit" })
 
   // GET /audit?companyId=&module=&limit=&offset=
-  .get("/", ({ query, cookie, set }) => {
+  .get("/", async ({ query, cookie, set }) => {
     const token = (cookie["session"].value as string);
-    if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
+    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
 
-    let sql = "SELECT * FROM audit_logs WHERE 1=1";
-    const params: (string | number)[] = [];
-
-    if ((query.companyId as string)) { sql += " AND company_id = ?"; params.push((query.companyId as string)); }
-    if ((query.module as string))    { sql += " AND module = ?";     params.push((query.module as string)); }
-    if ((query.action as string))    { sql += " AND action = ?";     params.push((query.action as string)); }
+    const conditions = [];
+    if (query.companyId) conditions.push(eq(auditLogs.companyId, query.companyId as string));
+    if (query.module)    conditions.push(eq(auditLogs.module, query.module as string));
+    if (query.action)    conditions.push(eq(auditLogs.action, query.action as string));
 
     const limitVal  = parseInt((query.limit  as string)) || 100;
     const offsetVal = parseInt((query.offset as string)) || 0;
     const safeLimit  = Number.isFinite(limitVal)  && limitVal > 0  ? limitVal : 100;
     const safeOffset = Number.isFinite(offsetVal) && offsetVal >= 0 ? offsetVal : 0;
  
-    sql += " ORDER BY chain_index DESC LIMIT ? OFFSET ?";
-    params.push(safeLimit, safeOffset);
-
-    return rawDb.query(sql).all(...params);
+    return await db
+      .select()
+      .from(auditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .limit(safeLimit)
+      .offset(safeOffset)
+      .orderBy(desc(auditLogs.chainIndex));
   })
 
   // GET /audit/verify — cryptographic chain validation
-  .get("/verify", ({ cookie, set }) => {
+  .get("/verify", async ({ cookie, set }) => {
     const token = (cookie["session"].value as string);
-    if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
-    return verifyAuditChain();
+    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
+    return await verifyAuditChain();
   })
 
   // GET /audit/:id — single entry
-  .get("/:id", ({ params, cookie, set }) => {
+  .get("/:id", async ({ params, cookie, set }) => {
     const token = (cookie["session"].value as string);
-    if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
-    const entry = rawDb.query("SELECT * FROM audit_logs WHERE id = ?").get((params.id as string));
+    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
+    
+    const [entry] = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.id, params.id as string))
+      .limit(1);
+
     if (!entry) { set.status = 404; return { error: "Audit entry not found" }; }
     return entry;
   });
-

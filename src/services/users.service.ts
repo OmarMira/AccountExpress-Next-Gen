@@ -1,137 +1,159 @@
 // ============================================================
-// USERS SERVICE
+// USERS SERVICE — PostgreSQL 16 / Drizzle ORM
 // CRUD de usuarios + asignación de roles por tenant.
-// SRP: solo lógica de negocio, sin HTTP.
+// All functions async.
 // ============================================================
 
-import { rawDb as db } from "../db/connection.ts";
-import { hashPassword } from "./auth.service.ts";
-import { randomUUID } from "crypto";
+import { db }                 from "../db/connection.ts";
+import { users, userCompanyRoles, roles } from "../db/schema/index.ts";
+import { eq, and, isNull }    from "drizzle-orm";
+import { hashPassword }        from "./auth.service.ts";
+import { randomUUID }         from "crypto";
 
 // ── Tipos ────────────────────────────────────────────────────
 
 export interface CreateUserInput {
-  username: string;
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  companyId: string;
-  roleId: string;
-  grantedBy: string; // userId del admin que crea
+  username:   string;
+  email:      string;
+  password:   string;
+  firstName:  string;
+  lastName:   string;
+  companyId:  string;
+  roleId:     string;
+  grantedBy:  string;
 }
 
 export interface UpdateUserInput {
-  userId: string;
-  firstName?: string;
-  lastName?: string;
-  isActive?: boolean;
+  userId:             string;
+  firstName?:         string;
+  lastName?:          string;
+  isActive?:          boolean;
   mustChangePassword?: boolean;
 }
 
 export interface AssignRoleInput {
-  userId: string;
+  userId:    string;
   companyId: string;
-  roleId: string;
+  roleId:    string;
   grantedBy: string;
 }
 
 // ── Listar usuarios de un tenant ─────────────────────────────
-
-export function listUsers(companyId: string) {
-  return db.query(`
-    SELECT
-      u.id, u.username, u.email,
-      u.first_name AS firstName, u.last_name AS lastName,
-      u.is_active AS isActive, u.is_locked AS isLocked, u.must_change_password AS mustChangePassword,
-      u.last_login_at AS lastLoginAt, u.created_at AS createdAt,
-      r.id   AS roleId,
-      r.name AS roleName,
-      r.display_name AS roleDisplayName,
-      ucr.is_active AS roleActive
-    FROM users u
-    INNER JOIN user_company_roles ucr ON ucr.user_id = u.id
-    INNER JOIN roles r ON r.id = ucr.role_id
-    WHERE ucr.company_id = ? AND ucr.is_active = 1
-    ORDER BY u.created_at DESC
-  `).all(companyId);
+export async function listUsers(companyId: string) {
+  return db
+    .select({
+      id:                  users.id,
+      username:            users.username,
+      email:               users.email,
+      firstName:           users.firstName,
+      lastName:            users.lastName,
+      isActive:            users.isActive,
+      isLocked:            users.isLocked,
+      mustChangePassword:  users.mustChangePassword,
+      lastLoginAt:         users.lastLoginAt,
+      createdAt:           users.createdAt,
+      roleId:              roles.id,
+      roleName:            roles.name,
+      roleDisplayName:     roles.displayName,
+      roleActive:          userCompanyRoles.isActive,
+    })
+    .from(users)
+    .innerJoin(userCompanyRoles, eq(userCompanyRoles.userId, users.id))
+    .innerJoin(roles, eq(roles.id, userCompanyRoles.roleId))
+    .where(
+      and(
+        eq(userCompanyRoles.companyId, companyId),
+        eq(userCompanyRoles.isActive, true)
+      )
+    )
+    .orderBy(users.createdAt);
 }
 
 // ── Listar roles disponibles ──────────────────────────────────
-
-export function listRoles() {
-  return db.query(`
-    SELECT id, name, display_name AS displayName, description
-    FROM roles
-    WHERE is_active = 1 AND is_system = 0
-    ORDER BY display_name ASC
-  `).all();
+export async function listRoles() {
+  return db
+    .select({ id: roles.id, name: roles.name, displayName: roles.displayName, description: roles.description })
+    .from(roles)
+    .where(and(eq(roles.isActive, true), eq(roles.isSystem, false)))
+    .orderBy(roles.displayName);
 }
 
 // ── Crear usuario + asignar rol en tenant ────────────────────
-
 export async function createUser(input: CreateUserInput) {
   const { hash, salt } = await hashPassword(input.password);
   const userId = randomUUID();
+  const now    = new Date();
 
-  // Insertar usuario global
-  db.query(`
-    INSERT INTO users (
-      id, username, email, password_hash, password_salt,
-      first_name, last_name, is_super_admin, is_active, is_locked, failed_attempts, must_change_password, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, 0, 0, 1, datetime('now'), datetime('now'))
-  `).run(userId, input.username, input.email, hash, salt,
-         input.firstName, input.lastName);
+  await db.insert(users).values({
+    id:                 userId,
+    username:           input.username,
+    email:              input.email,
+    passwordHash:       hash,
+    passwordSalt:       salt,
+    firstName:          input.firstName,
+    lastName:           input.lastName,
+    isSuperAdmin:       false,
+    isActive:           true,
+    isLocked:           false,
+    failedAttempts:     0,
+    mustChangePassword: true,
+    createdAt:          now,
+    updatedAt:          now,
+  });
 
-  // Asignar rol en la empresa
-  db.query(`
-    INSERT INTO user_company_roles (
-      id, user_id, company_id, role_id, is_active, granted_by, granted_at
-    ) VALUES (?, ?, ?, ?, 1, ?, datetime('now'))
-  `).run(randomUUID(), userId, input.companyId, input.roleId, input.grantedBy);
+  await db.insert(userCompanyRoles).values({
+    id:        randomUUID(),
+    userId,
+    companyId: input.companyId,
+    roleId:    input.roleId,
+    isActive:  true,
+    grantedBy: input.grantedBy,
+    grantedAt: now,
+  });
 
   return { userId };
 }
 
 // ── Actualizar datos del usuario ──────────────────────────────
+export async function updateUser(input: UpdateUserInput): Promise<{ updated: boolean }> {
+  const updates: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
 
-export function updateUser(input: UpdateUserInput) {
-  const fields: string[] = [];
-  const values: unknown[] = [];
+  if (input.firstName          !== undefined) updates.firstName          = input.firstName;
+  if (input.lastName           !== undefined) updates.lastName           = input.lastName;
+  if (input.isActive           !== undefined) updates.isActive           = input.isActive;
+  if (input.mustChangePassword !== undefined) updates.mustChangePassword = input.mustChangePassword;
 
-  if (input.firstName !== undefined) { fields.push("first_name = ?"); values.push(input.firstName); }
-  if (input.lastName  !== undefined) { fields.push("last_name = ?");  values.push(input.lastName); }
-  if (input.isActive  !== undefined) { fields.push("is_active = ?");  values.push(input.isActive ? 1 : 0); }
-  if (input.mustChangePassword !== undefined) {
-    fields.push("must_change_password = ?");
-    values.push(input.mustChangePassword ? 1 : 0);
-  }
+  if (Object.keys(updates).length <= 1) return { updated: false }; // only updatedAt, nothing real
 
-  if (fields.length === 0) return { updated: false };
-
-  fields.push("updated_at = datetime('now')");
-  values.push(input.userId);
-
-  db.query(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+  await db.update(users).set(updates).where(eq(users.id, input.userId));
   return { updated: true };
 }
 
 // ── Reasignar rol en tenant ───────────────────────────────────
+export async function assignRole(input: AssignRoleInput): Promise<{ assigned: boolean }> {
+  const now = new Date();
 
-export function assignRole(input: AssignRoleInput) {
-  // Revocar rol activo anterior
-  db.query(`
-    UPDATE user_company_roles
-    SET is_active = 0, revoked_at = datetime('now')
-    WHERE user_id = ? AND company_id = ? AND is_active = 1
-  `).run(input.userId, input.companyId);
+  // Revoke previous active role in this company
+  await db.update(userCompanyRoles)
+    .set({ isActive: false, revokedAt: now })
+    .where(
+      and(
+        eq(userCompanyRoles.userId, input.userId),
+        eq(userCompanyRoles.companyId, input.companyId),
+        eq(userCompanyRoles.isActive, true)
+      )
+    );
 
-  // Asignar nuevo rol
-  db.query(`
-    INSERT INTO user_company_roles (
-      id, user_id, company_id, role_id, is_active, granted_by, granted_at
-    ) VALUES (?, ?, ?, ?, 1, ?, datetime('now'))
-  `).run(randomUUID(), input.userId, input.companyId, input.roleId, input.grantedBy);
+  // Assign new role
+  await db.insert(userCompanyRoles).values({
+    id:        randomUUID(),
+    userId:    input.userId,
+    companyId: input.companyId,
+    roleId:    input.roleId,
+    isActive:  true,
+    grantedBy: input.grantedBy,
+    grantedAt: now,
+  });
 
   return { assigned: true };
 }

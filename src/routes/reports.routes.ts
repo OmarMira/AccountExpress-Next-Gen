@@ -19,12 +19,12 @@ export const reportsRoutes = new Elysia()
     app
       .use(requirePermission("reports", "read"))
 
-      .get("/balance-sheet", ({ query, cookie, set }) => {
-        const token = cookie["session"].value as string;
-        if (!validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
+      .get("/balance-sheet", async ({ query, cookie, set }) => {
+        const token = cookie["session"]?.value as string;
+        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
         
         try {
-          return { success: true, data: getBalanceSheet(query.companyId, query.asOfDate) };
+          return { success: true, data: await getBalanceSheet(query.companyId, query.asOfDate) };
         } catch (err: any) {
           set.status = 400;
           return { success: false, error: err.message };
@@ -36,11 +36,11 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/income-statement", ({ query, cookie, set }) => {
-        const token = cookie["session"].value as string;
-        if (!validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
+      .get("/income-statement", async ({ query, cookie, set }) => {
+        const token = cookie["session"]?.value as string;
+        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
         
-        return { success: true, data: getIncomeStatement(query.companyId, query.startDate, query.endDate) };
+        return { success: true, data: await getIncomeStatement(query.companyId, query.startDate, query.endDate) };
       }, {
         query: t.Object({
           companyId: t.String(),
@@ -49,12 +49,12 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/trial-balance", ({ query, cookie, set }) => {
-        const token = cookie["session"].value as string;
-        if (!validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
+      .get("/trial-balance", async ({ query, cookie, set }) => {
+        const token = cookie["session"]?.value as string;
+        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
         
         try {
-          return { success: true, data: getTrialBalance(query.companyId, query.asOfDate) };
+          return { success: true, data: await getTrialBalance(query.companyId, query.asOfDate) };
         } catch (err: any) {
           set.status = 400;
           return { success: false, error: err.message };
@@ -66,11 +66,11 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/cash-flow", ({ query, cookie, set }) => {
-        const token = cookie["session"].value as string;
-        if (!validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
+      .get("/cash-flow", async ({ query, cookie, set }) => {
+        const token = cookie["session"]?.value as string;
+        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
         
-        return { success: true, data: getCashFlow(query.companyId, query.startDate, query.endDate) };
+        return { success: true, data: await getCashFlow(query.companyId, query.startDate, query.endDate) };
       }, {
         query: t.Object({
           companyId: t.String(),
@@ -85,12 +85,12 @@ export const reportsRoutes = new Elysia()
     app
       .use(requirePermission("reports", "export"))
 
-      .post("/cpa-summary", ({ body, cookie, set }) => {
-        const token = cookie["session"].value as string;
-        if (!validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
+      .post("/cpa-summary", async ({ body, cookie, set }) => {
+        const token = cookie["session"]?.value as string;
+        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
         
         try {
-          return { success: true, data: generateCpaSummary(body.companyId, body.periodId) };
+          return { success: true, data: await generateCpaSummary(body.companyId, body.periodId) };
         } catch (err: any) {
           set.status = 400;
           return { success: false, error: err.message };
@@ -102,9 +102,9 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/cpa-summary/download", ({ query, cookie, set }) => {
-        const token = cookie["session"].value as string;
-        if (!validateSession(token)) {
+      .get("/cpa-summary/download", async ({ query, cookie, set }) => {
+        const token = cookie["session"]?.value as string;
+        if (!(await validateSession(token))) {
           set.status = 401;
           return { success: false, error: "Unauthorized" };
         }
@@ -113,8 +113,8 @@ export const reportsRoutes = new Elysia()
         const periodId  = query.periodId;
 
         try {
-          const summary = generateCpaSummary(companyId, periodId);
-          const pdfBytes = buildCpaPdf(summary);
+          const summary = await generateCpaSummary(companyId, periodId);
+          const pdfBytes = await buildCpaPdf(summary);
 
           return new Response(pdfBytes, {
             headers: {

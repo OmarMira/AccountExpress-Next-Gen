@@ -1,12 +1,13 @@
-﻿// ============================================================
-// BANK CSV IMPORT SERVICE
+// ============================================================
+// BANK CSV IMPORT SERVICE — PostgreSQL 16 / Drizzle ORM
 // Ingests CSV extracts from Chase, BofA, WellsFargo and Generic.
 // Provides mechanical deterministic duplicate prevention.
 // ============================================================
 
-import { rawDb } from "../../db/connection.ts";
+import { db, sql } from "../../db/connection.ts";
+import { bankTransactions } from "../../db/schema/index.ts";
 import { v4 as uuidv4 } from "uuid";
-import { createHash } from "crypto";
+import { and, eq } from "drizzle-orm";
 
 export interface ParsedTransaction {
   date: string;       // YYYY-MM-DD
@@ -45,12 +46,11 @@ export function parseBankCsv(csvText: string): ParsedTransaction[] {
 
   for (let i = startIndex; i < lines.length; i++) {
     const rawLine = lines[i];
-    // Simple CSV split handling quotes (not perfect, but sufficient for bank standard exports)
+    // Simple CSV split handling quotes
     const row = rawLine.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(s => s.replace(/^"|"$/g, "").trim());
     
     try {
       if (format === "chase" && row.length >= 6) {
-        // Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #
         results.push({
           date: normalizeDate(row[1]),
           description: row[2] || "Unknown",
@@ -59,7 +59,6 @@ export function parseBankCsv(csvText: string): ParsedTransaction[] {
         });
       }
       else if (format === "bofa" && row.length >= 3) {
-        // Date,Description,Amount,Running Bal.
         results.push({
           date: normalizeDate(row[0]),
           description: row[1] || "Unknown",
@@ -68,7 +67,6 @@ export function parseBankCsv(csvText: string): ParsedTransaction[] {
         });
       }
       else if (format === "wellsfargo" && row.length >= 5) {
-        // Date,Amount,*,*,Description
         results.push({
           date: normalizeDate(row[0]),
           amount: parseFloat(row[1] || "0"),
@@ -77,7 +75,6 @@ export function parseBankCsv(csvText: string): ParsedTransaction[] {
         });
       }
       else if (row.length >= 3) {
-        // Generic: Assume Date, Description, Amount
         results.push({
           date: normalizeDate(row[0]),
           description: row[1] || "Unknown",
@@ -85,75 +82,78 @@ export function parseBankCsv(csvText: string): ParsedTransaction[] {
           reference: null
         });
       }
-    } catch(e) { /* Skip malformed row natively inside batch */ }
+    } catch(e) { /* Skip malformed row */ }
   }
 
   return results;
 }
 
 // ── Native SQL Duplicate Resolver ───────────────────────────
-export function importTransactions(
+export async function importTransactions(
   companyId: string,
   bankAccount: string,
   csvText: string
-): { imported: number, duplicates: number, batchId: string } {
+): Promise<{ imported: number, duplicates: number, batchId: string }> {
   const parsed = parseBankCsv(csvText);
   if (parsed.length === 0) return { imported: 0, duplicates: 0, batchId: "" };
 
   const batchId = uuidv4();
-  const now = new Date().toISOString();
+  const now = new Date();
 
   let imported = 0;
   let duplicates = 0;
 
-  // Insert stmt ignores duplicate hashes leveraging SQL logic later or explicit filtering
-  const insertStmt = rawDb.prepare(
-    `INSERT INTO bank_transactions
-       (id, company_id, bank_account, transaction_date, description, amount,
-        transaction_type, reference_number, status, import_batch_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
-  );
-
-  const checkDuplicate = rawDb.prepare(
-    `SELECT id FROM bank_transactions
-     WHERE company_id = ? AND bank_account = ? AND transaction_date = ?
-       AND amount = ? AND description = ? LIMIT 1`
-  );
-
-  const transaction = rawDb.transaction(() => {
+  await db.transaction(async (tx) => {
     for (const p of parsed) {
       if (p.amount === 0) continue;
       
-      const type = p.amount < 0 ? "debit" : "credit"; // Relative to normal bank view
+      const type = p.amount < 0 ? "debit" : "credit";
       
-      const exists = checkDuplicate.get(companyId, bankAccount, p.date, p.amount, p.description);
+      const [exists] = await tx
+        .select({ id: bankTransactions.id })
+        .from(bankTransactions)
+        .where(
+          and(
+            eq(bankTransactions.companyId, companyId),
+            eq(bankTransactions.bankAccount, bankAccount),
+            eq(bankTransactions.transactionDate, p.date),
+            eq(bankTransactions.amount, String(p.amount)),
+            eq(bankTransactions.description, p.description)
+          )
+        )
+        .limit(1);
       
       if (exists) {
         duplicates++;
       } else {
-        insertStmt.run(
-          uuidv4(), companyId, bankAccount, p.date, p.description, p.amount,
-          type, p.reference, batchId, now
-        );
+        await tx.insert(bankTransactions).values({
+          id:              uuidv4(),
+          companyId,
+          bankAccount,
+          transactionDate: p.date,
+          description:     p.description,
+          amount:          String(p.amount),
+          transactionType: type,
+          referenceNumber: p.reference,
+          status:          "pending",
+          importBatchId:   batchId,
+          createdAt:       now,
+        });
         imported++;
       }
     }
   });
-
-  transaction();
 
   return { imported, duplicates, batchId };
 }
 
 // ── Helper ──────────────────────────────────────────────────
 function normalizeDate(mmddyyyy: string): string {
-  // Try mapping MM/DD/YYYY to YYYY-MM-DD
   const parts = mmddyyyy.split(/[/-]/);
   if (parts.length === 3) {
     if (parts[2].length === 4) {
-      return `${parts[2]}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`; // MM/DD/YYYY -> YYYY-MM-DD
+      return `${parts[2]}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`;
     }
   }
-  return mmddyyyy; // Fallback
+  return mmddyyyy;
 }
-

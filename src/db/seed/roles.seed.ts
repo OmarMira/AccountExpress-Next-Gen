@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // ROLES SEED DATA
 // 4 system roles — is_system=1, cannot be deleted.
 // ============================================================
@@ -37,7 +37,7 @@ export const ROLES_SEED: RoleSeed[] = [
     name:        "company_admin",
     displayName: "Admin de Empresa",
     description: "Control total dentro de su(s) empresa(s). Abre/cierra periodos fiscales.",
-    isSystem: 1,
+    isSystem: 0,
     isActive: 1,
     createdAt: NOW,
   },
@@ -46,7 +46,7 @@ export const ROLES_SEED: RoleSeed[] = [
     name:        "accountant",
     displayName: "Contador / CPA",
     description: "Opera todos los módulos contables. Genera reportes para CPA.",
-    isSystem: 1,
+    isSystem: 0,
     isActive: 1,
     createdAt: NOW,
   },
@@ -55,7 +55,7 @@ export const ROLES_SEED: RoleSeed[] = [
     name:        "auditor",
     displayName: "Auditor (Solo lectura)",
     description: "Acceso de solo lectura. Puede exportar. No puede crear ni modificar.",
-    isSystem: 1,
+    isSystem: 0,
     isActive: 1,
     createdAt: NOW,
   },

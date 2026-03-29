@@ -1,14 +1,12 @@
 // ============================================================
-// AUTH SERVICE
-// bcrypt password hashing (cost 12) and account lockout logic.
-// SECURITY RULES:
-//   - 5 consecutive failed attempts → is_locked=1, locked_until=NOW+30min
-//   - Super Admin can unlock manually
-//   - bcrypt cost 12 = ~300ms per hash (intentional brute-force deterrent)
+// AUTH SERVICE — PostgreSQL 16 / Drizzle ORM
+// bcrypt password hashing and account lockout logic.
 // ============================================================
 
 import bcrypt from "bcryptjs";
-import { rawDb } from "../db/connection.ts";
+import { db } from "../db/connection.ts";
+import { users } from "../db/schema/index.ts";
+import { eq } from "drizzle-orm";
 
 const BCRYPT_ROUNDS   = parseInt(process.env["BCRYPT_ROUNDS"] ?? "12", 10);
 const MAX_ATTEMPTS    = 5;
@@ -32,122 +30,160 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
 }
 
 // ── Record a failed login attempt ────────────────────────────
-// Increments counter; locks account after MAX_ATTEMPTS failures.
-export function recordFailedAttempt(userId: string): void {
-  const user = rawDb
-    .query("SELECT failed_attempts FROM users WHERE id = ?")
-    .get(userId) as { failed_attempts: number } | null;
+export async function recordFailedAttempt(userId: string): Promise<void> {
+  const [user] = await db
+    .select({ failedAttempts: users.failedAttempts })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
   if (!user) return;
 
-  const newCount = user.failed_attempts + 1;
+  const newCount = (user.failedAttempts ?? 0) + 1;
+  const now = new Date();
 
   if (newCount >= MAX_ATTEMPTS) {
-    const lockedUntil = new Date(
-      Date.now() + LOCKOUT_MINUTES * 60 * 1000
-    ).toISOString();
-    rawDb
-      .prepare(
-        `UPDATE users SET
-           failed_attempts = ?,
-           is_locked       = 1,
-           locked_until    = ?,
-           updated_at      = ?
-         WHERE id = ?`
-      )
-      .run(newCount, lockedUntil, new Date().toISOString(), userId);
+    const lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
+    await db.update(users)
+      .set({
+        failedAttempts: newCount,
+        isLocked:       true,
+        lockedUntil,
+        updatedAt:      now,
+      })
+      .where(eq(users.id, userId));
   } else {
-    rawDb
-      .prepare(
-        `UPDATE users SET
-           failed_attempts = ?,
-           updated_at      = ?
-         WHERE id = ?`
-      )
-      .run(newCount, new Date().toISOString(), userId);
+    await db.update(users)
+      .set({
+        failedAttempts: newCount,
+        updatedAt:      now,
+      })
+      .where(eq(users.id, userId));
   }
 }
 
 // ── Reset failed attempts on successful login ────────────────
-export function resetFailedAttempts(userId: string): void {
-  rawDb
-    .prepare(
-      `UPDATE users SET
-         failed_attempts = 0,
-         is_locked       = 0,
-         locked_until    = NULL,
-         last_login_at   = ?,
-         updated_at      = ?
-       WHERE id = ?`
-    )
-    .run(new Date().toISOString(), new Date().toISOString(), userId);
+export async function resetFailedAttempts(userId: string): Promise<void> {
+  const now = new Date();
+  await db.update(users)
+    .set({
+      failedAttempts: 0,
+      isLocked:       false,
+      lockedUntil:    null,
+      lastLoginAt:    now,
+      updatedAt:      now,
+    })
+    .where(eq(users.id, userId));
 }
 
 // ── Check if account is currently locked ─────────────────────
-export function isAccountLocked(userId: string): { locked: boolean; until: string | null } {
-  const user = rawDb
-    .query("SELECT is_locked, locked_until FROM users WHERE id = ?")
-    .get(userId) as { is_locked: number; locked_until: string | null } | null;
+export async function isAccountLocked(
+  userId: string
+): Promise<{ locked: boolean; until: string | null }> {
+  const [user] = await db
+    .select({ isLocked: users.isLocked, lockedUntil: users.lockedUntil })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
   if (!user) return { locked: false, until: null };
-  if (!user.is_locked) return { locked: false, until: null };
+  if (!user.isLocked) return { locked: false, until: null };
 
   // Auto-expire: if lockout time has passed, release the lock
-  if (user.locked_until && new Date(user.locked_until) <= new Date()) {
-    rawDb
-      .prepare(
-        `UPDATE users SET
-           is_locked       = 0,
-           locked_until    = NULL,
-           failed_attempts = 0,
-           updated_at      = ?
-         WHERE id = ?`
-      )
-      .run(new Date().toISOString(), userId);
+  if (user.lockedUntil && user.lockedUntil <= new Date()) {
+    await db.update(users)
+      .set({
+        isLocked:       false,
+        lockedUntil:    null,
+        failedAttempts: 0,
+        updatedAt:      new Date(),
+      })
+      .where(eq(users.id, userId));
     return { locked: false, until: null };
   }
 
-  return { locked: true, until: user.locked_until };
+  return {
+    locked: true,
+    until:  user.lockedUntil ? user.lockedUntil.toISOString() : null,
+  };
 }
 
 // ── Manually unlock account (super_admin action) ─────────────
-export function unlockAccount(userId: string): void {
-  rawDb
-    .prepare(
-      `UPDATE users SET
-         is_locked       = 0,
-         locked_until    = NULL,
-         failed_attempts = 0,
-         updated_at      = ?
-       WHERE id = ?`
-    )
-    .run(new Date().toISOString(), userId);
+export async function unlockAccount(userId: string): Promise<void> {
+  await db.update(users)
+    .set({
+      isLocked:       false,
+      lockedUntil:    null,
+      failedAttempts: 0,
+      updatedAt:      new Date(),
+    })
+    .where(eq(users.id, userId));
 }
 
 // ── Force password change flag ────────────────────────────────
-export function requirePasswordChange(userId: string): void {
-  rawDb
-    .prepare(
-      `UPDATE users SET must_change_password = 1, updated_at = ? WHERE id = ?`
-    )
-    .run(new Date().toISOString(), userId);
+export async function requirePasswordChange(userId: string): Promise<void> {
+  await db.update(users)
+    .set({ mustChangePassword: true, updatedAt: new Date() })
+    .where(eq(users.id, userId));
 }
 
 // ── Update last login IP ──────────────────────────────────────
-export function updateLastLogin(userId: string, ip: string): void {
-  rawDb
-    .prepare(
-      `UPDATE users SET
-         last_login_at = ?,
-         last_login_ip = ?,
-         updated_at    = ?
-       WHERE id = ?`
-    )
-    .run(new Date().toISOString(), ip, new Date().toISOString(), userId);
+export async function updateLastLogin(userId: string, ip: string): Promise<void> {
+  const now = new Date();
+  await db.update(users)
+    .set({ lastLoginAt: now, lastLoginIp: ip, updatedAt: now })
+    .where(eq(users.id, userId));
+}
+
+export interface LoginResult {
+  success:  boolean;
+  error?:    "INVALID_CREDENTIALS" | "ACCOUNT_DEACTIVATED" | "ACCOUNT_LOCKED";
+  until?:    string | null;
+  userId?:   string;
+  username?: string;
+}
+
+// ── Main Login logic ──────────────────────────────────────────
+export async function login(
+  username:  string,
+  password:  string,
+  _ip:       string
+): Promise<LoginResult> {
+  const [user] = await db
+    .select({
+      id:           users.id,
+      username:     users.username,
+      passwordHash: users.passwordHash,
+      isActive:     users.isActive,
+    })
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+
+  if (!user) {
+    await verifyPassword(password, DUMMY_HASH);
+    return { success: false, error: "INVALID_CREDENTIALS" };
+  }
+
+  if (!user.isActive) {
+    return { success: false, error: "ACCOUNT_DEACTIVATED" };
+  }
+
+  const lockStatus = await isAccountLocked(user.id);
+  if (lockStatus.locked) {
+    return { success: false, error: "ACCOUNT_LOCKED", until: lockStatus.until };
+  }
+
+  const valid = await verifyPassword(password, user.passwordHash);
+  if (!valid) {
+    await recordFailedAttempt(user.id);
+    return { success: false, error: "INVALID_CREDENTIALS" };
+  }
+
+  await resetFailedAttempts(user.id);
+  return { success: true, userId: user.id, username: user.username };
 }
 
 // ── Timing Attack Mitigation ──────────────────────────────────
-// Used when a user is not found to ensure bcrypt still runs.
 export const DUMMY_HASH =
   "$2b$12$invalidhashfortimingprotectiononly000000000000000000000";
-

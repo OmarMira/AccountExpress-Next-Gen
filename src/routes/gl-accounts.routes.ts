@@ -1,4 +1,4 @@
-﻿import { Elysia, t } from 'elysia';
+import { Elysia, t } from 'elysia';
 import { db } from '../db/connection';
 import { chartOfAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -14,13 +14,13 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
     const existing = await db.select().from(chartOfAccounts)
       .where(eq(chartOfAccounts.companyId, companyId)).limit(1);
     if (existing.length === 0) {
-      const now = new Date().toISOString();
+      const now = new Date();
       for (const acc of US_GAAP_ACCOUNTS) {
         await db.insert(chartOfAccounts).values({
           id: uuidv4(), companyId, code: acc.code, name: acc.name,
           accountType: acc.type, description: acc.subtype,
-          normalBalance: acc.normalBalance, isSystem: acc.isSystem ? 1 : 0,
-          isActive: 1, createdAt: now, updatedAt: now,
+          normalBalance: acc.normalBalance, isSystem: acc.isSystem ? true : false,
+          isActive: true, createdAt: now, updatedAt: now,
         }).onConflictDoNothing();
       }
     }
@@ -38,11 +38,11 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
     const existing = await db.select().from(chartOfAccounts)
       .where(and(eq(chartOfAccounts.companyId, companyId), eq(chartOfAccounts.code, code))).limit(1);
     if (existing.length > 0) { set.status = 409; return { error: `El código ${code} ya existe` }; }
-    const now = new Date().toISOString();
+    const now = new Date();
     const id = uuidv4();
     await db.insert(chartOfAccounts).values({
       id, companyId, code, name, accountType, normalBalance,
-      description: description || null, isSystem: 0, isActive: 1,
+      description: description || null, isSystem: false, isActive: true,
       createdAt: now, updatedAt: now,
     });
     return { id, message: 'Cuenta creada' };
@@ -56,7 +56,7 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
     const account = await db.select().from(chartOfAccounts)
       .where(and(eq(chartOfAccounts.id, id), eq(chartOfAccounts.companyId, companyId))).limit(1);
     if (account.length === 0) { set.status = 404; return { error: 'Cuenta no encontrada' }; }
-    const updates: any = { updatedAt: new Date().toISOString() };
+    const updates: any = { updatedAt: new Date() };
     if (name) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (code) {
@@ -81,7 +81,7 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
     if (account.length === 0) { set.status = 404; return { error: 'Cuenta no encontrada' }; }
     // Desactivar (soft delete) — la restricción de movimientos se agrega cuando exista la tabla de asientos
     await db.update(chartOfAccounts)
-      .set({ isActive: 0, updatedAt: new Date().toISOString() })
+      .set({ isActive: false, updatedAt: new Date() })
       .where(eq(chartOfAccounts.id, id));
     return { message: 'Cuenta desactivada' };
   }, { query: t.Object({ companyId: t.String() }) });

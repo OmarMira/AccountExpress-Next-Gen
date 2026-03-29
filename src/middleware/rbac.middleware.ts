@@ -1,17 +1,21 @@
-﻿import { Elysia } from "elysia";
+import { Elysia } from "elysia";
 import { db } from "../db/connection.ts";
 import { roles, permissions, rolePermissions } from "../db/schema/system.schema.ts";
 import { eq, and } from "drizzle-orm";
 import { tenantMiddleware } from "./tenant.middleware.ts";
 
+interface RoleSession {
+  roleId: string;
+}
+
 export const requirePermission = (moduleName: string, actionName: string) => (app: Elysia) => app
   .use(tenantMiddleware)
-  .onBeforeHandle(async ({ roleId }) => {
+  .onBeforeHandle(async ({ roleId }: { roleId: string }) => {
     const role = await db.query.roles.findFirst({
       where: eq(roles.id, roleId)
     });
 
-    if (!role || role.isActive === 0) {
+    if (!role || !role.isActive) {
       return new Response(JSON.stringify({ error: "Role invalid or inactive" }), { status: 403 });
     }
 

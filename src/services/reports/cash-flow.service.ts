@@ -1,9 +1,12 @@
-﻿// ============================================================
+// ============================================================
 // CASH FLOW
 // Summarizes bank_transactions mapping inflows and outflows.
+// PostgreSQL 16 / Drizzle ORM
 // ============================================================
 
-import { rawDb } from "../../db/connection.ts";
+import { db, sql } from "../../db/connection.ts";
+import { bankTransactions } from "../../db/schema/index.ts";
+import { and, eq, gte, lte } from "drizzle-orm";
 
 export interface CashFlowData {
   inflows: number;
@@ -13,22 +16,37 @@ export interface CashFlowData {
   endDate: string;
 }
 
-export function getCashFlow(companyId: string, startDate: string, endDate: string): CashFlowData {
+export async function getCashFlow(companyId: string, startDate: string, endDate: string): Promise<CashFlowData> {
   // We use actual reconciled bank transactions because they represent real cash movements
-  const query = `
+  const query = sql`
     SELECT
-      COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as inflows,
-      COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END), 0) as outflows
-    FROM bank_transactions
-    WHERE company_id = ? 
-      AND status = 'reconciled'
-      AND transaction_date >= ? AND transaction_date <= ?
+      COALESCE(SUM(CASE WHEN ${bankTransactions.amount} > 0 THEN ${bankTransactions.amount} ELSE 0 END), 0) as "inflows",
+      COALESCE(SUM(CASE WHEN ${bankTransactions.amount} < 0 THEN ${bankTransactions.amount} ELSE 0 END), 0) as "outflows"
+    FROM bankTransactions
+    WHERE ${bankTransactions.companyId} = ${companyId} 
+      AND ${bankTransactions.status} = 'reconciled'
+      AND ${bankTransactions.transactionDate} >= ${startDate}::date AND ${bankTransactions.transactionDate} <= ${endDate}::date
   `;
 
-  const result = rawDb.query(query).get(companyId, startDate, endDate) as { inflows: number; outflows: number };
+  // Actually, Drizzle allows a simpler pure ORM approach here, but sticking to execute for exact compatibility:
+  const query2 = sql`
+    SELECT
+      COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) as "inflows",
+      COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END), 0) as "outflows"
+    FROM bank_transactions
+    WHERE company_id = ${companyId} 
+      AND status = 'reconciled'
+      AND transaction_date >= ${startDate}::date AND transaction_date <= ${endDate}::date
+  `;
+
+  const rows = await db.execute(query2);
+  const result = rows[0] || { inflows: 0, outflows: 0 };
   
-  const inflows = Math.round(result.inflows * 100);
-  const outflows = Math.round(result.outflows * 100);
+  const totalInflows = Number(result.inflows || 0);
+  const totalOutflows = Number(result.outflows || 0);
+
+  const inflows = Math.round(totalInflows * 100);
+  const outflows = Math.round(totalOutflows * 100);
 
   return {
     inflows: inflows / 100,
@@ -38,4 +56,3 @@ export function getCashFlow(companyId: string, startDate: string, endDate: strin
     endDate
   };
 }
-

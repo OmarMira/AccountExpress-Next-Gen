@@ -1,8 +1,9 @@
-import { rawDb } from "../src/db/connection.ts";
+import { db, sql } from "../src/db/connection.ts";
+import { users, companies } from "../src/db/schema/index.ts";
 
-const usersCount = rawDb.query("SELECT COUNT(*) as c FROM users").get() as { c: number };
-const comps = rawDb.query("SELECT id, legal_name FROM companies").all() as { id: string, legal_name: string }[];
+const [usersCountResult] = await db.execute(sql`SELECT COUNT(*)::int as c FROM users`);
+const comps = await db.select({ id: companies.id, legalName: companies.legalName }).from(companies);
 
-console.log(`Usuarios totales: ${usersCount.c}`);
+console.log(`Usuarios totales: ${usersCountResult.c}`);
 console.log(`Empresas totales: ${comps.length}`);
-comps.forEach(c => console.log(` - ${c.legal_name} (${c.id})`));
+comps.forEach(c => console.log(` - ${c.legalName} (${c.id})`));

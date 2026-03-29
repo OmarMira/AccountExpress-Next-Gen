@@ -1,4 +1,4 @@
-﻿import { Elysia, t } from 'elysia';
+import { Elysia, t } from 'elysia';
 import { db } from '../db/connection';
 import { bankAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -12,7 +12,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
     const accounts = await db.query.bankAccounts.findMany({
       where: and(
         eq(bankAccounts.companyId, companyId),
-        eq(bankAccounts.isActive, 1)
+        eq(bankAccounts.isActive, true)
       ),
       orderBy: (bankAccounts, { asc }) => [asc(bankAccounts.accountName)]
     });
@@ -37,7 +37,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
         if (existing) return existing;
       }
 
-      const now = new Date().toISOString();
+      const now = new Date();
       const newAccount = {
         id: uuidv4(),
         companyId: data.companyId,
@@ -47,7 +47,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
         accountType: data.accountType || 'checking',
         balance: Math.round((data.balance || 0) * 100),
         glAccountId: data.glAccountId || null,
-        isActive: 1,
+        isActive: true,
         createdAt: now,
         updatedAt: now
       };
@@ -77,7 +77,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
     const { id } = params;
     const data = body as any;
     try {
-      const now = new Date().toISOString();
+      const now = new Date();
       
       const updateData: any = {
         updatedAt: now
@@ -89,7 +89,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       if (data.accountType !== undefined) updateData.accountType = data.accountType;
       if (data.balance !== undefined) updateData.balance = Math.round(data.balance * 100);
       if (data.glAccountId !== undefined) updateData.glAccountId = data.glAccountId;
-      if (data.isActive !== undefined) updateData.isActive = data.isActive ? 1 : 0;
+      if (data.isActive !== undefined) updateData.isActive = data.isActive ? true : false;
 
       const updated = await db.update(bankAccounts)
         .set(updateData)
@@ -120,9 +120,9 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
   .delete('/:id', async ({ params, set }) => {
     const { id } = params;
     try {
-      const now = new Date().toISOString();
+      const now = new Date();
       const updated = await db.update(bankAccounts)
-        .set({ isActive: 0, updatedAt: now })
+        .set({ isActive: false, updatedAt: now })
         .where(eq(bankAccounts.id, id))
         .returning();
 

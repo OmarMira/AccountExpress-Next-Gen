@@ -110,7 +110,7 @@ class StatementImportService {
 
         if (!matchingAccountId && extractedBankName) {
             const accs = await db.select().from(bankAccounts)
-                .where(and(eq(bankAccounts.companyId, companyId), eq(bankAccounts.bankName, extractedBankName), eq(bankAccounts.isActive, 1)))
+                .where(and(eq(bankAccounts.companyId, companyId), eq(bankAccounts.bankName, extractedBankName), eq(bankAccounts.isActive, true)))
                 .limit(1);
             if (accs.length > 0) matchingAccountId = accs[0].id;
         }
@@ -132,7 +132,7 @@ class StatementImportService {
                         eq(bankTransactions.companyId, companyId),
                         eq(bankTransactions.transactionDate, t.date),
                         eq(bankTransactions.description, t.description),
-                        eq(bankTransactions.amount, t.amount)
+                        eq(bankTransactions.amount, t.amount.toString())
                     )
                 ).limit(1);
 
@@ -145,12 +145,12 @@ class StatementImportService {
                     bankAccount: matchingAccountId,
                     transactionDate: t.date,
                     description: t.description,
-                    amount: t.amount,
+                    amount: t.amount.toString(),
                     transactionType: t.amount < 0 ? 'debit' : 'credit',
                     referenceNumber: t.referenceNumber || null,
                     status: 'pending',
                     importBatchId: batchId,
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date()
                 });
                 imported++;
             }
@@ -299,7 +299,7 @@ class StatementImportService {
 
         if (!matchingAccountId && bankName) {
             const accs = await db.select().from(bankAccounts)
-                .where(and(eq(bankAccounts.companyId, companyId), eq(bankAccounts.bankName, bankName), eq(bankAccounts.isActive, 1)))
+                .where(and(eq(bankAccounts.companyId, companyId), eq(bankAccounts.bankName, bankName), eq(bankAccounts.isActive, true)))
                 .limit(1);
             if (accs.length > 0) matchingAccountId = accs[0].id;
         }
@@ -319,7 +319,7 @@ class StatementImportService {
                         eq(bankTransactions.companyId, companyId),
                         eq(bankTransactions.transactionDate, t.date),
                         eq(bankTransactions.description, t.description),
-                        eq(bankTransactions.amount, t.amount)
+                        eq(bankTransactions.amount, t.amount.toString())
                     )
                 ).limit(1);
 
@@ -332,12 +332,12 @@ class StatementImportService {
                     bankAccount: matchingAccountId,
                     transactionDate: t.date,
                     description: t.description,
-                    amount: t.amount,
+                    amount: t.amount.toString(),
                     transactionType: t.amount < 0 ? 'debit' : 'credit',
                     referenceNumber: null,
                     status: 'pending',
                     importBatchId: batchId,
-                    createdAt: new Date().toISOString()
+                    createdAt: new Date()
                 });
                 imported++;
             }
@@ -367,7 +367,7 @@ class StatementImportService {
                 await db.update(bankAccounts)
                   .set({
                       balance: currentBalance + delta,
-                      updatedAt: new Date().toISOString()
+                      updatedAt: new Date()
                   })
                   .where(eq(bankAccounts.id, matchingAccountId));
             }

@@ -1,6 +1,8 @@
-import { BackupService } from './BackupService';
-import { rawDb as db } from '../../db/connection';
-import { createAuditEntry } from '../audit.service';
+import { BackupService } from './BackupService.ts';
+import { db } from '../../db/connection.ts';
+import { systemConfig, auditLogs } from '../../db/schema/index.ts';
+import { createAuditEntry } from '../audit.service.ts';
+import { eq, sql } from 'drizzle-orm';
 
 export interface LastBackupInfo {
   filename: string | null;
@@ -32,14 +34,20 @@ export class BackupScheduler {
 
   private async checkSchedule() {
     try {
-      const row = db.query('SELECT backup_schedule_hour FROM system_config LIMIT 1').get() as any;
-      if (!row || row.backup_schedule_hour === null) return;
+      const [row] = await db.select({ backupScheduleHour: systemConfig.backupScheduleHour }).from(systemConfig).limit(1);
+      if (!row || row.backupScheduleHour === null) return;
       
-      const hourUTC = parseInt(row.backup_schedule_hour, 10);
+      const hourUTC = row.backupScheduleHour;
       const currentHour = new Date().getUTCHours();
       
       if (currentHour === hourUTC) {
-         const ranToday = db.query("SELECT 1 FROM audit_logs WHERE action IN ('backup:success', 'backup:failed') AND DATE(created_at) = DATE('now')").get();
+         const [ranToday] = await db.execute(sql`
+           SELECT 1 as ran FROM audit_logs
+           WHERE action IN ('backup:success', 'backup:failed')
+             AND DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE
+           LIMIT 1
+         `) as { ran: number }[];
+
          if (!ranToday) {
              console.log("[Backup] Starting scheduled backup.");
              await this.runScheduledBackup();
@@ -58,7 +66,7 @@ export class BackupScheduler {
       filename = result.filename;
       await this.backupService.pruneOldBackups(30);
       
-      createAuditEntry({
+      await createAuditEntry({
         companyId: null,
         userId: null,
         sessionId: null,
@@ -72,7 +80,7 @@ export class BackupScheduler {
       });
       
     } catch (e: any) {
-      createAuditEntry({
+      await createAuditEntry({
         companyId: null,
         userId: null,
         sessionId: null,
@@ -93,13 +101,14 @@ export class BackupScheduler {
   }
 
   async setSchedule(hourUTC: number): Promise<void> {
-    db.query("UPDATE system_config SET backup_schedule_hour = ?").run(hourUTC);
+    // Requires an initial row to update, assuming systemConfig has one.
+    await db.update(systemConfig).set({ backupScheduleHour: hourUTC });
   }
 
   async getLastBackupInfo(): Promise<LastBackupInfo> {
     const backups = await this.backupService.listBackups(1);
-    let filename = null;
-    let date = null;
+    let filename: string | null = null;
+    let date: string | null = null;
     let status: 'success' | 'failed' | 'none' = 'none';
     
     if (backups.length > 0) {
@@ -108,11 +117,11 @@ export class BackupScheduler {
       status = 'success';
     }
 
-    let scheduledHourUTC = null;
+    let scheduledHourUTC: number | null = null;
     try {
-      const row = db.query("SELECT backup_schedule_hour FROM system_config LIMIT 1").get() as any;
-      if (row && row.backup_schedule_hour !== null) {
-        scheduledHourUTC = parseInt(row.backup_schedule_hour, 10);
+      const [row] = await db.select({ backupScheduleHour: systemConfig.backupScheduleHour }).from(systemConfig).limit(1);
+      if (row && row.backupScheduleHour !== null) {
+        scheduledHourUTC = row.backupScheduleHour;
       }
     } catch (e) {}
 
@@ -125,4 +134,3 @@ export class BackupScheduler {
      return `Cada día a las ${info.scheduledHourUTC.toString().padStart(2, '0')}:00 UTC`;
   }
 }
-

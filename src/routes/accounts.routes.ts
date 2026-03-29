@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // ACCOUNTS ROUTES — /accounts (Chart of Accounts)
 // ============================================================
 
@@ -15,23 +15,23 @@ export const accountsRoutes = new Elysia({ prefix: "/accounts" })
 
   // GET /accounts?companyId=
   .use(requirePermission("accounts", "read"))
-  .get("/", ({ query, cookie, set }) => {
+  .get("/", async ({ query, cookie, set }) => {
     const token = (cookie["session"].value as string);
     if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
     if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
-    return getAccountTree((query.companyId as string));
+    return await getAccountTree((query.companyId as string));
   })
 
   // POST /accounts
   .use(requirePermission("accounts", "create"))
   .post(
     "/",
-    ({ body, cookie, set }) => {
+    async ({ body, cookie, set }) => {
       const token = (cookie["session"].value as string);
       if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
 
       try {
-        const id = addAccount({
+        const id = await addAccount({
           companyId:     body.companyId,
           code:          body.code,
           name:          body.name,
@@ -63,13 +63,13 @@ export const accountsRoutes = new Elysia({ prefix: "/accounts" })
   )
 
   // DELETE /accounts/:id?companyId=
-  .delete("/:id", ({ params, query, cookie, set }) => {
+  .delete("/:id", async ({ params, query, cookie, set }) => {
     const token = (cookie["session"].value as string);
     if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
     if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
 
     try {
-      deactivateAccount((params.id as string), (query.companyId as string));
+      await deactivateAccount((params.id as string), (query.companyId as string));
       return { message: "Account deactivated" };
     } catch (err) {
       set.status = 422;

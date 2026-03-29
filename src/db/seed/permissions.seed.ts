@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // PERMISSIONS SEED DATA
 // 28 base permissions across 7 modules × up to 7 actions.
 // Format: module:action
@@ -58,5 +58,9 @@ export const PERMISSIONS_SEED: PermissionSeed[] = [
   { id: "perm-audit-read--26", module: "audit", action: "read",   description: "View audit log entries",                    createdAt: NOW },
   { id: "perm-audit-export-27", module: "audit", action: "export", description: "Export audit logs to CSV",                 createdAt: NOW },
   { id: "perm-audit-close-28", module: "audit", action: "close",  description: "Open/close fiscal periods",                 createdAt: NOW },
+  
+  // ── NEW PERMISSIONS (v1.0.1) ───────────────────────────────
+  { id: "perm-journ-void--29", module: "journal", action: "void",  description: "Void posted journal entries (reversing)",    createdAt: NOW },
+  { id: "perm-perio-close-30", module: "periods", action: "close", description: "Close/Open fiscal periods",                 createdAt: NOW },
 ];
 

@@ -3,7 +3,7 @@ process.env.DATABASE_PATH = "./data/test.db";
 import { 
   login, 
   LoginResult 
-} from "../src/services/auth/auth.service.ts";
+} from "../src/services/auth.service.ts";
 import { db } from "../src/db/connection.ts";
 import { users } from "../src/db/schema/system.schema.ts";
 import { eq } from "drizzle-orm";
@@ -48,13 +48,13 @@ async function runTimingTest() {
     passwordSalt: "salt",
     firstName: "Test",
     lastName: "Lock",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    createdAt: new Date(),
+    updatedAt: new Date()
   });
 
-  let lockResult: LoginResult;
+  let lastResult: LoginResult = { success: false };
   for (let i = 0; i < 5; i++) {
-    lockResult = await login("locktest", "bad", "127.0.0.1");
+    lastResult = await login("locktest", "bad", "127.0.0.1");
   }
   
   // 6th attempt should be locked

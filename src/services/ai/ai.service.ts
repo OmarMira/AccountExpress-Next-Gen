@@ -2,9 +2,10 @@
 // AI SERVICE
 // Proxy a Ollama (local) con contexto financiero de la DB.
 // SECURITY: Solo lectura. Nunca ejecuta SQL de escritura.
+// PostgreSQL 16 / Drizzle ORM
 // ============================================================
 
-import { rawDb } from "../../db/connection.ts";
+import { db, sql } from "../../db/connection.ts";
 
 const OLLAMA_URL = "http://localhost:11434/api/chat";
 const MODEL      = "mistral";
@@ -27,66 +28,72 @@ CRITICAL CONSTRAINTS:
 
 // ── Contexto financiero de la empresa ────────────────────────
 
-export function buildFinancialContext(companyId: string): object {
+export async function buildFinancialContext(companyId: string): Promise<object> {
   try {
     // Balance bancario
-    const bank = rawDb.query(
-      `SELECT SUM(balance) as total FROM bank_accounts WHERE company_id = ?`
-    ).get(companyId) as any;
+    const bankQuery = sql`SELECT SUM(balance) as "total" FROM bank_accounts WHERE company_id = ${companyId}`;
+    const bankRows = await db.execute(bankQuery);
+    const bank = bankRows[0] as any;
 
     // Transacciones pendientes
-    const pending = rawDb.query(
-      `SELECT COUNT(*) as count FROM bank_transactions WHERE company_id = ? AND status = 'pending'`
-    ).get(companyId) as any;
+    const pendingQuery = sql`SELECT COUNT(*) as "count" FROM bank_transactions WHERE company_id = ${companyId} AND status = 'pending'`;
+    const pendingRows = await db.execute(pendingQuery);
+    const pending = pendingRows[0] as any;
 
     // Período fiscal activo
-    const period = rawDb.query(
-      `SELECT name, start_date, end_date FROM fiscal_periods
-       WHERE company_id = ? AND status = 'open'
-       ORDER BY start_date ASC LIMIT 1`
-    ).get(companyId) as any;
+    const periodQuery = sql`
+       SELECT name, start_date as "start_date", end_date as "end_date" FROM fiscal_periods
+       WHERE company_id = ${companyId} AND status = 'open'
+       ORDER BY start_date ASC LIMIT 1
+    `;
+    const periodRows = await db.execute(periodQuery);
+    const period = periodRows[0] as any;
 
     // Últimos 10 asientos del diario
-    const journal = rawDb.query(
-      `SELECT je.entry_date as date, je.description, je.reference,
-              SUM(jl.debit_amount)  as total_debits,
-              SUM(jl.credit_amount) as total_credits
+    const journalQuery = sql`
+       SELECT je.entry_date as "date", je.description as "description", je.reference as "reference",
+              SUM(jl.debit_amount)  as "total_debits",
+              SUM(jl.credit_amount) as "total_credits"
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
-       WHERE je.company_id = ?
+       WHERE je.company_id = ${companyId}
        GROUP BY je.id
-       ORDER BY je.entry_date DESC LIMIT 10`
-    ).all(companyId) as any[];
+       ORDER BY je.entry_date DESC LIMIT 10
+    `;
+    const journal = await db.execute(journalQuery) as any[];
 
     // Verificar balance de partida doble (últimos 30 días)
-    const balance = rawDb.query(
-      `SELECT SUM(jl.debit_amount) as debits, SUM(jl.credit_amount) as credits
+    const balanceQuery = sql`
+       SELECT SUM(jl.debit_amount) as "debits", SUM(jl.credit_amount) as "credits"
        FROM journal_lines jl
        INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
-       WHERE je.company_id = ?
-         AND je.entry_date >= date('now', '-30 days')`
-    ).get(companyId) as any;
+       WHERE je.company_id = ${companyId}
+         AND je.entry_date >= current_date - interval '30 days'
+    `;
+    const balanceRows = await db.execute(balanceQuery);
+    const balance = balanceRows[0] as any;
 
     // Top 5 cuentas por actividad
-    const topAccounts = rawDb.query(
-      `SELECT ca.code as account_code, ca.name as account_name, ca.account_type,
-              SUM(jl.debit_amount + jl.credit_amount) as activity
+    const topAccountsQuery = sql`
+       SELECT ca.code as "account_code", ca.name as "account_name", ca.account_type as "account_type",
+              SUM(jl.debit_amount + jl.credit_amount) as "activity"
        FROM journal_lines jl
        INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
        INNER JOIN chart_of_accounts ca ON ca.id = jl.account_id
-       WHERE je.company_id = ?
+       WHERE je.company_id = ${companyId}
        GROUP BY ca.id
-       ORDER BY activity DESC LIMIT 5`
-    ).all(companyId) as any[];
+       ORDER BY activity DESC LIMIT 5
+    `;
+    const topAccounts = await db.execute(topAccountsQuery) as any[];
 
-    const debitTotal  = balance?.debits  || 0;
-    const creditTotal = balance?.credits || 0;
+    const debitTotal  = Number(balance?.debits || 0);
+    const creditTotal = Number(balance?.credits || 0);
 
     return {
       companyId,
       activePeriod: period || null,
-      bankBalance: bank?.total || 0,
-      pendingTransactions: pending?.count || 0,
+      bankBalance: Number(bank?.total || 0),
+      pendingTransactions: Number(pending?.count || 0),
       doubleEntryCheck: {
         totalDebits:  debitTotal,
         totalCredits: creditTotal,
@@ -107,7 +114,7 @@ export async function* chatWithOllama(
   messages: { role: string; content: string }[],
   companyId: string
 ): AsyncGenerator<string> {
-  const context = buildFinancialContext(companyId);
+  const context = await buildFinancialContext(companyId);
 
   // Inyectar contexto financiero como primer mensaje del sistema
   const contextMessage = {

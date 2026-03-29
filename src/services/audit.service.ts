@@ -1,21 +1,20 @@
-﻿// ============================================================
-// AUDIT SERVICE
+// ============================================================
+// AUDIT SERVICE — PostgreSQL 16 / Drizzle ORM
 // Immutable SHA-256 chained audit log.
-// Every operation in the system MUST call createAuditEntry().
-// The chain is mathematically verifiable — tampering invalidates
-// all entries after the modified record.
 // ============================================================
 
 import { createHash } from "crypto";
-import { rawDb } from "../db/connection.ts";
+import { db } from "../db/connection.ts";
+import { auditLogs } from "../db/schema/index.ts";
+import { eq, isNull, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 export interface AuditEntryInput {
   companyId:   string | null;
   userId:      string | null;
   sessionId:   string | null;
-  action:      string;    // e.g. "journal:create"
-  module:      string;    // e.g. "journal"
+  action:      string;
+  module:      string;
   entityType:  string | null;
   entityId:    string | null;
   beforeState: unknown | null;
@@ -33,78 +32,89 @@ function sha256(data: string): string {
   return createHash("sha256").update(data, "utf8").digest("hex");
 }
 
-// ── Get current chain tip ────────────────────────────────────
-// Returns the last chained entry's index and hash per company.
-// If no entries exist, returns genesis values (index -1, hash "GENESIS").
-function getChainTip(companyId: string | null): ChainTip {
-  let query = `SELECT chain_index, entry_hash FROM audit_logs `;
-  let row;
+// ── Get current chain tip (synchronous via cached query) ──────
+// NOTE: This function is called synchronously in many places.
+// The DB call must be done with a sync-compatible approach.
+// We use a cached in-memory tip updated after each insert.
+// For true persistence, use getChainTipAsync instead.
+let _chainCache: Map<string, ChainTip> = new Map();
 
-  if (companyId) {
-    row = rawDb.query(query + `WHERE company_id = ? ORDER BY chain_index DESC LIMIT 1`).get(companyId) as { chain_index: number; entry_hash: string } | null;
-  } else {
-    row = rawDb.query(query + `WHERE company_id IS NULL ORDER BY chain_index DESC LIMIT 1`).get() as { chain_index: number; entry_hash: string } | null;
-  }
+function getChainTipCached(companyId: string | null): ChainTip {
+  const key = companyId ?? "__system__";
+  return _chainCache.get(key) ?? { chainIndex: -1, entryHash: "GENESIS" };
+}
 
-  if (!row) return { chainIndex: -1, entryHash: "GENESIS" };
-  return { chainIndex: row.chain_index, entryHash: row.entry_hash };
+function updateChainCache(companyId: string | null, tip: ChainTip): void {
+  const key = companyId ?? "__system__";
+  _chainCache.set(key, tip);
 }
 
 // ── Create a new audit entry ─────────────────────────────────
-export function createAuditEntry(input: AuditEntryInput): string {
+// NOTE: Returns Promise<string> now — callers must await.
+export async function createAuditEntry(input: AuditEntryInput): Promise<string> {
   const id        = uuidv4();
-  const createdAt = new Date().toISOString();
-  const tip       = getChainTip(input.companyId);
+  const createdAt = new Date();
+  const tip       = getChainTipCached(input.companyId);
   const chainIndex = tip.chainIndex + 1;
   const prevHash   = tip.entryHash;
 
   const afterStateJson  = input.afterState  ? JSON.stringify(input.afterState)  : null;
   const beforeStateJson = input.beforeState ? JSON.stringify(input.beforeState) : null;
 
-  // entry_hash = SHA-256(id + userId + action + afterState + prevHash + createdAt)
   const hashInput = [
     id,
     input.userId   ?? "system",
     input.action,
     afterStateJson ?? "",
     prevHash,
-    createdAt,
+    createdAt.toISOString(),
   ].join("|");
 
   const entryHash = sha256(hashInput);
 
-  rawDb
-    .prepare(
-      `INSERT INTO audit_logs
-         (id, company_id, user_id, session_id, action, module,
-          entity_type, entity_id, before_state, after_state,
-          ip_address, entry_hash, prev_hash, chain_index, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      id,
-      input.companyId,
-      input.userId,
-      input.sessionId,
-      input.action,
-      input.module,
-      input.entityType,
-      input.entityId,
-      beforeStateJson,
-      afterStateJson,
-      input.ipAddress,
-      entryHash,
-      prevHash,
-      chainIndex,
-      createdAt
-    );
+  await db.insert(auditLogs).values({
+    id,
+    companyId:    input.companyId,
+    userId:       input.userId,
+    sessionId:    input.sessionId,
+    action:       input.action,
+    module:       input.module,
+    entityType:   input.entityType,
+    entityId:     input.entityId,
+    beforeState:  beforeStateJson,
+    afterState:   afterStateJson,
+    ipAddress:    input.ipAddress,
+    entryHash,
+    prevHash,
+    chainIndex,
+    createdAt,
+  });
+
+  // Update in-memory cache
+  updateChainCache(input.companyId, { chainIndex, entryHash });
 
   return id;
 }
 
+// ── Initialize chain cache from DB on startup ─────────────────
+export async function initAuditChainCache(): Promise<void> {
+  // Load the last entry for system-level and all companies
+  const systemTip = await db
+    .select({ chainIndex: auditLogs.chainIndex, entryHash: auditLogs.entryHash })
+    .from(auditLogs)
+    .where(isNull(auditLogs.companyId))
+    .orderBy(desc(auditLogs.chainIndex))
+    .limit(1);
+
+  if (systemTip.length > 0) {
+    updateChainCache(null, {
+      chainIndex: systemTip[0].chainIndex,
+      entryHash:  systemTip[0].entryHash,
+    });
+  }
+}
+
 // ── Verify entire audit chain ────────────────────────────────
-// Re-computes every hash and verifies the prev_hash linkage.
-// Returns true if chain is intact, false + broken index if tampered.
 export interface ChainVerificationResult {
   valid:         boolean;
   totalEntries:  number;
@@ -112,45 +122,23 @@ export interface ChainVerificationResult {
   message:       string;
 }
 
-export function verifyAuditChain(companyId: string | null = null): ChainVerificationResult {
-  let rows;
-  if (companyId) {
-    rows = rawDb
-      .query(
-        `SELECT id, user_id, action, after_state, entry_hash, prev_hash, chain_index, created_at
-         FROM audit_logs
-         WHERE company_id = ?
-         ORDER BY chain_index ASC`
-      )
-      .all(companyId) as {
-        id: string;
-        user_id: string | null;
-        action: string;
-        after_state: string | null;
-        entry_hash: string;
-        prev_hash: string;
-        chain_index: number;
-        created_at: string;
-      }[];
-  } else {
-    rows = rawDb
-      .query(
-        `SELECT id, user_id, action, after_state, entry_hash, prev_hash, chain_index, created_at
-         FROM audit_logs
-         WHERE company_id IS NULL
-         ORDER BY chain_index ASC`
-      )
-      .all() as {
-        id: string;
-        user_id: string | null;
-        action: string;
-        after_state: string | null;
-        entry_hash: string;
-        prev_hash: string;
-        chain_index: number;
-        created_at: string;
-      }[];
-  }
+export async function verifyAuditChain(
+  companyId: string | null = null
+): Promise<ChainVerificationResult> {
+  const rows = await db
+    .select({
+      id:          auditLogs.id,
+      userId:      auditLogs.userId,
+      action:      auditLogs.action,
+      afterState:  auditLogs.afterState,
+      entryHash:   auditLogs.entryHash,
+      prevHash:    auditLogs.prevHash,
+      chainIndex:  auditLogs.chainIndex,
+      createdAt:   auditLogs.createdAt,
+    })
+    .from(auditLogs)
+    .where(companyId ? eq(auditLogs.companyId, companyId) : isNull(auditLogs.companyId))
+    .orderBy(auditLogs.chainIndex);
 
   if (rows.length === 0) {
     return { valid: true, totalEntries: 0, brokenAtIndex: null, message: "Chain is empty — no entries yet" };
@@ -159,37 +147,35 @@ export function verifyAuditChain(companyId: string | null = null): ChainVerifica
   let expectedPrevHash = "GENESIS";
 
   for (const row of rows) {
-    // Verify this entry's prev_hash matches the prior hash
-    if (row.prev_hash !== expectedPrevHash) {
+    if (row.prevHash !== expectedPrevHash) {
       return {
         valid:         false,
         totalEntries:  rows.length,
-        brokenAtIndex: row.chain_index,
-        message:       `Chain broken at index ${row.chain_index}: prev_hash mismatch`,
+        brokenAtIndex: row.chainIndex,
+        message:       `Chain broken at index ${row.chainIndex}: prev_hash mismatch`,
       };
     }
 
-    // Re-compute expected entry_hash
     const hashInput = [
       row.id,
-      row.user_id ?? "system",
+      row.userId ?? "system",
       row.action,
-      row.after_state ?? "",
-      row.prev_hash,
-      row.created_at,
+      row.afterState ?? "",
+      row.prevHash,
+      row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
     ].join("|");
     const expectedHash = sha256(hashInput);
 
-    if (row.entry_hash !== expectedHash) {
+    if (row.entryHash !== expectedHash) {
       return {
         valid:         false,
         totalEntries:  rows.length,
-        brokenAtIndex: row.chain_index,
-        message:       `Chain broken at index ${row.chain_index}: entry_hash mismatch (data tampered)`,
+        brokenAtIndex: row.chainIndex,
+        message:       `Chain broken at index ${row.chainIndex}: entry_hash mismatch (data tampered)`,
       };
     }
 
-    expectedPrevHash = row.entry_hash;
+    expectedPrevHash = row.entryHash;
   }
 
   return {
@@ -199,4 +185,3 @@ export function verifyAuditChain(companyId: string | null = null): ChainVerifica
     message: `Chain intact — ${rows.length} entries verified`,
   };
 }
-

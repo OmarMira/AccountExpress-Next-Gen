@@ -1,15 +1,14 @@
 // ============================================================
-// JOURNAL SERVICE
-// Orquestador principal del motor contable.
-// SRP: creación de borradores, aprobación y consultas.
-// Delega matemática → journal-math.service.ts
-// Delega hashing   → journal-hash.service.ts
-// Delega anulación → journal-void.service.ts
+// JOURNAL SERVICE — PostgreSQL 16 / Drizzle ORM
+// Core accounting engine: draft creation, posting, queries.
+// All functions are async.
 // ============================================================
 
-import { rawDb } from "../db/connection.ts";
+import { db, sql }        from "../db/connection.ts";
+import { journalEntries, journalLines, fiscalPeriods } from "../db/schema/index.ts";
+import { eq, and, desc }  from "drizzle-orm";
 import { createAuditEntry } from "./audit.service.ts";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4 }   from "uuid";
 import { validateDoubleEntry } from "./journal-math.service.ts";
 import { nextEntryNumber, getJournalChainTip, computeEntryHash } from "./journal-hash.service.ts";
 
@@ -38,91 +37,109 @@ export class ValidationError extends Error {
   }
 }
 
-export function createDraft(
+// ── Create a draft journal entry ─────────────────────────────
+export async function createDraft(
   entry: JournalEntryInput,
   lines: JournalLineInput[]
-): string {
+): Promise<string> {
   if (lines.length === 0) throw new ValidationError("Al menos una línea es requerida.");
 
-  const period = rawDb.query("SELECT status FROM fiscal_periods WHERE id = ?").get(entry.periodId) as { status: string } | null;
+  const [period] = await db
+    .select({ status: fiscalPeriods.status })
+    .from(fiscalPeriods)
+    .where(eq(fiscalPeriods.id, entry.periodId))
+    .limit(1);
+
   if (!period) throw new ValidationError("Periodo fiscal no encontrado.");
-  if (period.status === "closed" || period.status === "locked") throw new ValidationError("El periodo contable se encuentra cerrado. No se permiten nuevos asientos.");
+  if (period.status === "closed" || period.status === "locked")
+    throw new ValidationError("El periodo contable se encuentra cerrado. No se permiten nuevos asientos.");
 
   const id          = uuidv4();
-  const now         = new Date().toISOString();
-  const entryNumber = nextEntryNumber(entry.companyId);
-  const prevHash    = getJournalChainTip(entry.companyId).hash;
+  const now         = new Date();
+  const entryNumber = await nextEntryNumber(entry.companyId);
+  const prevHash    = (await getJournalChainTip(entry.companyId)).hash;
   const entryHash   = computeEntryHash(id, entry, lines, prevHash);
 
-  const insertEntry = rawDb.prepare(
-    `INSERT INTO journal_entries
-       (id, company_id, entry_number, entry_date, description, reference,
-        status, is_adjusting, is_reversing, period_id, created_by,
-        entry_hash, prev_hash, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, 0, ?, ?, ?, ?, ?, ?)`
-  );
-  const insertLine = rawDb.prepare(
-    `INSERT INTO journal_lines
-       (id, journal_entry_id, company_id, account_id,
-        debit_amount, credit_amount, description, line_number, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
+  await db.transaction(async (tx) => {
+    await tx.insert(journalEntries).values({
+      id,
+      companyId:   entry.companyId,
+      entryNumber,
+      entryDate:   entry.entryDate,
+      description: entry.description,
+      reference:   entry.reference ?? null,
+      status:      "draft",
+      isAdjusting: entry.isAdjusting,
+      isReversing: false,
+      periodId:    entry.periodId,
+      createdBy:   entry.createdBy,
+      entryHash,
+      prevHash,
+      createdAt:   now,
+      updatedAt:   now,
+    });
 
-  const transaction = rawDb.transaction(() => {
-    insertEntry.run(
-      id, entry.companyId, entryNumber, entry.entryDate,
-      entry.description, entry.reference ?? null,
-      entry.isAdjusting ? 1 : 0,
-      entry.periodId, entry.createdBy,
-      entryHash, prevHash, now, now
-    );
     for (const line of lines) {
-      insertLine.run(
-        uuidv4(), id, entry.companyId, line.accountId,
-        line.debitAmount, line.creditAmount,
-        line.description ?? null, line.lineNumber, now
-      );
+      await tx.insert(journalLines).values({
+        id:             uuidv4(),
+        journalEntryId: id,
+        companyId:      entry.companyId,
+        accountId:      line.accountId,
+        debitAmount:    String(line.debitAmount),
+        creditAmount:   String(line.creditAmount),
+        description:    line.description ?? null,
+        lineNumber:     line.lineNumber,
+        createdAt:      now,
+      });
     }
   });
 
-  transaction();
   return id;
 }
 
-export function post(
+// ── Post a draft journal entry ────────────────────────────────
+export async function post(
   entryId:   string,
   postedBy:  string,
   sessionId: string,
   ipAddress: string
-): void {
-  const entry = rawDb
-    .query("SELECT * FROM journal_entries WHERE id = ?")
-    .get(entryId) as { company_id: string; status: string; period_id: string } | null;
+): Promise<void> {
+  const [entry] = await db
+    .select({ companyId: journalEntries.companyId, status: journalEntries.status, periodId: journalEntries.periodId })
+    .from(journalEntries)
+    .where(eq(journalEntries.id, entryId))
+    .limit(1);
 
   if (!entry) throw new ValidationError(`Journal entry ${entryId} not found`);
   if (entry.status !== "draft") throw new ValidationError(`Entry is ${entry.status} — only drafts can be posted`);
 
-  const lines = rawDb
-    .query("SELECT account_id, debit_amount, credit_amount, line_number FROM journal_lines WHERE journal_entry_id = ?")
-    .all(entryId) as { account_id: string; debit_amount: number; credit_amount: number; line_number: number }[];
+  const lines = await db
+    .select({
+      accountId:    journalLines.accountId,
+      debitAmount:  journalLines.debitAmount,
+      creditAmount: journalLines.creditAmount,
+      lineNumber:   journalLines.lineNumber,
+    })
+    .from(journalLines)
+    .where(eq(journalLines.journalEntryId, entryId));
 
   validateDoubleEntry(
     lines.map((l) => ({
-      accountId:    l.account_id,
-      debitAmount:  l.debit_amount,
-      creditAmount: l.credit_amount,
+      accountId:    l.accountId,
+      debitAmount:  parseFloat(l.debitAmount ?? "0"),
+      creditAmount: parseFloat(l.creditAmount ?? "0"),
       description:  null,
-      lineNumber:   l.line_number,
+      lineNumber:   l.lineNumber,
     }))
   );
 
-  const now = new Date().toISOString();
-  rawDb.prepare(
-    `UPDATE journal_entries SET status = 'posted', posted_by = ?, posted_at = ?, updated_at = ? WHERE id = ?`
-  ).run(postedBy, now, now, entryId);
+  const now = new Date();
+  await db.update(journalEntries)
+    .set({ status: "posted", postedBy, postedAt: now, updatedAt: now })
+    .where(eq(journalEntries.id, entryId));
 
-  createAuditEntry({
-    companyId:   entry.company_id,
+  await createAuditEntry({
+    companyId:   entry.companyId,
     userId:      postedBy,
     sessionId,
     action:      "journal:approve",
@@ -130,39 +147,142 @@ export function post(
     entityType:  "journal_entry",
     entityId:    entryId,
     beforeState: { status: "draft" },
-    afterState:  { status: "posted", postedAt: now },
+    afterState:  { status: "posted", postedAt: now.toISOString() },
     ipAddress,
   });
 }
 
-export function getEntryWithLines(entryId: string) {
-  const entry = rawDb.query("SELECT * FROM journal_entries WHERE id = ?").get(entryId);
-  const lines = rawDb.query("SELECT * FROM journal_lines WHERE journal_entry_id = ? ORDER BY line_number").all(entryId);
-  return { entry, lines };
+// ── Get entry with its lines ──────────────────────────────────
+export async function getEntryWithLines(entryId: string) {
+  const [entry] = await db
+    .select()
+    .from(journalEntries)
+    .where(eq(journalEntries.id, entryId))
+    .limit(1);
+
+  const lines = await db
+    .select()
+    .from(journalLines)
+    .where(eq(journalLines.journalEntryId, entryId))
+    .orderBy(journalLines.lineNumber);
+
+  return { entry: entry ?? null, lines };
 }
 
-export function listEntries(
+// ── Void/Reverse a journal entry ─────────────────────────────
+export async function voidEntry(
+  entryId:   string,
+  userId:    string,
+  sessionId: string,
+  ipAddress: string
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    // 1. Get original entry
+    const { entry, lines } = await getEntryWithLines(entryId);
+    if (!entry) throw new ValidationError(`Entry ${entryId} not found`);
+    if (entry.status !== "posted") throw new ValidationError("Only posted entries can be voided");
+
+    // 2. Create reversal draft
+    const reversalId = uuidv4();
+    const now = new Date();
+    const revNumber = await nextEntryNumber(entry.companyId);
+
+    const reversedLines = lines.map(line => ({
+      accountId:    line.accountId,
+      debitAmount:  parseFloat(line.creditAmount ?? "0"),
+      creditAmount: parseFloat(line.debitAmount ?? "0"),
+      description:  `Voiding line ${line.lineNumber}`,
+      lineNumber:   line.lineNumber,
+    }));
+
+    const tip = await getJournalChainTip(entry.companyId);
+    const finalHash = computeEntryHash(
+      reversalId,
+      {
+        companyId:   entry.companyId,
+        entryDate:   entry.entryDate,
+        description: `VOID: ${entry.description}`,
+        reference:   entry.id,
+        isAdjusting: false,
+        periodId:    entry.periodId,
+        createdBy:   userId,
+      },
+      reversedLines,
+      tip.hash
+    );
+
+    await tx.insert(journalEntries).values({
+      id:          reversalId,
+      companyId:   entry.companyId,
+      entryNumber: revNumber,
+      entryDate:   entry.entryDate,
+      description: `VOID: ${entry.description}`,
+      reference:   entry.id,
+      status:      "posted",
+      isReversing: true,
+      reversesId:  entry.id,
+      periodId:    entry.periodId,
+      createdBy:   userId,
+      postedBy:    userId,
+      postedAt:    now,
+      entryHash:   finalHash,
+      prevHash:    tip.hash,
+      createdAt:   now,
+      updatedAt:   now,
+    });
+
+    // 3. Insert reversed lines
+    for (const line of reversedLines) {
+      await tx.insert(journalLines).values({
+        id:             uuidv4(),
+        journalEntryId: reversalId,
+        companyId:      entry.companyId,
+        accountId:      line.accountId,
+        debitAmount:    line.debitAmount.toString(),
+        creditAmount:   line.creditAmount.toString(),
+        description:    line.description,
+        lineNumber:     line.lineNumber,
+        createdAt:      now,
+      });
+    }
+
+    // 6. Audit
+    await createAuditEntry({
+      companyId:   entry.companyId,
+      userId,
+      sessionId,
+      action:      "journal:void",
+      module:      "journal",
+      entityType:  "journal_entry",
+      entityId:    entryId,
+      beforeState: { status: "posted" },
+      afterState:  { status: "voided", reversalId },
+      ipAddress,
+    });
+  });
+}
+
+// ── List entries with optional filters ───────────────────────
+export async function listEntries(
   companyId: string,
   opts?: { status?: string; periodId?: string; limit?: number; offset?: number }
 ) {
-  let sql = `
+  const safeLimit  = Number.isFinite(opts?.limit)  && (opts?.limit  ?? 0) > 0  ? opts!.limit!  : 100;
+  const safeOffset = Number.isFinite(opts?.offset) && (opts?.offset ?? 0) >= 0 ? opts!.offset! : 0;
+
+  const rows = await db.execute(sql`
     SELECT e.*, COALESCE(SUM(l.debit_amount), 0) as total_amount
     FROM journal_entries e
     LEFT JOIN journal_lines l ON e.id = l.journal_entry_id
-    WHERE e.company_id = ?
-  `;
-  const params: (string | number)[] = [companyId];
-  if (opts?.status)   { sql += " AND e.status = ?";    params.push(opts.status); }
-  if (opts?.periodId) { sql += " AND e.period_id = ?"; params.push(opts.periodId); }
-  sql += " GROUP BY e.id ORDER BY e.entry_date DESC, e.entry_number DESC";
-  
-  const safeLimit = Number.isFinite(opts?.limit) && (opts?.limit ?? 0) > 0 ? opts!.limit! : 100;
-  const safeOffset = Number.isFinite(opts?.offset) && (opts?.offset ?? 0) >= 0 ? opts!.offset! : 0;
-  
-  sql += " LIMIT ? OFFSET ?";
-  params.push(safeLimit, safeOffset);
-  
-  return rawDb.query(sql).all(...params);
+    WHERE e.company_id = ${companyId}
+      ${opts?.status   ? sql`AND e.status = ${opts.status}`     : sql``}
+      ${opts?.periodId ? sql`AND e.period_id = ${opts.periodId}` : sql``}
+    GROUP BY e.id
+    ORDER BY e.entry_date DESC, e.entry_number DESC
+    LIMIT ${safeLimit} OFFSET ${safeOffset}
+  `);
+
+  return rows as any[];
 }
 
 export { validateDoubleEntry };

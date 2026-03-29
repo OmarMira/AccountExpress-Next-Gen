@@ -1,10 +1,12 @@
-﻿// ============================================================
-// COMPANIES ROUTES
+// ============================================================
+// COMPANIES ROUTES — PostgreSQL 16 / Drizzle ORM
 // Endpoints to manage companies and their isolated users.
 // ============================================================
 
 import { Elysia, t } from "elysia";
-import { rawDb } from "../db/connection.ts";
+import { db } from "../db/connection.ts";
+import { users, userCompanyRoles } from "../db/schema/index.ts";
+import { eq, and, isNull } from "drizzle-orm";
 import { 
   createCompany, 
   updateCompany, 
@@ -21,25 +23,25 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   .use(authMiddleware)
 
   // ── GET /companies ──────────────────────────────────────────
-  .get("/", ({ user }) => {
-    const isSuper = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(user) as any;
-    const isSuperAdmin = isSuper && isSuper.is_super_admin === 1;
-    return listCompanies(user, isSuperAdmin);
+  .get("/", async ({ user }) => {
+    const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+    const isSuperAdmin = dbUser?.isSuperAdmin === true;
+    return await listCompanies(user, isSuperAdmin);
   })
 
   // ── POST /companies ─────────────────────────────────────────
   .post(
     "/",
-    ({ body, user, sessionId, request, set }) => {
-      const isSuper = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(user) as any;
-      if (!isSuper || isSuper.is_super_admin !== 1) {
+    async ({ body, user, sessionId, request, set }) => {
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      if (!dbUser || !dbUser.isSuperAdmin) {
         set.status = 403; return { error: "Super Admin privileges required" };
       }
 
-      const companyId = createCompany(body);
+      const companyId = await createCompany(body);
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
-      createAuditEntry({
+      await createAuditEntry({
         companyId: companyId, userId: user, sessionId,
         action: "companies:create", module: "companies",
         entityType: "company", entityId: companyId,
@@ -69,20 +71,32 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   // ── PUT /companies/:id ──────────────────────────────────────
   .put(
     "/:id",
-    ({ params, body, user, sessionId, request, set }) => {
-      const isSuper = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(user) as any;
-      const isSuperAdmin = isSuper && isSuper.is_super_admin === 1;
+    async ({ params, body, user, sessionId, request, set }) => {
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      const isSuperAdmin = dbUser?.isSuperAdmin === true;
 
       if (!isSuperAdmin) {
-        const role = rawDb.query("SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ? AND is_active = 1 AND revoked_at IS NULL").get(user, params.id);
+        const [role] = await db
+          .select()
+          .from(userCompanyRoles)
+          .where(
+            and(
+              eq(userCompanyRoles.userId, user),
+              eq(userCompanyRoles.companyId, params.id),
+              eq(userCompanyRoles.isActive, true),
+              isNull(userCompanyRoles.revokedAt)
+            )
+          )
+          .limit(1);
+          
         if (!role) {
           set.status = 403; return { error: "Access denied" };
         }
       }
 
-      updateCompany(params.id, body);
+      await updateCompany(params.id, body);
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-      createAuditEntry({
+      await createAuditEntry({
         companyId: params.id, userId: user, sessionId,
         action: "companies:update", module: "companies",
         entityType: "company", entityId: params.id,
@@ -111,15 +125,15 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   // ── DELETE /companies/:id ───────────────────────────────────
   .delete(
     "/:id",
-    ({ params, user, sessionId, request, set }) => {
-      const isSuper = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(user) as any;
-      if (!isSuper || isSuper.is_super_admin !== 1) {
+    async ({ params, user, sessionId, request, set }) => {
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      if (!dbUser || !dbUser.isSuperAdmin) {
         set.status = 403; return { error: "Super Admin privileges required" };
       }
 
-      archiveCompany(params.id);
+      await archiveCompany(params.id);
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-      createAuditEntry({
+      await createAuditEntry({
         companyId: params.id, userId: user, sessionId,
         action: "companies:delete", module: "companies",
         entityType: "company", entityId: params.id,
@@ -131,38 +145,62 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   )
 
   // ── GET /companies/:id/users ────────────────────────────────
-  .get("/:id/users", ({ params, user, set }) => {
-    const isSuper = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(user) as any;
-    const isSuperAdmin = isSuper && isSuper.is_super_admin === 1;
+  .get("/:id/users", async ({ params, user, set }) => {
+    const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+    const isSuperAdmin = dbUser?.isSuperAdmin === true;
 
     if (!isSuperAdmin) {
-      const role = rawDb.query("SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ? AND is_active = 1 AND revoked_at IS NULL").get(user, params.id);
+      const [role] = await db
+        .select()
+        .from(userCompanyRoles)
+        .where(
+          and(
+            eq(userCompanyRoles.userId, user),
+            eq(userCompanyRoles.companyId, params.id),
+            eq(userCompanyRoles.isActive, true),
+            isNull(userCompanyRoles.revokedAt)
+          )
+        )
+        .limit(1);
+
       if (!role) {
         set.status = 403; return { error: "Access denied" };
       }
     }
-    return listCompanyUsers(params.id);
+    return await listCompanyUsers(params.id);
   })
 
   // ── POST /companies/:id/users ───────────────────────────────
   .post(
     "/:id/users",
-    ({ params, body, user, sessionId, request, set }) => {
-      const isSuper = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(user) as any;
-      const isSuperAdmin = isSuper && isSuper.is_super_admin === 1;
+    async ({ params, body, user, sessionId, request, set }) => {
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      const isSuperAdmin = dbUser?.isSuperAdmin === true;
 
       if (!isSuperAdmin) {
-        const role = rawDb.query("SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ? AND is_active = 1 AND revoked_at IS NULL").get(user, params.id);
+        const [role] = await db
+          .select()
+          .from(userCompanyRoles)
+          .where(
+            and(
+              eq(userCompanyRoles.userId, user),
+              eq(userCompanyRoles.companyId, params.id),
+              eq(userCompanyRoles.isActive, true),
+              isNull(userCompanyRoles.revokedAt)
+            )
+          )
+          .limit(1);
+
         if (!role) {
           set.status = 403; return { error: "Access denied" };
         }
       }
 
       try {
-        const ucrId = addUserToCompany(params.id, body.userId, body.roleId, user);
+        const ucrId = await addUserToCompany(params.id, body.userId, body.roleId, user);
         
         const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-        createAuditEntry({
+        await createAuditEntry({
           companyId: params.id, userId: user, sessionId,
           action: "company_users:create", module: "companies",
           entityType: "user_company_roles", entityId: ucrId,
@@ -187,22 +225,34 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   // ── DELETE /companies/:id/users/:userId ─────────────────────
   .delete(
     "/:id/users/:userId",
-    ({ params, user, sessionId, request, set }) => {
-      const isSuper = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(user) as any;
-      const isSuperAdmin = isSuper && isSuper.is_super_admin === 1;
+    async ({ params, user, sessionId, request, set }) => {
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      const isSuperAdmin = dbUser?.isSuperAdmin === true;
 
       if (!isSuperAdmin) {
-        const role = rawDb.query("SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ? AND is_active = 1 AND revoked_at IS NULL").get(user, params.id);
+        const [role] = await db
+          .select()
+          .from(userCompanyRoles)
+          .where(
+            and(
+              eq(userCompanyRoles.userId, user),
+              eq(userCompanyRoles.companyId, params.id),
+              eq(userCompanyRoles.isActive, true),
+              isNull(userCompanyRoles.revokedAt)
+            )
+          )
+          .limit(1);
+          
         if (!role) {
           set.status = 403; return { error: "Access denied" };
         }
       }
 
       try {
-        revokeUserFromCompany(params.id, params.userId);
+        await revokeUserFromCompany(params.id, params.userId);
         
         const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-        createAuditEntry({
+        await createAuditEntry({
           companyId: params.id, userId: user, sessionId,
           action: "company_users:revoke", module: "companies",
           entityType: "user_company_roles", entityId: params.userId,
@@ -216,4 +266,3 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       }
     }
   );
-

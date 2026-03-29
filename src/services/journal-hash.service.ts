@@ -1,49 +1,53 @@
 // ============================================================
-// JOURNAL HASH SERVICE
-// Generación de hashes SHA-256 y cadena criptográfica.
-// SRP: solo integridad criptográfica del diario.
+// JOURNAL HASH SERVICE — PostgreSQL 16 / Drizzle ORM
+// Cryptographic integrity for the journal entry chain.
+// IMPORTANT: nextEntryNumber and getJournalChainTip are async.
 // ============================================================
 
-import { createHash } from "crypto";
-import { rawDb } from "../db/connection.ts";
-import { JournalEntryInput, JournalLineInput } from "./journal.service.ts";
+import { createHash }      from "crypto";
+import { db, sql }         from "../db/connection.ts";
+import { journalEntries }  from "../db/schema/index.ts";
+import { eq, desc }        from "drizzle-orm";
+import type { JournalEntryInput, JournalLineInput } from "./journal.service.ts";
 
 export function sha256(data: string): string {
   return createHash("sha256").update(data, "utf8").digest("hex");
 }
 
-export function nextEntryNumber(companyId: string): string {
-  const row = rawDb
-    .query(
-      `SELECT MAX(CAST(SUBSTR(entry_number, 9) AS INTEGER)) as maxSeq
-       FROM journal_entries
-       WHERE company_id = ?`
-    )
-    .get(companyId) as { maxSeq: number | null };
+// ── Generate next sequential entry number ───────────────────
+export async function nextEntryNumber(companyId: string): Promise<string> {
+  // SUBSTR equivalent in PostgreSQL: SPLIT_PART or SUBSTRING
+  const [row] = await db.execute(sql`
+    SELECT MAX(CAST(SPLIT_PART(entry_number, '-', 3) AS INTEGER)) as max_seq
+    FROM journal_entries
+    WHERE company_id = ${companyId}
+  `) as any[];
+
   const year = new Date().getFullYear();
-  const seq  = String((row.maxSeq ?? 0) + 1).padStart(4, "0");
+  const seq  = String((row?.max_seq ?? 0) + 1).padStart(4, "0");
   return `JE-${year}-${seq}`;
 }
 
-export function getJournalChainTip(companyId: string): { hash: string } {
-  const row = rawDb
-    .query(
-      `SELECT entry_hash FROM journal_entries
-       WHERE company_id = ?
-       ORDER BY created_at DESC
-       LIMIT 1`
-    )
-    .get(companyId) as { entry_hash: string } | null;
-  return { hash: row?.entry_hash ?? "GENESIS" };
+// ── Get the hash of the last entry (chain tip) ───────────────
+export async function getJournalChainTip(companyId: string): Promise<{ hash: string }> {
+  const [row] = await db
+    .select({ entryHash: journalEntries.entryHash })
+    .from(journalEntries)
+    .where(eq(journalEntries.companyId, companyId))
+    .orderBy(desc(journalEntries.createdAt))
+    .limit(1);
+
+  return { hash: row?.entryHash ?? "GENESIS" };
 }
 
+// ── Compute SHA-256 hash for a journal entry ─────────────────
 export function computeEntryHash(
   entryId:  string,
   entry:    JournalEntryInput,
   lines:    JournalLineInput[],
   prevHash: string
 ): string {
-  const linesFingerprint = lines
+  const linesFingerprint = [...lines]
     .sort((a, b) => a.lineNumber - b.lineNumber)
     .map((l) => `${l.accountId}|${l.debitAmount}|${l.creditAmount}`)
     .join(",");

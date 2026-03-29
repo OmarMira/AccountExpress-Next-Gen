@@ -1,6 +1,6 @@
 import { db } from "../src/db/connection";
 import { users } from "../src/db/schema";
-import { hashPassword } from "../src/services/auth/password.service";
+import { hashPassword } from "../src/services/auth.service.ts";
 import { eq } from "drizzle-orm";
 
 async function main() {
@@ -14,7 +14,7 @@ async function main() {
   }
 
   const { hash, salt } = await hashPassword(password);
-  const now = new Date().toISOString();
+  const now = new Date();
 
   const existing = await db.query.users.findFirst({
     where: (u, { eq }) => eq(u.username, username)
@@ -25,8 +25,8 @@ async function main() {
       .set({
         passwordHash: hash,
         passwordSalt: salt,
-        isActive: 1,
-        isLocked: 0,
+        isActive: true,
+        isLocked: false,
         failedAttempts: 0,
         updatedAt: now
       })
@@ -44,9 +44,9 @@ async function main() {
       passwordSalt: salt,
       firstName: "Super",
       lastName: "Admin",
-      isSuperAdmin: 1,
-      isActive: 1,
-      isLocked: 0,
+      isSuperAdmin: true,
+      isActive: true,
+      isLocked: false,
       failedAttempts: 0,
       createdAt: now,
       updatedAt: now,

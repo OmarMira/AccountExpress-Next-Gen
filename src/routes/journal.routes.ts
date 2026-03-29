@@ -17,13 +17,13 @@ import { requirePermission } from "../middleware/rbac.middleware.ts";
 export const journalRoutes = new Elysia({ prefix: "/journal" })
 
   // GET /journal?companyId=&status=&periodId=
-  .get("/", ({ query, cookie, set }) => {
-    const token = (cookie["session"].value as string);
-    const session = token ? validateSession(token) : null;
+  .get("/", async ({ query, cookie, set }) => {
+    const token = (cookie["session"]?.value as string);
+    const session = token ? await validateSession(token) : null;
     if (!session) { set.status = 401; return { error: "Not authenticated" }; }
     if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
 
-    return listEntries((query.companyId as string), {
+    return await listEntries((query.companyId as string), {
       status:   (query.status as string),
       periodId: (query.periodId as string),
       limit:    (query.limit as string) ? parseInt((query.limit as string)) : 100,
@@ -32,23 +32,23 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   })
 
   // GET /journal/:id
-  .get("/:id", ({ params, cookie, set }) => {
-    const token = (cookie["session"].value as string);
-    if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
-    return getEntryWithLines((params.id as string));
+  .get("/:id", async ({ params, cookie, set }) => {
+    const token = (cookie["session"]?.value as string);
+    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
+    return await getEntryWithLines((params.id as string));
   })
 
   // POST /journal — create draft
   .use(requirePermission("journal", "create"))
   .post(
     "/",
-    ({ body, cookie, set }) => {
-      const token = (cookie["session"].value as string);
-      const session = token ? validateSession(token) : null;
+    async ({ body, cookie, set }) => {
+      const token = (cookie["session"]?.value as string);
+      const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
       try {
-        const id = createDraft(
+        const id = await createDraft(
           {
             companyId:   body.companyId,
             entryDate:   body.entryDate,
@@ -94,14 +94,14 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
 
   // POST /journal/:id/post — validate + post
   .use(requirePermission("journal", "approve"))
-  .post("/:id/post", ({ params, cookie, request, set }) => {
-    const token = (cookie["session"].value as string);
-    const session = token ? validateSession(token) : null;
+  .post("/:id/post", async ({ params, cookie, request, set }) => {
+    const token = (cookie["session"]?.value as string);
+    const session = token ? await validateSession(token) : null;
     if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     try {
-      post((params.id as string), session.userId, session.sessionId, ip);
+      await post((params.id as string), session.userId, session.sessionId, ip);
       return { message: "Journal entry posted" };
     } catch (err) {
       if (err instanceof ValidationError) {
@@ -114,14 +114,14 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
 
   // POST /journal/:id/void
   .use(requirePermission("journal", "void"))
-  .post("/:id/void", ({ params, cookie, request, set }) => {
-    const token = (cookie["session"].value as string);
-    const session = token ? validateSession(token) : null;
+  .post("/:id/void", async ({ params, cookie, request, set }) => {
+    const token = (cookie["session"]?.value as string);
+    const session = token ? await validateSession(token) : null;
     if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     try {
-      voidEntry((params.id as string), session.userId, session.sessionId, ip);
+      await voidEntry((params.id as string), session.userId, session.sessionId, ip);
       return { message: "Journal entry voided" };
     } catch (err) {
       if (err instanceof ValidationError) {

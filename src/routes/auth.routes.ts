@@ -1,9 +1,12 @@
 // ============================================================
 // AUTH ROUTES — POST /auth/login, /logout, /change-password
+// PostgreSQL 16 / Drizzle ORM refactor
 // ============================================================
 
 import { Elysia, t } from "elysia";
-import { rawDb } from "../db/connection.ts";
+import { db, sql } from "../db/connection.ts";
+import { users, sessions, companies, userCompanyRoles } from "../db/schema/index.ts";
+import { eq, and, or, isNull } from "drizzle-orm";
 import {
   verifyPassword,
   recordFailedAttempt,
@@ -15,10 +18,11 @@ import {
 } from "../services/auth.service.ts";
 import {
   createSession,
-  validateSession,
   invalidateSession,
+  switchSessionCompany
 } from "../services/session.service.ts";
 import { createAuditEntry } from "../services/audit.service.ts";
+import { loginRateLimiter } from "../middleware/rate-limit.ts";
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
 
@@ -29,17 +33,22 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       const ua = request.headers.get("user-agent") ?? null;
 
-      const user = rawDb
-        .query(
-          "SELECT id, username, password_hash, is_active, is_super_admin FROM users WHERE username = ? OR email = ?"
+      const [user] = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          passwordHash: users.passwordHash,
+          isActive: users.isActive,
+          isSuperAdmin: users.isSuperAdmin,
+        })
+        .from(users)
+        .where(
+          or(
+            eq(users.username, body.username),
+            eq(users.email, body.username)
+          )
         )
-        .get(body.username, body.username) as {
-          id: string;
-          username: string;
-          password_hash: string;
-          is_active: number;
-          is_super_admin: number;
-        } | null;
+        .limit(1);
 
       if (!user) {
         await verifyPassword(body.password, DUMMY_HASH);
@@ -47,21 +56,21 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         return { error: "Invalid credentials" };
       }
 
-      if (!user.is_active) {
+      if (!user.isActive) {
         set.status = 403;
         return { error: "Account is deactivated" };
       }
 
-      const lockStatus = isAccountLocked(user.id);
+      const lockStatus = await isAccountLocked(user.id);
       if (lockStatus.locked) {
         set.status = 423;
         return { error: `Account locked until ${lockStatus.until}` };
       }
 
-      const valid = await verifyPassword(body.password, user.password_hash);
+      const valid = await verifyPassword(body.password, user.passwordHash);
       if (!valid) {
-        recordFailedAttempt(user.id);
-        createAuditEntry({
+        await recordFailedAttempt(user.id);
+        await createAuditEntry({
           companyId: null, userId: user.id, sessionId: null,
           action: "users:read", module: "users",
           entityType: "login_attempt", entityId: user.id,
@@ -71,13 +80,13 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         return { error: "Invalid credentials" };
       }
 
-      resetFailedAttempts(user.id);
-      updateLastLogin(user.id, ip);
+      await resetFailedAttempts(user.id);
+      await updateLastLogin(user.id, ip);
 
       const companyId = null;
-      const sessionId = createSession({ userId: user.id, companyId, ipAddress: ip, userAgent: ua });
+      const sessionId = await createSession({ userId: user.id, companyId, ipAddress: ip, userAgent: ua });
 
-      createAuditEntry({
+      await createAuditEntry({
         companyId, userId: user.id, sessionId,
         action: "users:read", module: "users",
         entityType: "session", entityId: sessionId,
@@ -93,32 +102,50 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       });
 
       // Fetch Full User Profile
-      const fullUser = rawDb.query("SELECT id, username, email, first_name as firstName, last_name as lastName, is_super_admin as isSuperAdmin FROM users WHERE id = ?").get(user.id) as any;
+      const [fullUser] = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          isSuperAdmin: users.isSuperAdmin
+        })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
       
       // Fetch Available Companies
       let comps = [];
-      if (user.is_super_admin === 1) {
-        comps = rawDb.query("SELECT id, legal_name as legalName FROM companies WHERE is_active = 1").all();
+      if (user.isSuperAdmin) {
+        comps = await db
+          .select({ id: companies.id, legalName: companies.legalName })
+          .from(companies)
+          .where(eq(companies.isActive, true));
       } else {
-        comps = rawDb.query(`
-          SELECT c.id, c.legal_name as legalName 
-          FROM companies c
-          JOIN user_company_roles ucr ON c.id = ucr.company_id
-          WHERE ucr.user_id = ? AND c.is_active = 1 AND ucr.is_active = 1 AND ucr.revoked_at IS NULL
-        `).all(user.id);
+        comps = await db
+          .select({ id: companies.id, legalName: companies.legalName })
+          .from(companies)
+          .innerJoin(userCompanyRoles, eq(companies.id, userCompanyRoles.companyId))
+          .where(
+            and(
+              eq(userCompanyRoles.userId, user.id),
+              eq(companies.isActive, true),
+              eq(userCompanyRoles.isActive, true),
+              isNull(userCompanyRoles.revokedAt)
+            )
+          );
       }
 
       return { 
         message: "Login successful", 
         sessionId,
-        user: { 
-          ...fullUser, 
-          isSuperAdmin: fullUser.isSuperAdmin === 1
-        },
+        user: fullUser,
         companies: comps 
       };
     },
     {
+      beforeHandle: loginRateLimiter(5, 15 * 60 * 1000), // 5 attempts per 15 mins
       body: t.Object({
         username:  t.String({ minLength: 1 }),
         password:  t.String({ minLength: 1 }),
@@ -130,21 +157,52 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   .post(
     "/bypass",
     async ({ cookie, request, set }) => {
+      if (process.env.NODE_ENV === "production" || process.env.ALLOW_BYPASS === "false") {
+        set.status = 404;
+        return { error: "Not Found" };
+      }
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       const ua = request.headers.get("user-agent") ?? null;
-      const user = rawDb.query("SELECT id, username, is_active, is_super_admin FROM users WHERE username = 'admin' LIMIT 1").get() as any;
+      const [user] = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          isActive: users.isActive,
+          isSuperAdmin: users.isSuperAdmin
+        })
+        .from(users)
+        .where(eq(users.username, "admin"))
+        .limit(1);
+
       if (!user) {
         set.status = 500;
         return { error: "Admin user not found" };
       }
-      const sessionId = createSession({ userId: user.id, companyId: null, ipAddress: ip, userAgent: ua });
+      const sessionId = await createSession({ userId: user.id, companyId: null, ipAddress: ip, userAgent: ua });
       cookie["session"].set({ value: sessionId, httpOnly: true, sameSite: "strict", path: "/", maxAge: 8 * 60 * 60 });
-      const fullUser = rawDb.query("SELECT id, username, email, first_name as firstName, last_name as lastName, is_super_admin as isSuperAdmin FROM users WHERE id = ?").get(user.id) as any;
-      const comps = rawDb.query("SELECT id, legal_name as legalName FROM companies WHERE is_active = 1").all();
+      
+      const [fullUser] = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          isSuperAdmin: users.isSuperAdmin
+        })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+
+      const comps = await db
+        .select({ id: companies.id, legalName: companies.legalName })
+        .from(companies)
+        .where(eq(companies.isActive, true));
+
       return { 
         message: "Login successful (BYPASS)", 
         sessionId,
-        user: { ...fullUser, isSuperAdmin: true },
+        user: fullUser,
         companies: comps 
       };
     }
@@ -157,24 +215,40 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const token = (cookie["session"].value as string);
       if (!token) { set.status = 401; return { error: "Not authenticated" }; }
       
-      const session = rawDb.query("SELECT * FROM sessions WHERE id = ? AND is_valid = 1").get(token) as any;
-      if (!session) { set.status = 401; return { error: "Invalid session" }; }
-      if (session.company_id) { set.status = 400; return { error: "Company already selected. Use /switch-company instead." }; }
+      const [session] = await db
+        .select()
+        .from(sessions)
+        .where(and(eq(sessions.id, token), eq(sessions.isValid, true)))
+        .limit(1);
 
-      const role = rawDb.query("SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ? AND is_active = 1 AND revoked_at IS NULL").get(session.user_id, body.companyId);
+      if (!session) { set.status = 401; return { error: "Invalid session" }; }
+      if (session.companyId) { set.status = 400; return { error: "Company already selected. Use /switch-company instead." }; }
+
+      const [role] = await db
+        .select()
+        .from(userCompanyRoles)
+        .where(
+          and(
+            eq(userCompanyRoles.userId, session.userId),
+            eq(userCompanyRoles.companyId, body.companyId),
+            eq(userCompanyRoles.isActive, true),
+            isNull(userCompanyRoles.revokedAt)
+          )
+        )
+        .limit(1);
+
       if (!role) {
-        const user = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(session.user_id) as any;
-        if (!user || user.is_super_admin !== 1) {
+        const [user] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, session.userId)).limit(1);
+        if (!user || !user.isSuperAdmin) {
           set.status = 403; return { error: "Access denied to this company" };
         }
       }
 
-      const { switchSessionCompany } = await import("../services/session.service.ts");
-      switchSessionCompany(token, body.companyId);
+      await switchSessionCompany(token, body.companyId);
 
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-      createAuditEntry({
-        companyId: body.companyId, userId: session.user_id, sessionId: token,
+      await createAuditEntry({
+        companyId: body.companyId, userId: session.userId, sessionId: token,
         action: "session:select_company", module: "auth",
         entityType: "session", entityId: token,
         beforeState: null, afterState: { result: "company_selected", companyId: body.companyId }, ipAddress: ip,
@@ -192,26 +266,42 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const token = (cookie["session"].value as string);
       if (!token) { set.status = 401; return { error: "Not authenticated" }; }
       
-      const session = rawDb.query("SELECT * FROM sessions WHERE id = ? AND is_valid = 1").get(token) as any;
+      const [session] = await db
+        .select()
+        .from(sessions)
+        .where(and(eq(sessions.id, token), eq(sessions.isValid, true)))
+        .limit(1);
+
       if (!session) { set.status = 401; return { error: "Invalid session" }; }
 
-      const role = rawDb.query("SELECT * FROM user_company_roles WHERE user_id = ? AND company_id = ? AND is_active = 1 AND revoked_at IS NULL").get(session.user_id, body.companyId);
+      const [role] = await db
+        .select()
+        .from(userCompanyRoles)
+        .where(
+          and(
+            eq(userCompanyRoles.userId, session.userId),
+            eq(userCompanyRoles.companyId, body.companyId),
+            eq(userCompanyRoles.isActive, true),
+            isNull(userCompanyRoles.revokedAt)
+          )
+        )
+        .limit(1);
+
       if (!role) {
-        const user = rawDb.query("SELECT is_super_admin FROM users WHERE id = ?").get(session.user_id) as any;
-        if (!user || user.is_super_admin !== 1) {
+        const [user] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, session.userId)).limit(1);
+        if (!user || !user.isSuperAdmin) {
           set.status = 403; return { error: "Access denied to this company" };
         }
       }
 
-      const { switchSessionCompany } = await import("../services/session.service.ts");
-      switchSessionCompany(token, body.companyId);
+      await switchSessionCompany(token, body.companyId);
 
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-      createAuditEntry({
-        companyId: body.companyId, userId: session.user_id, sessionId: token,
+      await createAuditEntry({
+        companyId: body.companyId, userId: session.userId, sessionId: token,
         action: "session:switch_company", module: "auth",
         entityType: "session", entityId: token,
-        beforeState: { companyId: session.company_id }, afterState: { result: "company_switched", companyId: body.companyId }, ipAddress: ip,
+        beforeState: { companyId: session.companyId }, afterState: { result: "company_switched", companyId: body.companyId }, ipAddress: ip,
       });
 
       return { message: "Company switched successfully" };
@@ -220,10 +310,10 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   )
 
   // ── POST /auth/logout ─────────────────────────────────────
-  .post("/logout", ({ cookie, set }) => {
+  .post("/logout", async ({ cookie }) => {
     const token = (cookie["session"].value as string);
     if (token) {
-      invalidateSession(token);
+      await invalidateSession(token);
       cookie["session"].remove();
     }
     return { message: "Logged out" };
@@ -239,16 +329,22 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const { hashPassword: hash } = await import("../services/auth.service.ts");
       const { hash: newHash, salt: newSalt } = await hashPassword(body.newPassword);
 
-      rawDb
-        .prepare(
-          `UPDATE users SET
-             password_hash        = ?,
-             password_salt        = ?,
-             must_change_password = 0,
-             updated_at           = ?
-           WHERE id = (SELECT user_id FROM sessions WHERE id = ? AND is_valid = 1)`
-        )
-        .run(newHash, newSalt, new Date().toISOString(), token);
+      const [session] = await db
+        .select({ userId: sessions.userId })
+        .from(sessions)
+        .where(and(eq(sessions.id, token), eq(sessions.isValid, true)))
+        .limit(1);
+
+      if (!session) { set.status = 401; return { error: "Invalid session" }; }
+
+      await db.update(users)
+        .set({
+          passwordHash: newHash,
+          passwordSalt: newSalt,
+          mustChangePassword: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, session.userId));
 
       return { message: "Password changed successfully" };
     },
@@ -259,4 +355,3 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       }),
     }
   );
-

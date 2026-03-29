@@ -1,7 +1,9 @@
-﻿// ============================================================
+// ============================================================
 // APPLICATION BOOTSTRAPPER
 // Execution order: migrate → seed → start server
 // ============================================================
+
+import "./config/validate.ts"; // Side-effect: validates process.env immediately
 
 import { runMigrations } from "./db/migrate.ts";
 import { runSeed }       from "./db/seed/seed.ts";
@@ -13,7 +15,7 @@ console.log("  Account Express Bookkeeping Core — v1.0.0");
 console.log("═══════════════════════════════════════════════════\n");
 
 // 1. Run migrations (idempotent)
-runMigrations();
+await runMigrations();
 
 // 2. Run seed (idempotent)
 await runSeed();

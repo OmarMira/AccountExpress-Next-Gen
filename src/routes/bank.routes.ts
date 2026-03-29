@@ -1,12 +1,16 @@
+// ============================================================
+// BANK ROUTES — PostgreSQL 16 / Drizzle ORM
+// ============================================================
+
 import { Elysia, t } from "elysia";
 import { statementImportService } from "../services/bank/statement-import.service.ts";
 import { suggestAccount } from "../services/bank/smart-match.service.ts";
 import { matchTransaction, ignoreTransaction } from "../services/bank/reconciliation.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { validateSession } from "../services/session.service.ts";
-import { db, rawDb } from "../db/connection.ts";
+import { db, sql } from "../db/connection.ts";
 import { eq, and } from "drizzle-orm";
-import { bankTransactions } from "../db/schema";
+import { bankTransactions } from "../db/schema/index.ts";
 
 export const bankRoutes = new Elysia({ prefix: "/bank" })
   // ─────────────────────────────────────────────────────────────
@@ -17,7 +21,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     "/import",
     async ({ body, cookie, set }) => {
       const token = cookie["session"].value as string;
-      const session = token ? validateSession(token) : null;
+      const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
       const file = body.file as File;
@@ -65,10 +69,9 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     "/import-parsed",
     async ({ body, cookie, set }) => {
       const token = cookie["session"].value as string;
-      const session = token ? validateSession(token) : null;
+      const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
-      console.log(JSON.stringify(body.transactions.slice(0,3), null, 2));
       try {
         const result = await statementImportService.processParsedBatch(
           body.companyId,
@@ -115,35 +118,38 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(requirePermission("bank", "read"))
   .get(
     "/transactions",
-    ({ query, cookie, set }) => {
+    async ({ query, cookie, set }) => {
       const token = cookie["session"].value as string;
-      const session = token ? validateSession(token) : null;
+      const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
-      let sql = `SELECT * FROM bank_transactions WHERE company_id = ?`;
-      const params: any[] = [query.companyId];
+      let condition = eq(bankTransactions.companyId, query.companyId);
       if (query.status) {
-        sql += ` AND status = ?`;
-        params.push(query.status);
+        condition = and(condition, eq(bankTransactions.status, query.status)) as any;
       }
-      sql += ` ORDER BY transaction_date DESC`;
-      const txs = rawDb.query(sql).all(...params) as any[];
 
-      const enriched = txs.map(tx => {
-         const suggestions = suggestAccount(query.companyId, tx.description);
+      const txs = await db
+        .select()
+        .from(bankTransactions)
+        .where(condition)
+        .orderBy(sql`${bankTransactions.transactionDate} DESC`);
+
+      const enriched = [];
+      for (const tx of txs) {
+         const suggestions = await suggestAccount(query.companyId, tx.description);
          let suggestedCategory = null;
          let confidenceScore = 0;
          if (suggestions.length > 0) {
             suggestedCategory = suggestions[0].accountId;
             confidenceScore = suggestions[0].confidence;
          }
-         return {
+         enriched.push({
             ...tx,
             suggestedCategory,
             confidenceScore,
             isDuplicate: false
-         };
-      });
+         });
+      }
 
       return { success: true, data: enriched };
     },
@@ -161,12 +167,12 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(requirePermission("bank", "read"))
   .get(
     "/suggest",
-    ({ query, cookie, set }) => {
+    async ({ query, cookie, set }) => {
       const token = cookie["session"].value as string;
-      const session = token ? validateSession(token) : null;
+      const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
-      const suggestions = suggestAccount(query.companyId, query.description);
+      const suggestions = await suggestAccount(query.companyId, query.description);
       return { success: true, data: suggestions };
     },
     {
@@ -183,14 +189,14 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(requirePermission("bank", "reconcile"))
   .post(
     "/reconcile/:id",
-    ({ params, body, cookie, request, set }) => {
+    async ({ params, body, cookie, request, set }) => {
       const token = cookie["session"].value as string;
-      const session = token ? validateSession(token) : null;
+      const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
-      const draftId = matchTransaction(
+      const draftId = await matchTransaction(
         body.companyId,
         params.id,
         body.targetAccountId,
@@ -223,14 +229,14 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     .use(requirePermission("bank", "reconcile"))
     .post(
     "/ignore/:id",
-    ({ params, body, cookie, request, set }) => {
+    async ({ params, body, cookie, request, set }) => {
       const token = cookie["session"].value as string;
-      const session = token ? validateSession(token) : null;
+      const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
-      ignoreTransaction(body.companyId, params.id, session.userId, ip);
+      await ignoreTransaction(body.companyId, params.id, session.userId, ip);
       return { success: true };
     },
     {
@@ -244,9 +250,9 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   // ─────────────────────────────────────────────────────────────
   .patch(
     "/transactions/:id/assign",
-    ({ params, body, cookie, set }) => {
+    async ({ params, body, cookie, set }) => {
       const token = cookie["session"].value as string;
-      const session = token ? validateSession(token) : null;
+      const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
       if (!body.companyId || !body.glAccountId) {
@@ -254,16 +260,22 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         return { error: "companyId y glAccountId requeridos" };
       }
 
-      const existing = rawDb.query(
-        `SELECT id FROM bank_transactions WHERE id = ? AND company_id = ? LIMIT 1`
-      ).get(params.id, body.companyId);
+      const [existing] = await db
+        .select({ id: bankTransactions.id })
+        .from(bankTransactions)
+        .where(
+          and(
+            eq(bankTransactions.id, params.id),
+            eq(bankTransactions.companyId, body.companyId)
+          )
+        )
+        .limit(1);
 
       if (!existing) { set.status = 404; return { error: "Transacción no encontrada" }; }
 
-      rawDb.run(
-        `UPDATE bank_transactions SET gl_account_id = ?, status = 'assigned' WHERE id = ?`,
-        [body.glAccountId, params.id]
-      );
+      await db.update(bankTransactions)
+        .set({ glAccountId: body.glAccountId, status: "assigned" })
+        .where(eq(bankTransactions.id, params.id));
 
       return { success: true, message: "Cuenta asignada" };
     },
@@ -275,4 +287,3 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       })
     }
   ));
-

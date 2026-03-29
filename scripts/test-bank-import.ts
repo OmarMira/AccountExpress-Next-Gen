@@ -25,7 +25,7 @@ async function getRequiredEntities() {
             startDate: "2026-01-01",
             endDate: "2026-12-31",
             status: "open",
-            createdAt: new Date().toISOString()
+            createdAt: new Date()
         });
         period = await db.query.fiscalPeriods.findFirst({ where: eq(fiscalPeriods.companyId, company.id) });
     }
@@ -41,8 +41,9 @@ async function getRequiredEntities() {
                 name: "Test Asset",
                 accountType: "asset",
                 normalBalance: "debit",
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
             },
             {
                 id: randomUUID(),
@@ -51,8 +52,9 @@ async function getRequiredEntities() {
                 name: "Test Expense",
                 accountType: "expense",
                 normalBalance: "debit",
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
             }
         ]);
         allAccounts = await db.query.chartOfAccounts.findMany({ limit: 2 });
@@ -67,9 +69,9 @@ async function getRequiredEntities() {
             userId: user.id,
             companyId: company.id,
             ipAddress: "127.0.0.1",
-            createdAt: new Date().toISOString(),
-            expiresAt: new Date().toISOString(),
-            lastActiveAt: new Date().toISOString()
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 8 * 3600 * 1000),
+            lastActiveAt: new Date()
         });
         session = await db.query.sessions.findFirst({ where: eq(sessions.userId, user.id) });
     }
@@ -132,12 +134,12 @@ async function runTests() {
 
         // ── Test 5: Conciliar transacción ──
         const txTarget = await db.query.bankTransactions.findFirst({
-            where: eq(bankTransactions.amount, -155.00)
+            where: eq(bankTransactions.amount, "-155.00")
         });
         
         if (!txTarget) throw new Error("No se encontró la transacción de -$155.00");
         
-        const draftId = matchTransaction(
+        const draftId = await matchTransaction(
             company.id,
             txTarget.id,
             expenseAcc.id,
@@ -160,7 +162,7 @@ async function runTests() {
         }
 
         // ── Test 6: Smart Match ──
-        const suggestions = suggestAccount(company.id, txTarget.description);
+        const suggestions = await suggestAccount(company.id, txTarget.description);
         if (suggestions.length > 0 && suggestions[0].accountId === expenseAcc.id) {
             console.log("✅ Test 6: smart-match sugiere cuenta correcta para segunda transacción similar.");
             passed++;
@@ -171,6 +173,7 @@ async function runTests() {
     } catch (error) {
         console.error("Error durante las pruebas:", error);
     }
+
 
     if (passed === total) {
         console.log(`\n🎉 Todos los ${total} tests pasaron exitosamente.`);
