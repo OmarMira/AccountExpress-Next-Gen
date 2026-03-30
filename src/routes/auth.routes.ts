@@ -153,61 +153,6 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
     }
   )
 
-  // ── POST /auth/bypass (DEV ONLY) ─────────────────────────
-  .post(
-    "/bypass",
-    async ({ cookie, request, set }) => {
-      if (process.env.NODE_ENV === "production" || process.env.ALLOW_BYPASS === "false") {
-        set.status = 404;
-        return { error: "Not Found" };
-      }
-      const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-      const ua = request.headers.get("user-agent") ?? null;
-      const [user] = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          isActive: users.isActive,
-          isSuperAdmin: users.isSuperAdmin
-        })
-        .from(users)
-        .where(eq(users.username, "admin"))
-        .limit(1);
-
-      if (!user) {
-        set.status = 500;
-        return { error: "Admin user not found" };
-      }
-      const sessionId = await createSession({ userId: user.id, companyId: null, ipAddress: ip, userAgent: ua });
-      cookie["session"].set({ value: sessionId, httpOnly: true, sameSite: "strict", path: "/", maxAge: 8 * 60 * 60 });
-      
-      const [fullUser] = await db
-        .select({
-          id: users.id,
-          username: users.username,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          isSuperAdmin: users.isSuperAdmin
-        })
-        .from(users)
-        .where(eq(users.id, user.id))
-        .limit(1);
-
-      const comps = await db
-        .select({ id: companies.id, legalName: companies.legalName })
-        .from(companies)
-        .where(eq(companies.isActive, true));
-
-      return { 
-        message: "Login successful (BYPASS)", 
-        sessionId,
-        user: fullUser,
-        companies: comps 
-      };
-    }
-  )
-
   // ── POST /auth/select-company ─────────────────────────────
   .post(
     "/select-company",

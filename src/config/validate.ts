@@ -25,7 +25,6 @@ const envSchema = z.object({
 
   // Environment mode
   NODE_ENV:             z.enum(["development", "production", "test"]).default("development"),
-  ALLOW_BYPASS:         z.string().optional().default("false"),
 });
 
 export function validateEnv() {
