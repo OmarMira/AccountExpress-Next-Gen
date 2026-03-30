@@ -1,174 +1,129 @@
-// ============================================================
-// PDF BUILDER SERVICE
-// Genera el Tax Summary PDF para entrega al CPA.
-// SRP: solo construcción del documento PDF.
-// Input: CpaSummary de cpa-summary.service.ts
-// Output: Buffer PDF listo para descarga
-// ============================================================
-
-import { CpaSummary } from "./cpa-summary.service.ts";
-
-// ── Helpers de formato ───────────────────────────────────────
+import PDFDocument from 'pdfkit';
+import { CpaSummary } from './cpa-summary.service.ts';
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
     minimumFractionDigits: 2,
   }).format(Math.abs(amount));
 }
 
 function formatCategory(raw: string): string {
-  return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return raw.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ── Builder principal ────────────────────────────────────────
+export function buildCpaPdf(summary: CpaSummary): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
+    const chunks: Buffer[] = [];
 
-export function buildCpaPdf(summary: CpaSummary): Uint8Array {
-  const lines: string[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('end', () => resolve(new Uint8Array(Buffer.concat(chunks))));
+    doc.on('error', reject);
 
-  // ── Encabezado ───────────────────────────────────────────
-  lines.push("ACCOUNT EXPRESS BOOKKEEPING CORE");
-  lines.push("TAX SUMMARY REPORT");
-  lines.push("─".repeat(60));
-  lines.push(`Company ID   : ${summary.companyId}`);
-  lines.push(`Period ID    : ${summary.periodId}`);
-  lines.push(`Generated at : ${new Date(summary.hashTimestamp).toLocaleString("en-US")}`);
-  lines.push("─".repeat(60));
+    // ── Header ───────────────────────────────────────────────
+    doc.fontSize(16).font('Helvetica-Bold').text('ACCOUNT EXPRESS BOOKKEEPING CORE', { align: 'center' });
+    doc.fontSize(13).font('Helvetica').text('TAX SUMMARY REPORT', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(0.5);
 
-  // ── Tabla de categorías fiscales ─────────────────────────
-  lines.push("");
-  lines.push("TAX CATEGORIES SUMMARY");
-  lines.push("");
-  lines.push(
-    "Category".padEnd(35) +
-    "Net Balance".padStart(20)
-  );
-  lines.push("─".repeat(55));
+    // ── Metadata ─────────────────────────────────────────────
+    doc.fontSize(9).font('Helvetica');
+    doc.text(`Company ID   : ${summary.companyId}`);
+    doc.text(`Period ID    : ${summary.periodId}`);
+    doc.text(`Generated at : ${new Date(summary.hashTimestamp).toLocaleString('en-US')}`);
+    doc.moveDown(0.5);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(1);
 
-  let totalRevenue = 0;
-  let totalExpense = 0;
+    // ── Tax Categories Table ──────────────────────────────────
+    doc.fontSize(11).font('Helvetica-Bold').text('TAX CATEGORIES SUMMARY');
+    doc.moveDown(0.5);
 
-  for (const tax of summary.taxes) {
-    const label = formatCategory(tax.taxCategory).padEnd(35);
-    const amount = formatCurrency(tax.totalBalance).padStart(20);
-    const sign = tax.totalBalance < 0 ? " (Revenue)" : " (Expense)";
-    lines.push(label + amount + sign);
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text('Category', 50, doc.y, { width: 320, continued: true });
+    doc.text('Net Balance', { width: 120, align: 'right', continued: true });
+    doc.text('Type', { width: 72, align: 'right' });
+    doc.moveDown(0.3);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(0.3);
 
-    if (tax.totalBalance < 0) totalRevenue += Math.abs(tax.totalBalance);
-    else totalExpense += tax.totalBalance;
-  }
+    let totalRevenue = 0;
+    let totalExpense = 0;
 
-  lines.push("─".repeat(55));
-  lines.push(
-    "Total Revenue".padEnd(35) +
-    formatCurrency(totalRevenue).padStart(20)
-  );
-  lines.push(
-    "Total Expenses".padEnd(35) +
-    formatCurrency(totalExpense).padStart(20)
-  );
-  lines.push(
-    "Net Income / (Loss)".padEnd(35) +
-    formatCurrency(totalRevenue - totalExpense).padStart(20)
-  );
+    doc.font('Helvetica').fontSize(9);
+    for (const tax of summary.taxes) {
+      const label = formatCategory(tax.taxCategory);
+      const amount = formatCurrency(tax.totalBalance);
+      const type = tax.totalBalance < 0 ? 'Revenue' : 'Expense';
 
-  // ── Sello criptográfico ──────────────────────────────────
-  lines.push("");
-  lines.push("─".repeat(60));
-  lines.push("CRYPTOGRAPHIC INTEGRITY SEAL");
-  lines.push("");
-  lines.push("SHA-256 Chain:");
-  lines.push(summary.sha256ChainResult);
-  lines.push("");
+      if (tax.totalBalance < 0) totalRevenue += Math.abs(tax.totalBalance);
+      else totalExpense += tax.totalBalance;
 
-  if (summary.rfc3161_token_hex) {
-    lines.push("RFC 3161 Timestamp Token:");
-    lines.push(summary.rfc3161_token_hex);
-    lines.push("");
-  } else {
-    lines.push("RFC 3161 Token: Not applied");
-    lines.push("");
-  }
-
-  // ── Disclaimer legal ─────────────────────────────────────
-  lines.push("─".repeat(60));
-  lines.push("LEGAL DISCLAIMER");
-  lines.push("");
-
-  // Wrap del disclaimer a 60 caracteres por línea
-  const words = summary.disclaimer.split(" ");
-  let currentLine = "";
-  for (const word of words) {
-    if ((currentLine + " " + word).trim().length > 60) {
-      lines.push(currentLine.trim());
-      currentLine = word;
-    } else {
-      currentLine = (currentLine + " " + word).trim();
+      const rowY = doc.y;
+      doc.text(label, 50, rowY, { width: 320, continued: true });
+      doc.text(amount, { width: 120, align: 'right', continued: true });
+      doc.text(type, { width: 72, align: 'right' });
     }
-  }
-  if (currentLine) lines.push(currentLine.trim());
 
-  lines.push("");
-  lines.push("─".repeat(60));
-  lines.push("END OF REPORT");
+    doc.moveDown(0.3);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(0.3);
 
-  // ── Convertir a bytes ────────────────────────────────────
-  // Genera un PDF texto plano embebido en estructura PDF mínima
-  const content = lines.join("\n");
-  return buildMinimalPdf(content);
-}
+    doc.font('Helvetica-Bold').fontSize(9);
+    const t1Y = doc.y;
+    doc.text('Total Revenue', 50, t1Y, { width: 320, continued: true });
+    doc.text(formatCurrency(totalRevenue), { width: 120, align: 'right', continued: true });
+    doc.text('', { width: 72 });
 
-// ── Estructura PDF mínima (sin dependencias externas) ────────
+    const t2Y = doc.y;
+    doc.text('Total Expenses', 50, t2Y, { width: 320, continued: true });
+    doc.text(formatCurrency(totalExpense), { width: 120, align: 'right', continued: true });
+    doc.text('', { width: 72 });
 
-function buildMinimalPdf(text: string): Uint8Array {
-  const escapedLines = text
-    .split("\n")
-    .map((line) =>
-      line
-        .replace(/\\/g, "\\\\")
-        .replace(/\(/g, "\\(")
-        .replace(/\)/g, "\\)")
-    );
+    const t3Y = doc.y;
+    doc.text('Net Income / (Loss)', 50, t3Y, { width: 320, continued: true });
+    doc.text(formatCurrency(totalRevenue - totalExpense), { width: 120, align: 'right', continued: true });
+    doc.text('', { width: 72 });
 
-  // Cada línea como operación Tj en PDF
-  const pdfLines = escapedLines.map(
-    (line, i) => `BT /F1 9 Tf 40 ${780 - i * 13} Td (${line}) Tj ET`
-  );
+    doc.moveDown(1);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(1);
 
-  const streamContent = pdfLines.join("\n");
-  const streamLength = new TextEncoder().encode(streamContent).length;
+    // ── Cryptographic Seal ───────────────────────────────────
+    doc.fontSize(11).font('Helvetica-Bold').text('CRYPTOGRAPHIC INTEGRITY SEAL');
+    doc.moveDown(0.5);
+    doc.fontSize(8).font('Helvetica');
+    doc.text('SHA-256 Chain:');
+    doc.font('Courier').fontSize(7).text(summary.sha256ChainResult, { lineBreak: true });
+    doc.moveDown(0.5);
 
-  const pdf = [
-    "%PDF-1.4",
-    "1 0 obj",
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "endobj",
-    "2 0 obj",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "endobj",
-    "3 0 obj",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]",
-    "   /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-    "endobj",
-    "4 0 obj",
-    `<< /Length ${streamLength} >>`,
-    "stream",
-    streamContent,
-    "endstream",
-    "endobj",
-    "5 0 obj",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
-    "endobj",
-    "xref",
-    "0 6",
-    "0000000000 65535 f",
-    "trailer",
-    "<< /Size 6 /Root 1 0 R >>",
-    "startxref",
-    "0",
-    "%%EOF",
-  ].join("\n");
+    if (summary.rfc3161_token_hex) {
+      doc.font('Helvetica').fontSize(8).text('RFC 3161 Timestamp Token:');
+      doc.font('Courier').fontSize(7).text(summary.rfc3161_token_hex, { lineBreak: true });
+    } else {
+      doc.font('Helvetica').fontSize(8).text('RFC 3161 Token: Not applied');
+    }
 
-  return new TextEncoder().encode(pdf);
+    doc.moveDown(1);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(1);
+
+    // ── Legal Disclaimer ─────────────────────────────────────
+    doc.fontSize(11).font('Helvetica-Bold').text('LEGAL DISCLAIMER');
+    doc.moveDown(0.5);
+    doc.fontSize(8).font('Helvetica').text(summary.disclaimer, {
+      align: 'justify',
+      lineGap: 2,
+    });
+
+    doc.moveDown(1);
+    doc.moveTo(50, doc.y).lineTo(562, doc.y).stroke();
+    doc.moveDown(0.5);
+    doc.fontSize(8).font('Helvetica-Bold').text('END OF REPORT', { align: 'center' });
+
+    doc.end();
+  });
 }
