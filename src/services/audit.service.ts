@@ -9,6 +9,18 @@ import { auditLogs } from "../db/schema/index.ts";
 import { eq, isNull, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
+const SENSITIVE_FIELDS = new Set(["passwordHash", "passwordSalt", "password", "token", "secret"]);
+
+// NOTE: shallow sanitization only — does not recurse into nested objects
+function sanitizeState(state: unknown): unknown {
+  if (!state || typeof state !== "object") return state;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(state as Record<string, unknown>)) {
+    result[key] = SENSITIVE_FIELDS.has(key) ? "[REDACTED]" : value;
+  }
+  return result;
+}
+
 export interface AuditEntryInput {
   companyId:   string | null;
   userId:      string | null;
@@ -58,8 +70,8 @@ export async function createAuditEntry(input: AuditEntryInput): Promise<string> 
   const chainIndex = tip.chainIndex + 1;
   const prevHash   = tip.entryHash;
 
-  const afterStateJson  = input.afterState  ? JSON.stringify(input.afterState)  : null;
-  const beforeStateJson = input.beforeState ? JSON.stringify(input.beforeState) : null;
+  const afterStateJson  = input.afterState  ? JSON.stringify(sanitizeState(input.afterState))  : null;
+  const beforeStateJson = input.beforeState ? JSON.stringify(sanitizeState(input.beforeState)) : null;
 
   const hashInput = [
     id,
