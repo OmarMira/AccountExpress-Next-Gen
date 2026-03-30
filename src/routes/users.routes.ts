@@ -14,6 +14,9 @@ import {
   updateUser,
   assignRole,
 } from "../services/users.service.ts";
+import { db } from "../db/connection.ts";
+import { users, userCompanyRoles } from "../db/schema/index.ts";
+import { eq, and, isNull } from "drizzle-orm";
 
 export const usersRoutes = new Elysia({ prefix: "/users" })
 
@@ -77,6 +80,31 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     const session = token ? await validateSession(token) : null;
     if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
 
+    const [callerUser] = await db
+      .select({ isSuperAdmin: users.isSuperAdmin })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+
+    if (!callerUser?.isSuperAdmin) {
+      const payload = body as any;
+      const companyId = payload.companyId ?? session.companyId;
+      if (!companyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
+      const [adminRole] = await db
+        .select({ roleId: userCompanyRoles.roleId })
+        .from(userCompanyRoles)
+        .where(
+          and(
+            eq(userCompanyRoles.userId, session.userId),
+            eq(userCompanyRoles.companyId, companyId),
+            eq(userCompanyRoles.isActive, true),
+            isNull(userCompanyRoles.revokedAt)
+          )
+        )
+        .limit(1);
+      if (!adminRole) { set.status = 403; return { success: false, error: "Forbidden: admin role required" }; }
+    }
+
     const payload = body as any;
     const result = await updateUser({
       userId: params.userId,
@@ -92,7 +120,29 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     const session = token ? await validateSession(token) : null;
     if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
 
+    const [callerUser] = await db
+      .select({ isSuperAdmin: users.isSuperAdmin })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+
     const { companyId, roleId } = body as any;
+    if (!callerUser?.isSuperAdmin) {
+      if (!companyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
+      const [adminRole] = await db
+        .select({ roleId: userCompanyRoles.roleId })
+        .from(userCompanyRoles)
+        .where(
+          and(
+            eq(userCompanyRoles.userId, session.userId),
+            eq(userCompanyRoles.companyId, companyId),
+            eq(userCompanyRoles.isActive, true),
+            isNull(userCompanyRoles.revokedAt)
+          )
+        )
+        .limit(1);
+      if (!adminRole) { set.status = 403; return { success: false, error: "Forbidden: admin role required" }; }
+    }
     if (!companyId || !roleId) {
       set.status = 400;
       return { success: false, error: "companyId and roleId required" };
