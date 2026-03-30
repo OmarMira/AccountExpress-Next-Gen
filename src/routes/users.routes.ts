@@ -48,12 +48,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     const session = token ? await validateSession(token) : null;
     if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
 
-    const { username, email, password, firstName, lastName, companyId, roleId } = body as any;
-
-    if (!username || !email || !password || !firstName || !lastName || !companyId || !roleId) {
-      set.status = 400;
-      return { success: false, error: "All fields required" };
-    }
+    const { username, email, password, firstName, lastName, companyId, roleId } = body;
 
     try {
       const result = await createUser({
@@ -72,6 +67,16 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       set.status = 500;
       return { success: false, error: "Internal error" };
     }
+  }, {
+    body: t.Object({
+      username:  t.String({ minLength: 1 }),
+      email:     t.String(),
+      password:  t.String({ minLength: 8 }),
+      firstName: t.String({ minLength: 1 }),
+      lastName:  t.String({ minLength: 1 }),
+      companyId: t.String(),
+      roleId:    t.String(),
+    }),
   })
 
   // ── PATCH /users/:userId ──────────────────────────────────
@@ -87,7 +92,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       .limit(1);
 
     if (!callerUser?.isSuperAdmin) {
-      const payload = body as any;
+      const payload = body;
       const companyId = payload.companyId ?? session.companyId;
       if (!companyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
       const [adminRole] = await db
@@ -105,13 +110,21 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       if (!adminRole) { set.status = 403; return { success: false, error: "Forbidden: admin role required" }; }
     }
 
-    const payload = body as any;
+    const payload = body;
     const result = await updateUser({
       userId: params.userId,
       ...payload,
     });
 
     return { success: true, data: result };
+  }, {
+    body: t.Object({
+      isActive:  t.Optional(t.Boolean()),
+      firstName: t.Optional(t.String({ minLength: 1 })),
+      lastName:  t.Optional(t.String({ minLength: 1 })),
+      email:     t.Optional(t.String()),
+      companyId: t.Optional(t.String()),
+    }),
   })
 
   // ── PUT /users/:userId/role ───────────────────────────────
@@ -126,7 +139,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       .where(eq(users.id, session.userId))
       .limit(1);
 
-    const { companyId, roleId } = body as any;
+    const { companyId, roleId } = body;
     if (!callerUser?.isSuperAdmin) {
       if (!companyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
       const [adminRole] = await db
@@ -156,4 +169,9 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     });
 
     return { success: true, data: result };
+  }, {
+    body: t.Object({
+      companyId: t.String(),
+      roleId:    t.String(),
+    }),
   });
