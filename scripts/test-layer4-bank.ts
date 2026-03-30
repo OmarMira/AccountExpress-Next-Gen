@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { companies, users, sessions, fiscalPeriods, bankTransactions, journalEntries } from "../src/db/schema/index.ts";
 import { importTransactions } from "../src/services/bank/csv-import.service.ts";
 import { matchTransaction } from "../src/services/bank/reconciliation.service.ts";
-import { suggestAccount } from "../src/services/bank/smart-match.service.ts";
+import { suggestAccountBatch } from "../src/services/bank/smart-match.service.ts";
 import { getAccountTree, getAccountBalance, seedGaapForCompany } from "../src/services/accounts.service.ts";
 import { eq, and, like } from "drizzle-orm";
 
@@ -132,7 +132,8 @@ async function runTests() {
 
   // TEST 4: Smart Match
   try {
-    const hits = await suggestAccount(companyId, "HOME DEPOT SUPPLY");
+    const hitsMap = await suggestAccountBatch(companyId, ["HOME DEPOT SUPPLY"]);
+    const hits = hitsMap.get("HOME DEPOT SUPPLY") ?? [];
     if (hits.length > 0 && hits[0].accountId === repairsAcct.id) {
       console.log(`✅ PASSED: Smart Match found correct account mapping.`);
       successCount++;

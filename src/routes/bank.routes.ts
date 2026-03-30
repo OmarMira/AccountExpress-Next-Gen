@@ -4,7 +4,7 @@
 
 import { Elysia, t } from "elysia";
 import { statementImportService } from "../services/bank/statement-import.service.ts";
-import { suggestAccount } from "../services/bank/smart-match.service.ts";
+import { suggestAccountBatch } from "../services/bank/smart-match.service.ts";
 import { matchTransaction, ignoreTransaction } from "../services/bank/reconciliation.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { validateSession } from "../services/session.service.ts";
@@ -134,22 +134,17 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         .where(condition)
         .orderBy(sql`${bankTransactions.transactionDate} DESC`);
 
-      const enriched = [];
-      for (const tx of txs) {
-         const suggestions = await suggestAccount(query.companyId, tx.description);
-         let suggestedCategory = null;
-         let confidenceScore = 0;
-         if (suggestions.length > 0) {
-            suggestedCategory = suggestions[0].accountId;
-            confidenceScore = suggestions[0].confidence;
-         }
-         enriched.push({
-            ...tx,
-            suggestedCategory,
-            confidenceScore,
-            isDuplicate: false
-         });
-      }
+      const descriptions = txs.map(tx => tx.description);
+      const suggestionMap = await suggestAccountBatch(query.companyId, descriptions);
+      const enriched = txs.map(tx => {
+        const suggestions = suggestionMap.get(tx.description) ?? [];
+        return {
+          ...tx,
+          suggestedCategory: suggestions[0]?.accountId ?? null,
+          confidenceScore: suggestions[0]?.confidence ?? 0,
+          isDuplicate: false,
+        };
+      });
 
       return { success: true, data: enriched };
     },
@@ -172,8 +167,8 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       const session = token ? await validateSession(token) : null;
       if (!session) { set.status = 401; return { error: "Not authenticated" }; }
 
-      const suggestions = await suggestAccount(query.companyId, query.description);
-      return { success: true, data: suggestions };
+      const suggestionMap = await suggestAccountBatch(query.companyId, [query.description]);
+      return { success: true, data: suggestionMap.get(query.description) ?? [] };
     },
     {
       query: t.Object({

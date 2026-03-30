@@ -1,6 +1,6 @@
 import { statementImportService } from "../src/services/bank/statement-import.service";
 import { matchTransaction } from "../src/services/bank/reconciliation.service";
-import { suggestAccount } from "../src/services/bank/smart-match.service";
+import { suggestAccountBatch } from "../src/services/bank/smart-match.service";
 import { db } from "../src/db/connection";
 import { bankTransactions, companies, fiscalPeriods, users, chartOfAccounts, sessions } from "../src/db/schema";
 import { randomUUID } from "node:crypto";
@@ -162,7 +162,8 @@ async function runTests() {
         }
 
         // ── Test 6: Smart Match ──
-        const suggestions = await suggestAccount(company.id, txTarget.description);
+        const suggestionMap = await suggestAccountBatch(company.id, [txTarget.description]);
+        const suggestions = suggestionMap.get(txTarget.description) ?? [];
         if (suggestions.length > 0 && suggestions[0].accountId === expenseAcc.id) {
             console.log("✅ Test 6: smart-match sugiere cuenta correcta para segunda transacción similar.");
             passed++;
