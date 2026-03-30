@@ -3,10 +3,14 @@ import { db } from '../db/connection';
 import { bankAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { validateSession } from '../services/session.service.ts';
 
 export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
-  .get('/', async ({ query }) => {
+  .get('/', async ({ query, cookie, set }) => {
     const { companyId } = query as { companyId?: string };
+    const token = cookie['session']?.value as string;
+    const session = token ? await validateSession(token) : null;
+    if (!session) { set.status = 401; return { error: 'Not authenticated' }; }
     if (!companyId) return [];
 
     const accounts = await db.query.bankAccounts.findMany({
@@ -24,8 +28,11 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
     query: t.Object({ companyId: t.String() })
   })
 
-  .post('/', async ({ body, set }) => {
+  .post('/', async ({ body, set, cookie }) => {
     const data = body as any;
+    const token = cookie['session']?.value as string;
+    const session = token ? await validateSession(token) : null;
+    if (!session) { set.status = 401; return { error: 'Not authenticated' }; }
     try {
       if (data.companyId && data.accountNumber) {
         const existing = await db.query.bankAccounts.findFirst({
@@ -73,9 +80,12 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
     })
   })
 
-  .put('/:id', async ({ params, body, set }) => {
+  .put('/:id', async ({ params, body, set, cookie }) => {
     const { id } = params;
     const data = body as any;
+    const token = cookie['session']?.value as string;
+    const session = token ? await validateSession(token) : null;
+    if (!session) { set.status = 401; return { error: 'Not authenticated' }; }
     try {
       const now = new Date();
       
@@ -117,8 +127,11 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
     })
   })
 
-  .delete('/:id', async ({ params, set }) => {
+  .delete('/:id', async ({ params, set, cookie }) => {
     const { id } = params;
+    const token = cookie['session']?.value as string;
+    const session = token ? await validateSession(token) : null;
+    if (!session) { set.status = 401; return { error: 'Not authenticated' }; }
     try {
       const now = new Date();
       const updated = await db.update(bankAccounts)
