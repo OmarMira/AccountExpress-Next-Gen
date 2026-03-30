@@ -46,3 +46,13 @@ export const loginRateLimiter = (max: number, windowMs: number) => {
     info.count++;
   };
 };
+
+// Cleanup expired entries every 5 minutes to prevent unbounded memory growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, info] of memoryStore.entries()) {
+    if (now > info.resetAt) {
+      memoryStore.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000);
