@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // US GAAP CHART OF ACCOUNTS SEED
 // Codes 1000–5999 following standard US GAAP classification.
 // All seeded accounts have is_system=1 (cannot be deleted).

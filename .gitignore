@@ -7,3 +7,5 @@ data/
 *.db-wal
 drizzle/migrations/
 bun.lockb
+temp_*.ts
+tmp/
