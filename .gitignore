@@ -9,3 +9,6 @@ drizzle/migrations/
 bun.lockb
 temp_*.ts
 tmp/
+run-parser*.ts
+debug-*.ts
+test-pdf.js
