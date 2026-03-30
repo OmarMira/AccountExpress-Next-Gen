@@ -326,9 +326,6 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const token = (cookie["session"].value as string);
       if (!token) { set.status = 401; return { error: "Not authenticated" }; }
 
-      const { hashPassword: hash } = await import("../services/auth.service.ts");
-      const { hash: newHash, salt: newSalt } = await hashPassword(body.newPassword);
-
       const [session] = await db
         .select({ userId: sessions.userId })
         .from(sessions)
@@ -336,6 +333,19 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         .limit(1);
 
       if (!session) { set.status = 401; return { error: "Invalid session" }; }
+
+      const [user] = await db
+        .select({ passwordHash: users.passwordHash })
+        .from(users)
+        .where(eq(users.id, session.userId))
+        .limit(1);
+
+      if (!user) { set.status = 404; return { error: "User not found" }; }
+
+      const valid = await verifyPassword(body.currentPassword, user.passwordHash);
+      if (!valid) { set.status = 401; return { error: "Current password is incorrect" }; }
+
+      const { hash: newHash, salt: newSalt } = await hashPassword(body.newPassword);
 
       await db.update(users)
         .set({
