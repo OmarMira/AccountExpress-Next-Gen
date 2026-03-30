@@ -4,7 +4,7 @@
   "description": "Account Express Bookkeeping Core — Cryptographic Bookkeeping Vault",
   "type": "module",
   "scripts": {
-    "dev": "bun run --watch src/index.ts",
+    "dev": "concurrently \"bun run src/index.ts\" \"cd frontend && bun run dev\"",
     "dev:all": "concurrently \"bun run src/index.ts\" \"cd frontend && bun run dev\"",
     "dev:frontend": "cd frontend && bun run dev",
     "start": "bun run src/index.ts",
