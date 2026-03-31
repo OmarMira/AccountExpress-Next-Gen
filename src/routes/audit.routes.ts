@@ -7,16 +7,15 @@ import { Elysia } from "elysia";
 import { db, sql } from "../db/connection.ts";
 import { auditLogs } from "../db/schema/index.ts";
 import { eq, and, desc } from "drizzle-orm";
-import { validateSession } from "../services/session.service.ts";
+
 import { verifyAuditChain } from "../services/audit.service.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const auditRoutes = new Elysia({ prefix: "/audit" })
+  .use(authMiddleware)
 
   // GET /audit?companyId=&module=&limit=&offset=
-  .get("/", async ({ query, cookie, set }) => {
-    const token = (cookie["session"].value as string);
-    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-
+  .get("/", async ({ query, set }) => {
     const conditions = [];
     if (query.companyId) conditions.push(eq(auditLogs.companyId, query.companyId as string));
     if (query.module)    conditions.push(eq(auditLogs.module, query.module as string));
@@ -37,17 +36,12 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
   })
 
   // GET /audit/verify — cryptographic chain validation
-  .get("/verify", async ({ cookie, set }) => {
-    const token = (cookie["session"].value as string);
-    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
+  .get("/verify", async () => {
     return await verifyAuditChain();
   })
 
   // GET /audit/:id — single entry
-  .get("/:id", async ({ params, cookie, set }) => {
-    const token = (cookie["session"].value as string);
-    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-    
+  .get("/:id", async ({ params, set }) => {
     const [entry] = await db
       .select()
       .from(auditLogs)
