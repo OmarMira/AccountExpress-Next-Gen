@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Elysia, t } from "elysia";
-import { validateSession } from "../services/session.service.ts";
+
 import {
   openPeriod,
   closePeriod,
@@ -12,13 +12,13 @@ import {
   getPeriod,
 } from "../services/fiscal-period.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
+  .use(authMiddleware)
 
   // GET /fiscal-periods?companyId=&status=
-  .get("/", async ({ query, cookie, set }) => {
-    const token = (cookie["session"]?.value as string);
-    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
+  .get("/", async ({ query, set }) => {
     if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
     return await listPeriods((query.companyId as string), (query.status as string) as "open" | "closed" | "locked" | undefined);
   })
@@ -26,10 +26,7 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   // POST /fiscal-periods
   .post(
     "/",
-    async ({ body, cookie, set }) => {
-      const token = (cookie["session"]?.value as string);
-      if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ body, set }) => {
       try {
         const id = await openPeriod({
           companyId:  body.companyId,
@@ -57,9 +54,7 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   )
 
   // GET /fiscal-periods/:id
-  .get("/:id", async ({ params, cookie, set }) => {
-    const token = (cookie["session"]?.value as string);
-    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
+  .get("/:id", async ({ params, set }) => {
     const period = await getPeriod((params.id as string));
     if (!period) { set.status = 404; return { error: "Fiscal period not found" }; }
     return period;
@@ -67,13 +62,9 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
 
   // POST /fiscal-periods/:id/close
   .use(requirePermission("periods", "close"))
-  .post("/:id/close", async ({ params, cookie, set }) => {
-    const token = (cookie["session"]?.value as string);
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+  .post("/:id/close", async ({ params, user, set }) => {
     try {
-      await closePeriod((params.id as string), session.userId);
+      await closePeriod((params.id as string), user);
       return { message: "Fiscal period closed" };
     } catch (err) {
       set.status = 422;
@@ -82,10 +73,7 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   })
 
   // POST /fiscal-periods/:id/lock
-  .post("/:id/lock", async ({ params, cookie, set }) => {
-    const token = (cookie["session"]?.value as string);
-    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-
+  .post("/:id/lock", async ({ params, set }) => {
     try {
       await lockPeriod((params.id as string));
       return { message: "Fiscal period locked permanently" };
