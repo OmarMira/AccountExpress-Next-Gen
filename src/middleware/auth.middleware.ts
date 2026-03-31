@@ -3,8 +3,8 @@ import { db } from "../db/connection.ts";
 import { sessions } from "../db/schema/system.schema.ts";
 import { eq, and } from "drizzle-orm";
 
-export const authMiddleware = (app: Elysia) => app
-  .derive(async ({ cookie }) => {
+export const authMiddleware = new Elysia({ name: "auth-middleware" })
+  .derive({ as: "scoped" }, async ({ cookie }) => {
     const sessionId = cookie.session?.value ? String(cookie.session.value) : "";
     if (!sessionId) return { user: "", companyId: null, sessionId: "" };
 
@@ -31,9 +31,9 @@ export const authMiddleware = (app: Elysia) => app
       sessionId
     };
   })
-  .onBeforeHandle({ as: "scoped" }, ({ user, set }) => {
-    if (!user) {
-      set.status = 401;
+  .onBeforeHandle({ as: "scoped" }, (context: any) => {
+    if (!context.user) {
+      context.set.status = 401;
       return { error: "Not authenticated" };
     }
   });
