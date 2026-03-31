@@ -6,8 +6,9 @@
 // ============================================================
 
 import { Elysia, t } from "elysia";
-import { validateSession } from "../services/session.service.ts";
+
 import { chatWithOllama } from "../services/ai/ai.service.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const aiRoutes = new Elysia({ prefix: "/ai" })
 
@@ -40,65 +41,59 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
   })
 
   // ── POST /ai/chat — chat con streaming ────────────────────
-  .post("/chat", async ({ body, cookie, set }) => {
-    const token = cookie["session"]?.value as string;
-    if (!validateSession(token)) {
-      set.status = 401;
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
+  .group("", app => app
+    .use(authMiddleware)
+    .post("/chat", async ({ body, set }) => {
+      const { messages, companyId } = body;
 
-    const { messages, companyId } = body;
+      if (!companyId) {
+        set.status = 400;
+        return new Response(JSON.stringify({ error: "companyId required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
 
-    if (!companyId) {
-      set.status = 400;
-      return new Response(JSON.stringify({ error: "companyId required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
+      // Stream de respuesta
+      const generator = chatWithOllama(messages, companyId);
 
-    // Stream de respuesta
-    const generator = chatWithOllama(messages, companyId);
-
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of generator) {
-            controller.enqueue(new TextEncoder().encode(chunk));
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of generator) {
+              controller.enqueue(new TextEncoder().encode(chunk));
+            }
+          } catch (err: any) {
+            const msg = err?.name === "AbortError"
+              ? "\n[Error: AI response timed out after 60 seconds]"
+              : "\n[Error: AI service unavailable]";
+            controller.enqueue(new TextEncoder().encode(msg));
+          } finally {
+            controller.close();
           }
-        } catch (err: any) {
-          const msg = err?.name === "AbortError"
-            ? "\n[Error: AI response timed out after 60 seconds]"
-            : "\n[Error: AI service unavailable]";
-          controller.enqueue(new TextEncoder().encode(msg));
-        } finally {
-          controller.close();
         }
-      }
-    });
+      });
 
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Transfer-Encoding": "chunked",
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no"
-      }
-    });
-  }, {
-    body: t.Object({
-      messages: t.Array(
-        t.Object({
-          role:    t.String(),
-          content: t.String()
-        })
-      ),
-      companyId: t.String()
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Transfer-Encoding": "chunked",
+          "Cache-Control": "no-cache",
+          "X-Accel-Buffering": "no"
+        }
+      });
+    }, {
+      body: t.Object({
+        messages: t.Array(
+          t.Object({
+            role:    t.String(),
+            content: t.String()
+          })
+        ),
+        companyId: t.String()
+      })
     })
-  })
+  )
 
   // ── GET /ai/download-ollama — proxy de descarga ───────────
   .get("/download-ollama", async ({ query, set }) => {
