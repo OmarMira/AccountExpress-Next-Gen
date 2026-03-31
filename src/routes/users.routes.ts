@@ -5,8 +5,9 @@
 // ============================================================
 
 import { Elysia, t } from "elysia";
-import { validateSession } from "../services/session.service.ts";
+
 import { requirePermission } from "../middleware/rbac.middleware.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
 import {
   listUsers,
   listRoles,
@@ -20,13 +21,10 @@ import { users, userCompanyRoles } from "../db/schema/index.ts";
 import { eq, and, isNull } from "drizzle-orm";
 
 export const usersRoutes = new Elysia({ prefix: "/users" })
+  .use(authMiddleware)
 
   // ── GET /users?companyId=xxx ──────────────────────────────
-  .get("/", async ({ query, cookie, set }) => {
-    const token = cookie["session"]?.value as string | undefined;
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
-
+  .get("/", async ({ query, set }) => {
     const companyId = query.companyId;
     if (!companyId) { set.status = 400; return { success: false, error: "companyId required" }; }
 
@@ -35,20 +33,12 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   })
 
   // ── GET /users/roles ──────────────────────────────────────
-  .get("/roles", async ({ cookie, set }) => {
-    const token = cookie["session"]?.value as string | undefined;
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
-
+  .get("/roles", async () => {
     return { success: true, data: await listRoles() };
   })
 
   // ── POST /users ───────────────────────────────────────────
-  .post("/", async ({ body, cookie, set }) => {
-    const token = cookie["session"]?.value as string | undefined;
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
-
+  .post("/", async ({ body, set, user }) => {
     const { username, email, password, firstName, lastName, companyId, roleId } = body;
 
     try {
@@ -56,7 +46,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
         username, email, password,
         firstName, lastName,
         companyId, roleId,
-        grantedBy: session.userId,
+        grantedBy: user,
       });
       set.status = 201;
       return { success: true, data: result };
@@ -81,27 +71,23 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   })
 
   // ── PATCH /users/:userId ──────────────────────────────────
-  .patch("/:userId", async ({ params, body, cookie, set }) => {
-    const token = cookie["session"]?.value as string | undefined;
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
-
+  .patch("/:userId", async ({ params, body, set, user, companyId: sessionCompanyId }) => {
     const [callerUser] = await db
       .select({ isSuperAdmin: users.isSuperAdmin })
       .from(users)
-      .where(eq(users.id, session.userId))
+      .where(eq(users.id, user))
       .limit(1);
 
     if (!callerUser?.isSuperAdmin) {
       const payload = body;
-      const companyId = payload.companyId ?? session.companyId;
+      const companyId = payload.companyId ?? sessionCompanyId;
       if (!companyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
       const [adminRole] = await db
         .select({ roleId: userCompanyRoles.roleId })
         .from(userCompanyRoles)
         .where(
           and(
-            eq(userCompanyRoles.userId, session.userId),
+            eq(userCompanyRoles.userId, user),
             eq(userCompanyRoles.companyId, companyId),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
@@ -129,15 +115,11 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   })
 
   // ── PUT /users/:userId/role ───────────────────────────────
-  .put("/:userId/role", async ({ params, body, cookie, set }) => {
-    const token = cookie["session"]?.value as string | undefined;
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
-
+  .put("/:userId/role", async ({ params, body, set, user }) => {
     const [callerUser] = await db
       .select({ isSuperAdmin: users.isSuperAdmin })
       .from(users)
-      .where(eq(users.id, session.userId))
+      .where(eq(users.id, user))
       .limit(1);
 
     const { companyId, roleId } = body;
@@ -148,7 +130,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
         .from(userCompanyRoles)
         .where(
           and(
-            eq(userCompanyRoles.userId, session.userId),
+            eq(userCompanyRoles.userId, user),
             eq(userCompanyRoles.companyId, companyId),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
@@ -166,7 +148,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       userId: params.userId,
       companyId,
       roleId,
-      grantedBy: session.userId,
+      grantedBy: user,
     });
 
     return { success: true, data: result };
@@ -178,15 +160,11 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   })
 
   // ── POST /users/:userId/reset-password ────────────────────
-  .post("/:userId/reset-password", async ({ params, body, cookie, set }) => {
-    const token = cookie["session"]?.value as string | undefined;
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
-
+  .post("/:userId/reset-password", async ({ params, body, set, user }) => {
     const [callerUser] = await db
       .select({ isSuperAdmin: users.isSuperAdmin })
       .from(users)
-      .where(eq(users.id, session.userId))
+      .where(eq(users.id, user))
       .limit(1);
 
     if (!callerUser?.isSuperAdmin) {
