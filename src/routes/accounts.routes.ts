@@ -3,21 +3,21 @@
 // ============================================================
 
 import { Elysia, t } from "elysia";
-import { validateSession } from "../services/session.service.ts";
+
 import {
   getAccountTree,
   addAccount,
   deactivateAccount,
 } from "../services/accounts.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const accountsRoutes = new Elysia({ prefix: "/accounts" })
+  .use(authMiddleware)
 
   // GET /accounts?companyId=
   .use(requirePermission("accounts", "read"))
-  .get("/", async ({ query, cookie, set }) => {
-    const token = (cookie["session"].value as string);
-    if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
+  .get("/", async ({ query, set }) => {
     if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
     return await getAccountTree((query.companyId as string));
   })
@@ -26,10 +26,7 @@ export const accountsRoutes = new Elysia({ prefix: "/accounts" })
   .use(requirePermission("accounts", "create"))
   .post(
     "/",
-    async ({ body, cookie, set }) => {
-      const token = (cookie["session"].value as string);
-      if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ body, set }) => {
       try {
         const id = await addAccount({
           companyId:     body.companyId,
@@ -63,9 +60,7 @@ export const accountsRoutes = new Elysia({ prefix: "/accounts" })
   )
 
   // DELETE /accounts/:id?companyId=
-  .delete("/:id", async ({ params, query, cookie, set }) => {
-    const token = (cookie["session"].value as string);
-    if (!token || !validateSession(token)) { set.status = 401; return { error: "Not authenticated" }; }
+  .delete("/:id", async ({ params, query, set }) => {
     if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
 
     try {
