@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Elysia, t } from "elysia";
-import { validateSession } from "../services/session.service.ts";
+
 import {
   createDraft,
   post,
@@ -13,14 +13,13 @@ import {
 } from "../services/journal.service.ts";
 import { voidEntry } from "../services/journal-void.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const journalRoutes = new Elysia({ prefix: "/journal" })
+  .use(authMiddleware)
 
   // GET /journal?companyId=&status=&periodId=
-  .get("/", async ({ query, cookie, set }) => {
-    const token = (cookie["session"]?.value as string);
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { error: "Not authenticated" }; }
+  .get("/", async ({ query, set }) => {
     if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
 
     return await listEntries((query.companyId as string), {
@@ -32,9 +31,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   })
 
   // GET /journal/:id
-  .get("/:id", async ({ params, cookie, set }) => {
-    const token = (cookie["session"]?.value as string);
-    if (!token || !(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
+  .get("/:id", async ({ params }) => {
     return await getEntryWithLines((params.id as string));
   })
 
@@ -42,11 +39,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   .use(requirePermission("journal", "create"))
   .post(
     "/",
-    async ({ body, cookie, set }) => {
-      const token = (cookie["session"]?.value as string);
-      const session = token ? await validateSession(token) : null;
-      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ body, set, user }) => {
       try {
         const id = await createDraft(
           {
@@ -56,7 +49,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
             reference:   body.reference ?? null,
             isAdjusting: body.isAdjusting ?? false,
             periodId:    body.periodId,
-            createdBy:   session.userId,
+            createdBy:   user,
           },
           body.lines.map((l: any) => ({ ...l, description: l.description ?? null }))
         );
@@ -94,14 +87,10 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
 
   // POST /journal/:id/post — validate + post
   .use(requirePermission("journal", "approve"))
-  .post("/:id/post", async ({ params, cookie, request, set }) => {
-    const token = (cookie["session"]?.value as string);
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+  .post("/:id/post", async ({ params, request, set, user, sessionId }) => {
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     try {
-      await post((params.id as string), session.userId, session.sessionId, ip);
+      await post((params.id as string), user, sessionId, ip);
       return { message: "Journal entry posted" };
     } catch (err) {
       if (err instanceof ValidationError) {
@@ -114,14 +103,10 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
 
   // POST /journal/:id/void
   .use(requirePermission("journal", "void"))
-  .post("/:id/void", async ({ params, cookie, request, set }) => {
-    const token = (cookie["session"]?.value as string);
-    const session = token ? await validateSession(token) : null;
-    if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+  .post("/:id/void", async ({ params, request, set, user, sessionId }) => {
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     try {
-      await voidEntry((params.id as string), session.userId, session.sessionId, ip);
+      await voidEntry((params.id as string), user, sessionId, ip);
       return { message: "Journal entry voided" };
     } catch (err) {
       if (err instanceof ValidationError) {
