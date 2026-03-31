@@ -12,6 +12,7 @@ import {
   numeric,
   timestamp,
   check,
+  index,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
@@ -75,7 +76,10 @@ export const journalEntries = pgTable("journal_entries", {
   prevHash: text("prev_hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  idxJeCompanyDate:   index("idx_je_company_date").on(table.companyId, table.entryDate),
+  idxJeStatus:        index("idx_je_status").on(table.status),
+}));
 
 // ─────────────────────────────────────────────────────────────
 // 13. JOURNAL_LINES
@@ -149,4 +153,7 @@ export const bankTransactions = pgTable("bank_transactions", {
   matchedAt: timestamp("matched_at", { withTimezone: true }),
   importBatchId: text("import_batch_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  idxBtCompanyStatus: index("idx_bt_company_status").on(table.companyId, table.status),
+  idxBtDate:          index("idx_bt_date").on(table.transactionDate),
+}));

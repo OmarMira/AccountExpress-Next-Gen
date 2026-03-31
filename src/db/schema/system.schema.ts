@@ -176,7 +176,10 @@ export const sessions = pgTable("sessions", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull(),
   isValid: boolean("is_valid").default(true).notNull(),
-});
+}, (table) => ({
+  idxSessionsUserId:  index("idx_sessions_user_id").on(table.userId),
+  idxSessionsValid:   index("idx_sessions_is_valid").on(table.isValid),
+}));
 
 // ─────────────────────────────────────────────────────────────
 // 9. AUDIT_LOGS
@@ -203,7 +206,10 @@ export const auditLogs = pgTable("audit_logs", {
   chainIndex: integer("chain_index").notNull(),
   timestampToken: text("timestamp_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  idxAuditCompanyCreated: index("idx_audit_company_created").on(table.companyId, table.createdAt),
+  idxAuditModule:         index("idx_audit_module").on(table.module),
+}));
 
 // ─────────────────────────────────────────────────────────────
 // 10. FISCAL_PERIODS
