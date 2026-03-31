@@ -7,23 +7,21 @@ import { statementImportService } from "../services/bank/statement-import.servic
 import { suggestAccountBatch } from "../services/bank/smart-match.service.ts";
 import { matchTransaction, ignoreTransaction } from "../services/bank/reconciliation.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { validateSession } from "../services/session.service.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
+
 import { db, sql } from "../db/connection.ts";
 import { eq, and } from "drizzle-orm";
 import { bankTransactions } from "../db/schema/index.ts";
 
 export const bankRoutes = new Elysia({ prefix: "/bank" })
+  .use(authMiddleware)
   // ─────────────────────────────────────────────────────────────
   // 1. IMPORT CSV (bank:create)
   // ─────────────────────────────────────────────────────────────
   .use(requirePermission("bank", "create"))
   .post(
     "/import",
-    async ({ body, cookie, set }) => {
-      const token = cookie["session"].value as string;
-      const session = token ? await validateSession(token) : null;
-      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ body, set }) => {
       const file = body.file as File;
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
@@ -67,11 +65,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   // ─────────────────────────────────────────────────────────────
   .post(
     "/import-parsed",
-    async ({ body, cookie, set }) => {
-      const token = cookie["session"].value as string;
-      const session = token ? await validateSession(token) : null;
-      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ body, set }) => {
       try {
         const result = await statementImportService.processParsedBatch(
           body.companyId,
@@ -118,11 +112,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(requirePermission("bank", "read"))
   .get(
     "/transactions",
-    async ({ query, cookie, set }) => {
-      const token = cookie["session"].value as string;
-      const session = token ? await validateSession(token) : null;
-      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ query }) => {
       let condition = eq(bankTransactions.companyId, query.companyId);
       if (query.status) {
         condition = and(condition, eq(bankTransactions.status, query.status)) as any;
@@ -162,11 +152,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(requirePermission("bank", "read"))
   .get(
     "/suggest",
-    async ({ query, cookie, set }) => {
-      const token = cookie["session"].value as string;
-      const session = token ? await validateSession(token) : null;
-      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ query }) => {
       const suggestionMap = await suggestAccountBatch(query.companyId, [query.description]);
       return { success: true, data: suggestionMap.get(query.description) ?? [] };
     },
@@ -184,11 +170,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(requirePermission("bank", "reconcile"))
   .post(
     "/reconcile/:id",
-    async ({ params, body, cookie, request, set }) => {
-      const token = cookie["session"].value as string;
-      const session = token ? await validateSession(token) : null;
-      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ params, body, request, set, user, sessionId }) => {
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
       const draftId = await matchTransaction(
@@ -197,8 +179,8 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         body.targetAccountId,
         body.bankAccountId,
         body.periodId,
-        session.userId,
-        session.sessionId,
+        user,
+        sessionId,
         ip
       );
       
@@ -224,14 +206,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     .use(requirePermission("bank", "reconcile"))
     .post(
     "/ignore/:id",
-    async ({ params, body, cookie, request, set }) => {
-      const token = cookie["session"].value as string;
-      const session = token ? await validateSession(token) : null;
-      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ params, body, request, set, user }) => {
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
-      await ignoreTransaction(body.companyId, params.id, session.userId, ip);
+      await ignoreTransaction(body.companyId, params.id, user, ip);
       return { success: true };
     },
     {
@@ -245,11 +223,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   // ─────────────────────────────────────────────────────────────
   .patch(
     "/transactions/:id/assign",
-    async ({ params, body, cookie, set }) => {
-      const token = cookie["session"].value as string;
-      const session = token ? await validateSession(token) : null;
-      if (!session) { set.status = 401; return { error: "Not authenticated" }; }
-
+    async ({ params, body, set }) => {
       if (!body.companyId || !body.glAccountId) {
         set.status = 400;
         return { error: "companyId y glAccountId requeridos" };
