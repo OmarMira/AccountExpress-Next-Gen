@@ -97,6 +97,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         value: sessionId,
         httpOnly: true,
         sameSite: "strict",
+        secure: process.env["NODE_ENV"] === "production",
         path: "/",
         maxAge: 8 * 60 * 60, // 8 hours
       });
