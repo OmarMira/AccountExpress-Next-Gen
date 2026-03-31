@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Elysia, t } from "elysia";
-import { validateSession } from "../services/session.service.ts";
+
 import { db, sql } from "../db/connection.ts";
 import { bankAccounts, bankTransactions, fiscalPeriods, journalLines, journalEntries, chartOfAccounts } from "../db/schema/index.ts";
 import { eq, and, lte } from "drizzle-orm";
@@ -13,13 +13,7 @@ import { getBalanceSheet } from "../services/reports/balance-sheet.service.ts";
 
 export const dashboardRoutes = new Elysia({ prefix: "/dashboard" })
   .use(requirePermission("reports", "read"))
-  .get("/", async ({ query, cookie, set }) => {
-    const token = cookie["session"].value as string;
-    if (!(await validateSession(token))) {
-      set.status = 401;
-      return { error: "Not authenticated" };
-    }
-
+  .get("/", async ({ query, set }) => {
     const companyId = query.companyId;
 
     try {
