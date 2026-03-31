@@ -14,6 +14,7 @@ import {
   updateUser,
   assignRole,
 } from "../services/users.service.ts";
+import { hashPassword } from "../services/auth.service.ts";
 import { db } from "../db/connection.ts";
 import { users, userCompanyRoles } from "../db/schema/index.ts";
 import { eq, and, isNull } from "drizzle-orm";
@@ -173,5 +174,43 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     body: t.Object({
       companyId: t.String(),
       roleId:    t.String(),
+    }),
+  })
+
+  // ── POST /users/:userId/reset-password ────────────────────
+  .post("/:userId/reset-password", async ({ params, body, cookie, set }) => {
+    const token = cookie["session"]?.value as string | undefined;
+    const session = token ? await validateSession(token) : null;
+    if (!session) { set.status = 401; return { success: false, error: "Unauthorized" }; }
+
+    const [callerUser] = await db
+      .select({ isSuperAdmin: users.isSuperAdmin })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+
+    if (!callerUser?.isSuperAdmin) {
+      set.status = 403;
+      return { success: false, error: "Forbidden: super_admin only" };
+    }
+
+    const { newPassword } = body;
+    const { hash } = await hashPassword(newPassword);
+
+    await db.update(users)
+      .set({
+        passwordHash:       hash,
+        mustChangePassword: true,
+        failedAttempts:     0,
+        isLocked:           false,
+        lockedUntil:        null,
+        updatedAt:          new Date(),
+      })
+      .where(eq(users.id, params.userId));
+
+    return { success: true, message: "Password reset. User must change it on next login." };
+  }, {
+    body: t.Object({
+      newPassword: t.String({ minLength: 8 }),
     }),
   });
