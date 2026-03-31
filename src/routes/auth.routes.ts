@@ -19,7 +19,10 @@ import {
 import {
   createSession,
   invalidateSession,
-  switchSessionCompany
+  switchSessionCompany,
+  invalidateAllUserSessions,
+  listActiveSessions,
+  validateSession as validateSessionService,
 } from "../services/session.service.ts";
 import { createAuditEntry } from "../services/audit.service.ts";
 import { loginRateLimiter } from "../middleware/rate-limit.ts";
@@ -263,6 +266,27 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       cookie["session"].remove();
     }
     return { message: "Logged out" };
+  })
+
+  // ── POST /auth/logout-all — revoke all sessions ───────────
+  .post("/logout-all", async ({ cookie, set }) => {
+    const token = cookie["session"]?.value as string;
+    if (!token) { set.status = 401; return { error: "Not authenticated" }; }
+    const session = await validateSessionService(token);
+    if (!session) { set.status = 401; return { error: "Invalid session" }; }
+    const count = await invalidateAllUserSessions(session.userId);
+    cookie["session"].remove();
+    return { success: true, message: `${count} session(s) revoked.` };
+  })
+
+  // ── GET /auth/sessions — list active sessions ─────────────
+  .get("/sessions", async ({ cookie, set }) => {
+    const token = cookie["session"]?.value as string;
+    if (!token) { set.status = 401; return { error: "Not authenticated" }; }
+    const session = await validateSessionService(token);
+    if (!session) { set.status = 401; return { error: "Invalid session" }; }
+    const activeSessions = await listActiveSessions(session.userId);
+    return { success: true, data: activeSessions };
   })
 
   // ── POST /auth/change-password ────────────────────────────
