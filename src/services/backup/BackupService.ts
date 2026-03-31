@@ -3,6 +3,12 @@ import { readdir, stat, unlink, mkdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
+import { createGzip, gunzipSync } from 'zlib';
+import { promisify } from 'util';
+import { pipeline } from 'stream';
+import { createReadStream, createWriteStream } from 'fs';
+
+const pipelineAsync = promisify(pipeline);
 
 export interface BackupResult {
   filename: string;
@@ -60,9 +66,10 @@ export class BackupService {
     await this.ensureDir();
     const now = new Date();
     const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `backup-${dateStr}.sql.enc`;
+    const filename = `backup-${dateStr}.sql.gz.enc`;
     const outputPath = join(BACKUPS_DIR, filename);
     const tempSqlPath = join(BACKUPS_DIR, `temp-${dateStr}.sql`);
+    const tempGzPath  = join(BACKUPS_DIR, `temp-${dateStr}.sql.gz`);
 
     const dbUrl = process.env.DATABASE_URL;
     if (!dbUrl) throw new Error("DATABASE_URL no está configurada.");
@@ -79,19 +86,27 @@ export class BackupService {
       dumpProcess.on('error', (err) => reject(err));
     });
 
-    // 2. Calcular hash de integridad ANTES de encriptar
-    const auditHash = await hashFile(tempSqlPath);
+    // 2. Comprimir el SQL con gzip
+    await pipelineAsync(
+      createReadStream(tempSqlPath),
+      createGzip({ level: 6 }),
+      createWriteStream(tempGzPath)
+    );
+    await unlink(tempSqlPath);
 
-    // 3. Encriptar el archivo SQL con el hash en los metadatos
-    const encryptedPath = await encryptFile(tempSqlPath, password, {
+    // 3. Calcular hash de integridad ANTES de encriptar
+    const auditHash = await hashFile(tempGzPath);
+
+    // 4. Encriptar el archivo comprimido con el hash en los metadatos
+    const encryptedPath = await encryptFile(tempGzPath, password, {
       createdAt: now.toISOString(),
       auditHash,
-      format: 'postgresql-plain'
+      format: 'postgresql-gzip'
     });
 
-    // 4. Mover al destino final y limpiar archivos temporales
+    // 5. Mover al destino final y limpiar archivos temporales
     await rename(encryptedPath, outputPath);
-    await unlink(tempSqlPath);
+    await unlink(tempGzPath);
 
     const fileStat = await stat(outputPath);
     return {
@@ -109,7 +124,7 @@ export class BackupService {
     const backups: BackupMetadata[] = [];
 
     for (const file of files) {
-      if (!file.endsWith('.sql.enc')) continue;
+      if (!file.endsWith('.sql.gz.enc') && !file.endsWith('.sql.enc')) continue;
       const fullPath = join(BACKUPS_DIR, file);
       const fileStat = await stat(fullPath);
       
@@ -150,11 +165,17 @@ export class BackupService {
       throw new Error(`Error de integridad: El hash del backup (${currentHash}) no coincide con el original (${metadata.auditHash}).`);
     }
     
-    // 3. Inyectar en psql vía stdin
+    // 3. Descomprimir si el backup es formato gzip
+    let sqlData = data;
+    if (metadata.format === 'postgresql-gzip') {
+      sqlData = Buffer.from(gunzipSync(data));
+    }
+
+    // 4. Inyectar en psql vía stdin
     await new Promise<void>((resolve, reject) => {
       const psqlProcess = spawn(PSQL_PATH, [dbUrl, '--single-transaction']);
       
-      psqlProcess.stdin.write(data);
+      psqlProcess.stdin.write(sqlData);
       psqlProcess.stdin.end();
 
       psqlProcess.on('close', (code) => {
