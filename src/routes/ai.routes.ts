@@ -69,10 +69,11 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
           for await (const chunk of generator) {
             controller.enqueue(new TextEncoder().encode(chunk));
           }
-        } catch (err) {
-          controller.enqueue(
-            new TextEncoder().encode("\n[Error: AI service unavailable]")
-          );
+        } catch (err: any) {
+          const msg = err?.name === "AbortError"
+            ? "\n[Error: AI response timed out after 60 seconds]"
+            : "\n[Error: AI service unavailable]";
+          controller.enqueue(new TextEncoder().encode(msg));
         } finally {
           controller.close();
         }

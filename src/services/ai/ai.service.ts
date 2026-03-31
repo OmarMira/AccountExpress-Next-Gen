@@ -110,10 +110,21 @@ export async function buildFinancialContext(companyId: string): Promise<object> 
 
 // ── Llamada a Ollama con streaming ────────────────────────────
 
+const MAX_MESSAGES = 50;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function* chatWithOllama(
   messages: { role: string; content: string }[],
   companyId: string
 ): AsyncGenerator<string> {
+  if (!UUID_REGEX.test(companyId)) {
+    yield "Error: invalid companyId format.";
+    return;
+  }
+  if (messages.length > MAX_MESSAGES) {
+    yield `Error: message history exceeds the limit of ${MAX_MESSAGES} messages.`;
+    return;
+  }
   const context = await buildFinancialContext(companyId);
 
   // Inyectar contexto financiero como primer mensaje del sistema
@@ -124,7 +135,10 @@ export async function* chatWithOllama(
 
   const fullMessages = [contextMessage, ...messages];
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
   const response = await fetch(OLLAMA_URL, {
+    signal: controller.signal,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -135,6 +149,7 @@ export async function* chatWithOllama(
     }),
   });
 
+  clearTimeout(timeout);
   if (!response.ok || !response.body) {
     yield `Error connecting to Ollama. Make sure it is running on localhost:11434 and the model "${MODEL}" is installed.`;
     return;
