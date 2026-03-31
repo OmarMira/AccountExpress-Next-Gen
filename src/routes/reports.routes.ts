@@ -10,19 +10,18 @@ import { getTrialBalance } from "../services/reports/trial-balance.service.ts";
 import { getCashFlow } from "../services/reports/cash-flow.service.ts";
 import { generateCpaSummary } from "../services/reports/cpa-summary.service.ts";
 import { buildCpaPdf } from "../services/reports/pdf-builder.service.ts";
-import { validateSession } from "../services/session.service.ts";
+
 import { requirePermission } from "../middleware/rbac.middleware.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const reportsRoutes = new Elysia()
   // ── Reports Group ──────────────────────────────────────────
   .group("/reports", (app) =>
     app
+      .use(authMiddleware)
       .use(requirePermission("reports", "read"))
 
-      .get("/balance-sheet", async ({ query, cookie, set }) => {
-        const token = cookie["session"]?.value as string;
-        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-        
+      .get("/balance-sheet", async ({ query, set }) => {
         try {
           return { success: true, data: await getBalanceSheet(query.companyId, query.asOfDate) };
         } catch (err: any) {
@@ -36,10 +35,7 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/income-statement", async ({ query, cookie, set }) => {
-        const token = cookie["session"]?.value as string;
-        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-        
+      .get("/income-statement", async ({ query }) => {
         return { success: true, data: await getIncomeStatement(query.companyId, query.startDate, query.endDate) };
       }, {
         query: t.Object({
@@ -49,10 +45,7 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/trial-balance", async ({ query, cookie, set }) => {
-        const token = cookie["session"]?.value as string;
-        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-        
+      .get("/trial-balance", async ({ query, set }) => {
         try {
           return { success: true, data: await getTrialBalance(query.companyId, query.asOfDate) };
         } catch (err: any) {
@@ -66,10 +59,7 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/cash-flow", async ({ query, cookie, set }) => {
-        const token = cookie["session"]?.value as string;
-        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-        
+      .get("/cash-flow", async ({ query }) => {
         return { success: true, data: await getCashFlow(query.companyId, query.startDate, query.endDate) };
       }, {
         query: t.Object({
@@ -83,12 +73,10 @@ export const reportsRoutes = new Elysia()
   // ── Export Group ───────────────────────────────────────────
   .group("/export", (app) =>
     app
+      .use(authMiddleware)
       .use(requirePermission("reports", "export"))
 
-      .post("/cpa-summary", async ({ body, cookie, set }) => {
-        const token = cookie["session"]?.value as string;
-        if (!(await validateSession(token))) { set.status = 401; return { error: "Not authenticated" }; }
-        
+      .post("/cpa-summary", async ({ body, set }) => {
         try {
           return { success: true, data: await generateCpaSummary(body.companyId, body.periodId) };
         } catch (err: any) {
@@ -102,13 +90,7 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/cpa-summary/download", async ({ query, cookie, set }) => {
-        const token = cookie["session"]?.value as string;
-        if (!(await validateSession(token))) {
-          set.status = 401;
-          return { success: false, error: "Unauthorized" };
-        }
-
+      .get("/cpa-summary/download", async ({ query, set }) => {
         const companyId = query.companyId;
         const periodId  = query.periodId;
 
