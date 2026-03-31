@@ -27,8 +27,8 @@ export interface ValidationResult {
 }
 
 const BACKUPS_DIR = 'data/backups';
-const PG_DUMP_PATH = 'C:\\Program Files\\PostgreSQL\\17\\bin\\pg_dump.exe';
-const PSQL_PATH    = 'C:\\Program Files\\PostgreSQL\\17\\bin\\psql.exe';
+const PG_DUMP_PATH = process.env.PG_DUMP_PATH ?? 'pg_dump';
+const PSQL_PATH    = process.env.PSQL_PATH    ?? 'psql';
 
 export class BackupService {
   constructor() {
