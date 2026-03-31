@@ -4,27 +4,19 @@ import { sessions } from "../db/schema/system.schema.ts";
 import { eq, and } from "drizzle-orm";
 
 export const authMiddleware = (app: Elysia) => app
-  .derive(async ({ cookie, set }) => {
+  .derive(async ({ cookie }) => {
     const sessionId = cookie.session?.value ? String(cookie.session.value) : "";
-
-    if (!sessionId) {
-      set.status = 401;
-      return { error: "No session", user: "", companyId: null, sessionId: "" };
-    }
+    if (!sessionId) return { user: "", companyId: null, sessionId: "" };
 
     const dbSession = await db.query.sessions.findFirst({
       where: and(eq(sessions.id, sessionId), eq(sessions.isValid, true))
     });
 
-    if (!dbSession) {
-      set.status = 401;
-      return { error: "Invalid session", user: "", companyId: null, sessionId: "" };
-    }
+    if (!dbSession) return { user: "", companyId: null, sessionId: "" };
 
     if (new Date(dbSession.expiresAt) < new Date()) {
       await db.update(sessions).set({ isValid: false }).where(eq(sessions.id, sessionId));
-      set.status = 401;
-      return { error: "Session expired", user: "", companyId: null, sessionId: "" };
+      return { user: "", companyId: null, sessionId: "" };
     }
 
     const now = new Date();
@@ -38,4 +30,10 @@ export const authMiddleware = (app: Elysia) => app
       companyId: dbSession.companyId ?? null,
       sessionId
     };
+  })
+  .onBeforeHandle({ as: "scoped" }, ({ user, set }) => {
+    if (!user) {
+      set.status = 401;
+      return { error: "Not authenticated" };
+    }
   });
