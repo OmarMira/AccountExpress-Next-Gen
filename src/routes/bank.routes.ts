@@ -168,7 +168,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   // ─────────────────────────────────────────────────────────────
   // 4. RECONCILE (bank:reconcile)
   // ─────────────────────────────────────────────────────────────
-  .use(requirePermission("bank", "reconcile"))
+  .use(requirePermission("bank", "approve"))
   .post(
     "/reconcile/:id",
     async ({ params, body, request, set, user, sessionId }) => {
@@ -204,7 +204,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   // 5. IGNORE & 6. ASSIGN
   // ─────────────────────────────────────────────────────────────
   .group("", app => app
-    .use(requirePermission("bank", "reconcile"))
+    .use(requirePermission("bank", "approve"))
     .post(
     "/ignore/:id",
     async ({ params, body, request, set, user }) => {
