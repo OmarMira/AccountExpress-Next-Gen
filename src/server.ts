@@ -5,6 +5,7 @@
 
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
+import { authMiddleware } from "./middleware/auth.middleware.ts";
 import { authRoutes }          from "./routes/auth.routes.ts";
 import { bankAccountsRoutes } from './routes/bank-accounts.routes.ts';
 import { companiesRoutes }     from "./routes/companies.routes.ts";

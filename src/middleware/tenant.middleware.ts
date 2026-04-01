@@ -2,11 +2,12 @@ import { Elysia } from "elysia";
 import { db } from "../db/connection.ts";
 import { userCompanyRoles } from "../db/schema/system.schema.ts";
 import { eq, and, isNull } from "drizzle-orm";
-import { authMiddleware } from "./auth.middleware.ts";
+import { requireAuth, authMiddleware } from "./auth.middleware.ts";
 
 export const tenantMiddleware = (app: Elysia) => app
   .use(authMiddleware)
-  .onBeforeHandle(async ({ user, companyId }) => {
+  .onBeforeHandle(requireAuth)
+  .onBeforeHandle(async ({ user, companyId }: any) => {
     if (!companyId) {
       return new Response(JSON.stringify({ error: "No active company in session" }), { status: 403 });
     }
@@ -24,7 +25,7 @@ export const tenantMiddleware = (app: Elysia) => app
       return new Response(JSON.stringify({ error: "User not in this company" }), { status: 403 });
     }
   })
-  .derive(async ({ user, companyId }) => {
+  .derive(async ({ user, companyId }: any) => {
     if (!companyId) return { roleId: "" };
     const membership = await db.query.userCompanyRoles.findFirst({
       where: and(
