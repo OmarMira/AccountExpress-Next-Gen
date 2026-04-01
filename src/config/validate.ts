@@ -16,6 +16,10 @@ const envSchema = z.object({
 
   // Security and Branding
   SESSION_SECRET:       z.string().min(16, "SESSION_SECRET must be at least 16 characters"),
+  AUTO_BACKUP_SECRET:   z.string().min(32, "AUTO_BACKUP_SECRET must be at least 32 characters")
+    .refine(v => v !== "change-me-for-production", {
+      message: "AUTO_BACKUP_SECRET must be changed from the default value before starting the server",
+    }),
   APP_NAME:             z.string().min(1, "APP_NAME is required for UI display"),
 
   // Initial Seed Data (Super Admin)
