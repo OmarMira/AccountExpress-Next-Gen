@@ -5,7 +5,7 @@ async function testLogin() {
     const res = await fetch("http://localhost:3000/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: "admin", password: "ChangeMe@2026!" })
+      body: JSON.stringify({ username: "admin", password: process.env.SUPER_ADMIN_PASSWORD ?? (() => { throw new Error("SUPER_ADMIN_PASSWORD not set"); })(), })
     });
     const authHeaders = res.headers.get("set-cookie");
     const data = await res.json();
