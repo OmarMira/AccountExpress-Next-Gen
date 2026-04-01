@@ -22,12 +22,13 @@ import {
   switchSessionCompany,
   invalidateAllUserSessions,
   listActiveSessions,
-  validateSession as validateSessionService,
 } from "../services/session.service.ts";
 import { createAuditEntry } from "../services/audit.service.ts";
 import { loginRateLimiter } from "../middleware/rate-limit.ts";
+import { authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const authRoutes = new Elysia({ prefix: "/auth" })
+  .use(authMiddleware)
 
   // ── POST /auth/login ──────────────────────────────────────
   .post(
@@ -269,50 +270,35 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   })
 
   // ── POST /auth/logout-all — revoke all sessions ───────────
-  .post("/logout-all", async ({ cookie, set }) => {
-    const token = cookie["session"]?.value as string;
-    if (!token) { set.status = 401; return { error: "Not authenticated" }; }
-    const session = await validateSessionService(token);
-    if (!session) { set.status = 401; return { error: "Invalid session" }; }
-    const count = await invalidateAllUserSessions(session.userId);
+  .post("/logout-all", async ({ user, sessionId, set, cookie }) => {
+    if (!user) { set.status = 401; return { error: "Not authenticated" }; }
+    const count = await invalidateAllUserSessions(user);
     cookie["session"].remove();
     return { success: true, message: `${count} session(s) revoked.` };
   })
 
   // ── GET /auth/sessions — list active sessions ─────────────
-  .get("/sessions", async ({ cookie, set }) => {
-    const token = cookie["session"]?.value as string;
-    if (!token) { set.status = 401; return { error: "Not authenticated" }; }
-    const session = await validateSessionService(token);
-    if (!session) { set.status = 401; return { error: "Invalid session" }; }
-    const activeSessions = await listActiveSessions(session.userId);
+  .get("/sessions", async ({ user, sessionId, set }) => {
+    if (!user) { set.status = 401; return { error: "Not authenticated" }; }
+    const activeSessions = await listActiveSessions(user);
     return { success: true, data: activeSessions };
   })
 
   // ── POST /auth/change-password ────────────────────────────
   .post(
     "/change-password",
-    async ({ body, cookie, set }) => {
-      const token = (cookie["session"].value as string);
-      if (!token) { set.status = 401; return { error: "Not authenticated" }; }
+    async ({ body, user, set }) => {
+      if (!user) { set.status = 401; return { error: "Not authenticated" }; }
 
-      const [session] = await db
-        .select({ userId: sessions.userId })
-        .from(sessions)
-        .where(and(eq(sessions.id, token), eq(sessions.isValid, true)))
-        .limit(1);
-
-      if (!session) { set.status = 401; return { error: "Invalid session" }; }
-
-      const [user] = await db
+      const [dbUser] = await db
         .select({ passwordHash: users.passwordHash })
         .from(users)
-        .where(eq(users.id, session.userId))
+        .where(eq(users.id, user))
         .limit(1);
 
-      if (!user) { set.status = 404; return { error: "User not found" }; }
+      if (!dbUser) { set.status = 404; return { error: "User not found" }; }
 
-      const valid = await verifyPassword(body.currentPassword, user.passwordHash);
+      const valid = await verifyPassword(body.currentPassword, dbUser.passwordHash);
       if (!valid) { set.status = 401; return { error: "Current password is incorrect" }; }
 
       const { hash: newHash, salt: newSalt } = await hashPassword(body.newPassword);
@@ -324,7 +310,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
           mustChangePassword: false,
           updatedAt: new Date(),
         })
-        .where(eq(users.id, session.userId));
+        .where(eq(users.id, user));
 
       return { message: "Password changed successfully" };
     },

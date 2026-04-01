@@ -39,45 +39,6 @@ export async function createSession(opts: {
   return id;
 }
 
-// ── Validate & slide session window ─────────────────────────
-export interface ValidSession {
-  sessionId: string;
-  userId:    string;
-  companyId: string | null;
-}
-
-export async function validateSession(token: string): Promise<ValidSession | null> {
-  const [session] = await db
-    .select({
-      id:        sessions.id,
-      userId:    sessions.userId,
-      companyId: sessions.companyId,
-      expiresAt: sessions.expiresAt,
-      isValid:   sessions.isValid,
-    })
-    .from(sessions)
-    .where(eq(sessions.id, token))
-    .limit(1);
-
-  if (!session || !session.isValid) return null;
-  if (session.expiresAt < new Date()) {
-    await db.update(sessions)
-      .set({ isValid: false })
-      .where(eq(sessions.id, token));
-    return null;
-  }
-
-  // Slide the window
-  await db.update(sessions)
-    .set({ lastActiveAt: new Date(), expiresAt: expiresAt() })
-    .where(eq(sessions.id, token));
-
-  return {
-    sessionId: session.id,
-    userId:    session.userId,
-    companyId: session.companyId,
-  };
-}
 
 // ── Invalidate a specific session (logout) ───────────────────
 export async function invalidateSession(token: string): Promise<void> {
