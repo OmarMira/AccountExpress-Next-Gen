@@ -3,8 +3,9 @@ import { db } from "../db/connection.ts";
 import { sessions } from "../db/schema/system.schema.ts";
 import { eq, and } from "drizzle-orm";
 
-export const authMiddleware = new Elysia({ name: "auth-middleware" })
-  .derive({ as: "scoped" }, async ({ cookie }) => {
+// 1. Only injects data (always proceeds)
+export const authMiddleware = new Elysia({ name: "auth-data" })
+  .derive({ as: "global" }, async ({ cookie }) => {
     const sessionId = cookie.session?.value ? String(cookie.session.value) : "";
     if (!sessionId) return { user: "", companyId: null, sessionId: "" };
 
@@ -30,10 +31,14 @@ export const authMiddleware = new Elysia({ name: "auth-middleware" })
       companyId: dbSession.companyId ?? null,
       sessionId
     };
-  })
-  .onBeforeHandle({ as: "scoped" }, (context: any) => {
-    if (!context.user) {
-      context.set.status = 401;
+  });
+
+// 2. Blocks if not user (strict)
+export const isAuthenticated = new Elysia({ name: "auth-guard" })
+  .use(authMiddleware)
+  .onBeforeHandle({ as: "scoped" }, ({ user, set }: any) => {
+    if (!user) {
+      set.status = 401;
       return { error: "Not authenticated" };
     }
   });
