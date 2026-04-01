@@ -1,4 +1,0 @@
-[DB] Connected to PostgreSQL
-========================================
-   LAYER 2: TIMING ATTACK RESISTANCE    
-========================================
