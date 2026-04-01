@@ -10,10 +10,10 @@ import {
   deactivateAccount,
 } from "../services/accounts.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { requireAuth } from "../middleware/auth.middleware.ts";
 
 export const accountsRoutes = new Elysia({ prefix: "/accounts" })
-  .use(authMiddleware)
+  .guard({ beforeHandle: requireAuth })
 
   // GET /accounts?companyId=
   .use(requirePermission("accounts", "read"))

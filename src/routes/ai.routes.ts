@@ -8,7 +8,7 @@
 import { Elysia, t } from "elysia";
 
 import { chatWithOllama } from "../services/ai/ai.service.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { requireAuth } from "../middleware/auth.middleware.ts";
 
 export const aiRoutes = new Elysia({ prefix: "/ai" })
 
@@ -42,7 +42,7 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
 
   // ── POST /ai/chat — chat con streaming ────────────────────
   .group("", app => app
-    .use(authMiddleware)
+    .guard({ beforeHandle: requireAuth })
     .post("/chat", async ({ body, set }) => {
       const { messages, companyId } = body;
 

@@ -3,11 +3,10 @@ import { db } from '../db/connection';
 import { bankAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { authMiddleware } from '../middleware/auth.middleware.ts';
-
+import { requireAuth } from "../middleware/auth.middleware.ts";
 
 export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
-  .use(authMiddleware)
+  .guard({ beforeHandle: requireAuth })
   .get('/', async ({ query }) => {
     const { companyId } = query as { companyId?: string };
     if (!companyId) return [];

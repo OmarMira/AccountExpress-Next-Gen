@@ -9,10 +9,10 @@ import { auditLogs } from "../db/schema/index.ts";
 import { eq, and, desc } from "drizzle-orm";
 
 import { verifyAuditChain } from "../services/audit.service.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { requireAuth } from "../middleware/auth.middleware.ts";
 
 export const auditRoutes = new Elysia({ prefix: "/audit" })
-  .use(authMiddleware)
+  .guard({ beforeHandle: requireAuth })
 
   // GET /audit?companyId=&module=&limit=&offset=
   .get("/", async ({ query, set }) => {

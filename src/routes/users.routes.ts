@@ -7,7 +7,7 @@
 import { Elysia, t } from "elysia";
 
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 import {
   listUsers,
   listRoles,
@@ -22,6 +22,7 @@ import { eq, and, isNull } from "drizzle-orm";
 
 export const usersRoutes = new Elysia({ prefix: "/users" })
   .use(authMiddleware)
+  .guard({ beforeHandle: requireAuth })
 
   // ── GET /users?companyId=xxx ──────────────────────────────
   .get("/", async ({ query, set }) => {

@@ -7,7 +7,7 @@ import { statementImportService } from "../services/bank/statement-import.servic
 import { suggestAccountBatch } from "../services/bank/smart-match.service.ts";
 import { matchTransaction, ignoreTransaction } from "../services/bank/reconciliation.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
 import { db, sql } from "../db/connection.ts";
 import { eq, and } from "drizzle-orm";
@@ -15,6 +15,7 @@ import { bankTransactions } from "../db/schema/index.ts";
 
 export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(authMiddleware)
+  .guard({ beforeHandle: requireAuth })
   // ─────────────────────────────────────────────────────────────
   // 1. IMPORT CSV (bank:create)
   // ─────────────────────────────────────────────────────────────

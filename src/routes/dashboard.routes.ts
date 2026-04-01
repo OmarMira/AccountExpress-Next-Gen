@@ -10,8 +10,10 @@ import { eq, and, lte } from "drizzle-orm";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { verifyAuditChain } from "../services/audit.service.ts";
 import { getBalanceSheet } from "../services/reports/balance-sheet.service.ts";
+import { requireAuth } from "../middleware/auth.middleware.ts";
 
 export const dashboardRoutes = new Elysia({ prefix: "/dashboard" })
+  .guard({ beforeHandle: requireAuth })
   .use(requirePermission("reports", "read"))
   .get("/", async ({ query, set }) => {
     const companyId = query.companyId;

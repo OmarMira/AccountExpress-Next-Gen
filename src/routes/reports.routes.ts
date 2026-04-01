@@ -12,13 +12,13 @@ import { generateCpaSummary } from "../services/reports/cpa-summary.service.ts";
 import { buildCpaPdf } from "../services/reports/pdf-builder.service.ts";
 
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { requireAuth } from "../middleware/auth.middleware.ts";
 
 export const reportsRoutes = new Elysia()
   // ── Reports Group ──────────────────────────────────────────
   .group("/reports", (app) =>
     app
-      .use(authMiddleware)
+      .guard({ beforeHandle: requireAuth })
       .use(requirePermission("reports", "read"))
 
       .get("/balance-sheet", async ({ query, set }) => {
@@ -73,7 +73,7 @@ export const reportsRoutes = new Elysia()
   // ── Export Group ───────────────────────────────────────────
   .group("/export", (app) =>
     app
-      .use(authMiddleware)
+      .guard({ beforeHandle: requireAuth })
       .use(requirePermission("reports", "export"))
 
       .post("/cpa-summary", async ({ body, set }) => {

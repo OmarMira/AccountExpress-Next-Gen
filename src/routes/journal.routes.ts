@@ -13,10 +13,11 @@ import {
 } from "../services/journal.service.ts";
 import { voidEntry } from "../services/journal-void.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const journalRoutes = new Elysia({ prefix: "/journal" })
   .use(authMiddleware)
+  .guard({ beforeHandle: requireAuth })
 
   // GET /journal?companyId=&status=&periodId=
   .get("/", async ({ query, set }) => {

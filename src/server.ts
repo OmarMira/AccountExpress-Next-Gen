@@ -38,8 +38,8 @@ export const app = new Elysia()
     time:    new Date().toISOString(),
   }))
 
-  // ── Route groups ──────────────────────────────────────────
   .group("/api", (app) => app
+    .use(authMiddleware)
     .use(authRoutes)
     .use(companiesRoutes)
     .use(journalRoutes)

@@ -12,10 +12,10 @@ import {
   getPeriod,
 } from "../services/fiscal-period.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { requireAuth } from "../middleware/auth.middleware.ts";
 
 export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
-  .use(authMiddleware)
+  .guard({ beforeHandle: requireAuth })
 
   // GET /fiscal-periods?companyId=&status=
   .get("/", async ({ query, set }) => {
