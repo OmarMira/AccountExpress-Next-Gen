@@ -75,7 +75,7 @@ export const ImportHistory: React.FC = () => {
               <th className="px-6 py-4">Descripción</th>
               <th className="px-6 py-4 text-right">Monto</th>
               <th className="px-6 py-4 text-center">Estado</th>
-              {showAssign && <th className="px-6 py-4">Cuenta Contable</th>}
+              <th className="px-6 py-4">Cuenta Contable</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/40">
@@ -93,14 +93,15 @@ export const ImportHistory: React.FC = () => {
                 <td className="px-6 py-4 text-center">
                   <span className={`inline-flex px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${
                     t.status === 'reconciled' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                    : t.status === 'assigned' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                     : t.status === 'ignored' ? 'bg-slate-800 text-slate-400 border-slate-700'
                     : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
                   }`}>
-                    {t.status === 'reconciled' ? 'Conciliado' : t.status === 'ignored' ? 'Ignorado' : 'Pendiente'}
+                    {t.status === 'reconciled' ? 'Conciliado' : t.status === 'assigned' ? 'Asignado' : t.status === 'ignored' ? 'Ignorado' : 'Pendiente'}
                   </span>
                 </td>
-                {showAssign && (
-                  <td className="px-6 py-4">
+                <td className="px-6 py-4">
+                  {showAssign ? (
                     <div className="relative">
                       <select
                         defaultValue={t.glAccountId || ''}
@@ -119,8 +120,14 @@ export const ImportHistory: React.FC = () => {
                       </select>
                       <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
-                  </td>
-                )}
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                      {glAccounts.find((a: any) => a.id === t.glAccountId) 
+                        ? `${glAccounts.find((a: any) => a.id === t.glAccountId).code} · ${glAccounts.find((a: any) => a.id === t.glAccountId).name}`
+                        : t.status === 'ignored' ? '— Omitida —' : '— Sin asignar —'}
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

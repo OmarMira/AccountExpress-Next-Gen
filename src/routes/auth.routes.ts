@@ -161,25 +161,24 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   // ── POST /auth/select-company ─────────────────────────────
   .post(
     "/select-company",
-    async ({ body, cookie, request, set }) => {
-      const token = (cookie["session"].value as string);
-      if (!token) { set.status = 401; return { error: "Not authenticated" }; }
+    async ({ body, user, sessionId, request, set }) => {
+      if (!user) { set.status = 401; return { error: "Not authenticated" }; }
       
       const [session] = await db
-        .select()
+        .select({ companyId: sessions.companyId })
         .from(sessions)
-        .where(and(eq(sessions.id, token), eq(sessions.isValid, true)))
+        .where(eq(sessions.id, sessionId))
         .limit(1);
 
       if (!session) { set.status = 401; return { error: "Invalid session" }; }
       if (session.companyId) { set.status = 400; return { error: "Company already selected. Use /switch-company instead." }; }
 
       const [role] = await db
-        .select()
+        .select({ id: userCompanyRoles.id })
         .from(userCompanyRoles)
         .where(
           and(
-            eq(userCompanyRoles.userId, session.userId),
+            eq(userCompanyRoles.userId, user),
             eq(userCompanyRoles.companyId, body.companyId),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
@@ -188,19 +187,19 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         .limit(1);
 
       if (!role) {
-        const [user] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, session.userId)).limit(1);
-        if (!user || !user.isSuperAdmin) {
+        const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+        if (!dbUser || !dbUser.isSuperAdmin) {
           set.status = 403; return { error: "Access denied to this company" };
         }
       }
 
-      await switchSessionCompany(token, body.companyId);
+      await switchSessionCompany(sessionId, body.companyId);
 
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
-        companyId: body.companyId, userId: session.userId, sessionId: token,
+        companyId: body.companyId, userId: user, sessionId,
         action: "session:select_company", module: "auth",
-        entityType: "session", entityId: token,
+        entityType: "session", entityId: sessionId,
         beforeState: null, afterState: { result: "company_selected", companyId: body.companyId }, ipAddress: ip,
       });
 
@@ -212,24 +211,15 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   // ── POST /auth/switch-company ─────────────────────────────
   .post(
     "/switch-company",
-    async ({ body, cookie, request, set }) => {
-      const token = (cookie["session"].value as string);
-      if (!token) { set.status = 401; return { error: "Not authenticated" }; }
+    async ({ body, user, sessionId, request, set }) => {
+      if (!user) { set.status = 401; return { error: "Not authenticated" }; }
       
-      const [session] = await db
-        .select()
-        .from(sessions)
-        .where(and(eq(sessions.id, token), eq(sessions.isValid, true)))
-        .limit(1);
-
-      if (!session) { set.status = 401; return { error: "Invalid session" }; }
-
       const [role] = await db
-        .select()
+        .select({ id: userCompanyRoles.id })
         .from(userCompanyRoles)
         .where(
           and(
-            eq(userCompanyRoles.userId, session.userId),
+            eq(userCompanyRoles.userId, user),
             eq(userCompanyRoles.companyId, body.companyId),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
@@ -238,20 +228,20 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         .limit(1);
 
       if (!role) {
-        const [user] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, session.userId)).limit(1);
-        if (!user || !user.isSuperAdmin) {
+        const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+        if (!dbUser || !dbUser.isSuperAdmin) {
           set.status = 403; return { error: "Access denied to this company" };
         }
       }
 
-      await switchSessionCompany(token, body.companyId);
+      await switchSessionCompany(sessionId, body.companyId);
 
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
-        companyId: body.companyId, userId: session.userId, sessionId: token,
+        companyId: body.companyId, userId: user, sessionId,
         action: "session:switch_company", module: "auth",
-        entityType: "session", entityId: token,
-        beforeState: { companyId: session.companyId }, afterState: { result: "company_switched", companyId: body.companyId }, ipAddress: ip,
+        entityType: "session", entityId: sessionId,
+        beforeState: null, afterState: { result: "company_switched", companyId: body.companyId }, ipAddress: ip,
       });
 
       return { message: "Company switched successfully" };
