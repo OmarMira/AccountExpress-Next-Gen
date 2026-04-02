@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+
+echo "🔍 Scanning for secrets with GitLeaks..."
+gitleaks protect --staged --redact 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ GitLeaks detected secrets in staged files. Commit aborted."
+  exit 1
+fi
+echo "✅ No secrets detected."

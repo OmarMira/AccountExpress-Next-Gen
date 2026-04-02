@@ -1,0 +1,16 @@
+title = "AccountExpress GitLeaks Configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allow placeholder passwords in SQL setup files"
+paths = [
+  "scripts/create-pg-user.sql"
+]
+
+[[allowlists]]
+description = "Allow example values in .env.example"
+paths = [
+  ".env.example"
+]
