@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // REPORTS & EXPORT ROUTES
 // Routes for financial reports and CPA tax export
 // ============================================================
@@ -10,6 +10,7 @@ import { getTrialBalance } from "../services/reports/trial-balance.service.ts";
 import { getCashFlow } from "../services/reports/cash-flow.service.ts";
 import { generateCpaSummary } from "../services/reports/cpa-summary.service.ts";
 import { buildCpaPdf } from "../services/reports/pdf-builder.service.ts";
+import { getAgingReport } from "../services/reports/aging.service.ts";
 
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { requireAuth } from "../middleware/auth.middleware.ts";
@@ -68,6 +69,21 @@ export const reportsRoutes = new Elysia()
           endDate: t.String(),
         })
       })
+
+      .get("/aging", async ({ query, set }) => {
+        try {
+          const asOfDate = query.asOfDate ?? new Date().toISOString().split("T")[0];
+          return { success: true, data: await getAgingReport(query.companyId, asOfDate) };
+        } catch (err: any) {
+          set.status = 400;
+          return { success: false, error: err.message };
+        }
+      }, {
+        query: t.Object({
+          companyId: t.String(),
+          asOfDate: t.Optional(t.String()),
+        })
+      })
   )
 
   // ── Export Group ───────────────────────────────────────────
@@ -112,6 +128,21 @@ export const reportsRoutes = new Elysia()
         query: t.Object({
           companyId: t.String(),
           periodId: t.String(),
+        })
+      })
+
+      .get("/aging", async ({ query, set }) => {
+        try {
+          const asOfDate = query.asOfDate ?? new Date().toISOString().split("T")[0];
+          return { success: true, data: await getAgingReport(query.companyId, asOfDate) };
+        } catch (err: any) {
+          set.status = 400;
+          return { success: false, error: err.message };
+        }
+      }, {
+        query: t.Object({
+          companyId: t.String(),
+          asOfDate: t.Optional(t.String()),
         })
       })
   );
