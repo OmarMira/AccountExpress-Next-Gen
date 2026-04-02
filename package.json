@@ -17,7 +17,8 @@
     "test:double-entry": "bun run scripts/test-double-entry.ts",
     "test:audit-chain": "bun run scripts/test-audit-chain.ts",
     "test:fiscal-trigger": "bun run scripts/test-fiscal-trigger.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+    "setup:ai": "bun run scripts/setup-ollama.ts"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",

@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
@@ -38,7 +38,7 @@ export function Reports() {
 
   const { data: agingReport, isLoading: loadAging } = useQuery({
     queryKey: ['report-aging', activeCompany?.id, asOfDate],
-    queryFn: () => fetchApi(/reports/aging?companyId=+activeCompany?.id+&asOfDate=+asOfDate),
+    queryFn: () => fetchApi(`/reports/aging?companyId=${activeCompany?.id}&asOfDate=${asOfDate}`),
     enabled: !!activeCompany && activeTab === 'aging'
   });
 
@@ -421,11 +421,11 @@ export function Reports() {
                 </div>
                 {agingReport.data.buckets.map((bucket: any) => (
                   <div key={bucket.label} className="mb-6">
-                    <div className={lex justify-between items-center p-3 rounded-lg mb-2 +$\{bucket.minDays >= 91 ? 'bg-red-900/30 border border-red-800/50' : bucket.minDays >= 61 ? 'bg-orange-900/30 border border-orange-800/50' : bucket.minDays >= 31 ? 'bg-yellow-900/30 border border-yellow-800/50' : 'bg-gray-800/50 border border-gray-700/50'}}>
-                      <span className={ont-bold text-sm +$\{bucket.minDays >= 91 ? 'text-red-400' : bucket.minDays >= 61 ? 'text-orange-400' : bucket.minDays >= 31 ? 'text-yellow-400' : 'text-gray-300'}}>{bucket.label}</span>
+                    <div className={`flex justify-between items-center p-3 rounded-lg mb-2 ${bucket.minDays >= 91 ? 'bg-red-900/30 border border-red-800/50' : bucket.minDays >= 61 ? 'bg-orange-900/30 border border-orange-800/50' : bucket.minDays >= 31 ? 'bg-yellow-900/30 border border-yellow-800/50' : 'bg-gray-800/50 border border-gray-700/50'}`}>
+                      <span className={`font-bold text-sm ${bucket.minDays >= 91 ? 'text-red-400' : bucket.minDays >= 61 ? 'text-orange-400' : bucket.minDays >= 31 ? 'text-yellow-400' : 'text-gray-300'}`}>{bucket.label}</span>
                       <div className="flex gap-4 text-sm">
                         <span className="text-gray-400">{bucket.count} transacciones</span>
-                        <span className="font-mono font-bold text-white">$\{bucket.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="font-mono font-bold text-white">${bucket.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
                     </div>
                     {bucket.transactions.length > 0 && (
@@ -436,7 +436,7 @@ export function Reports() {
                               <td className="py-2 pl-4 text-gray-500 font-mono w-28">{tx.transactionDate}</td>
                               <td className="py-2 text-gray-300">{tx.description}</td>
                               <td className="py-2 pr-4 text-right font-mono text-gray-400">{tx.daysPending}d</td>
-                              <td className="py-2 pr-4 text-right font-mono text-white">$\{Math.abs(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                              <td className="py-2 pr-4 text-right font-mono text-white">${Math.abs(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             </tr>
                           ))}
                         </tbody>

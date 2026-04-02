@@ -207,7 +207,7 @@ export function AIPanel({ onClose }: AIPanelProps) {
             <Loader2 size={14} className="text-gray-400 animate-spin" />
           ) : status?.mistralReady ? (
             <span className="flex items-center gap-1 text-green-400 text-xs">
-              <CheckCircle2 size={13} /> Mistral activo
+              <CheckCircle2 size={13} /> IA Local activa
             </span>
           ) : (
             <span className="flex items-center gap-1 text-red-400 text-xs">

@@ -8,7 +8,7 @@
 import { db, sql } from "../../db/connection.ts";
 
 const OLLAMA_URL = "http://localhost:11434/api/chat";
-const MODEL      = "mistral";
+const MODEL      = "phi3:mini";
 
 const SYSTEM_PROMPT = `You are a strict bookkeeping assistant for a small business accounting system.
 
