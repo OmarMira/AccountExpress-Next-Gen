@@ -1,6 +1,6 @@
 // ============================================================
 // AI PANEL
-// Panel lateral de chat con Ollama/Mistral.
+// Panel lateral de chat con Ollama/Phi-3:mini.
 // Se abre desde cualquier pantalla via AppShell.
 // ============================================================
 
@@ -17,7 +17,7 @@ interface Message {
 
 interface OllamaStatus {
   ollamaRunning: boolean;
-  mistralReady: boolean;
+  asistenteListo: boolean;
 }
 
 // ── Comandos rápidos ──────────────────────────────────────────
@@ -47,7 +47,9 @@ export function AIPanel({ onClose }: AIPanelProps) {
 
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [pulling, setPulling]               = useState(false);
-  const [pullError, setPullError]           = useState<string | null>(null);
+  const [pullError, setPullError]           = useState(false);
+  const [bytesDescargados, setBytesDescargados] = useState(0);
+  const [totalBytes, setTotalBytes]             = useState(0);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLTextAreaElement>(null);
@@ -58,47 +60,53 @@ export function AIPanel({ onClose }: AIPanelProps) {
     fetch('/api/ai/status', { credentials: 'include' })
       .then((r) => r.json())
       .then((d) => setStatus(d.data))
-      .catch(() => setStatus({ ollamaRunning: false, mistralReady: false }))
+      .catch(() => setStatus({ ollamaRunning: false, asistenteListo: false }))
       .finally(() => setStatusLoading(false));
   }, []);
 
-  // Auto-pull Mistral si Ollama corre pero modelo no está
-  useEffect(() => {
-    if (!statusLoading && status?.ollamaRunning && !status?.mistralReady && !pulling) {
-      setPulling(true);
-      setPullError(null);
-      fetch('/api/ai/pull-model', { method: 'POST', credentials: 'include' })
-        .then((r) => r.json())
-        .then((d) => {
-          if (!d.success) {
-            setPullError(d.error ?? 'Error iniciando descarga');
-            setPulling(false);
-          }
-        })
-        .catch((err) => {
-          setPullError(err.message);
-          setPulling(false);
-        });
-    }
-  }, [statusLoading, status]);
+  const iniciarInstalacion = async () => {
+    setPulling(true);
+    setPullError(false);
+    setBytesDescargados(0);
+    setTotalBytes(0);
 
-  // Polling cada 10 segundos hasta que Mistral esté listo
-  useEffect(() => {
-    if (!pulling) return;
-    const interval = setInterval(() => {
-      fetch('/api/ai/status', { credentials: 'include' })
-        .then((r) => r.json())
-        .then((d) => {
-          setStatus(d.data);
-          if (d.data?.mistralReady) {
-            setPulling(false);
-            clearInterval(interval);
-          }
-        })
-        .catch(() => {});
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [pulling]);
+    try {
+      const response = await fetch("/api/ai/pull-model");
+      if (!response.body) throw new Error("Sin respuesta");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        const lines = text.split("\n").filter(l => l.startsWith("data: "));
+
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line.replace("data: ", ""));
+            if (json.bytesDescargados) {
+              setBytesDescargados(json.bytesDescargados);
+              setTotalBytes(json.total);
+            }
+            if (json.completo) {
+              setPulling(false);
+              setStatus(prev => prev ? { ...prev, asistenteListo: true } : prev);
+            }
+            if (json.error) {
+              setPullError(true);
+              setPulling(false);
+            }
+          } catch { /* ignorar */ }
+        }
+      }
+    } catch {
+      setPullError(true);
+      setPulling(false);
+    }
+  };
 
   // ── Auto-scroll ───────────────────────────────────────────
 
@@ -118,7 +126,6 @@ export function AIPanel({ onClose }: AIPanelProps) {
     if (os === 'linux') return;
     setDownloadStarted(true);
 
-    // Descarga nativa del browser — sin cargar en RAM
     const a = document.createElement('a');
     a.href = `/api/ai/download-ollama?os=${os}`;
     a.download = os === 'windows' ? 'OllamaSetup.exe' : 'Ollama-darwin.zip';
@@ -130,7 +137,7 @@ export function AIPanel({ onClose }: AIPanelProps) {
   // ── Enviar mensaje ────────────────────────────────────────
 
   const sendMessage = async (text: string) => {
-    if (!text.trim() || isStreaming || !status?.mistralReady) return;
+    if (!text.trim() || isStreaming || !status?.asistenteListo) return;
 
     const userMessage: Message = { role: 'user', content: text.trim() };
     const updatedMessages = [...messages, userMessage];
@@ -138,7 +145,6 @@ export function AIPanel({ onClose }: AIPanelProps) {
     setInput('');
     setIsStreaming(true);
 
-    // Placeholder para la respuesta del asistente
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
     try {
@@ -202,16 +208,15 @@ export function AIPanel({ onClose }: AIPanelProps) {
           <span className="text-white font-semibold text-sm">Asistente Contable</span>
         </div>
         <div className="flex items-center gap-3">
-          {/* Estado Ollama */}
           {statusLoading ? (
             <Loader2 size={14} className="text-gray-400 animate-spin" />
-          ) : status?.mistralReady ? (
+          ) : status?.asistenteListo ? (
             <span className="flex items-center gap-1 text-green-400 text-xs">
               <CheckCircle2 size={13} /> IA Local activa
             </span>
           ) : (
             <span className="flex items-center gap-1 text-red-400 text-xs">
-              <AlertCircle size={13} /> Ollama offline
+              <AlertCircle size={13} /> Asistente Offline
             </span>
           )}
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
@@ -220,15 +225,15 @@ export function AIPanel({ onClose }: AIPanelProps) {
         </div>
       </div>
 
-      {/* Ollama offline — botón de instalación */}
+      {/* Asistente offline — botón de instalación */}
       {!statusLoading && !status?.ollamaRunning && (
         <div className="mx-4 mt-4 p-4 bg-gray-800 border border-gray-700 rounded-xl space-y-3">
           <div className="flex items-center gap-2 text-yellow-400">
             <AlertCircle size={16} />
-            <span className="text-sm font-semibold">Ollama no está instalado</span>
+            <span className="text-sm font-semibold">Asistente no disponible</span>
           </div>
           <p className="text-gray-400 text-xs">
-            Para usar el asistente IA necesitás instalar Ollama en tu computadora.
+            Para usar el asistente contable necesitás instalar el motor de IA en tu computadora.
           </p>
           {detectOS() === 'linux' ? (
             <div className="space-y-2">
@@ -244,8 +249,7 @@ export function AIPanel({ onClose }: AIPanelProps) {
                 Descarga iniciada
               </div>
               <p className="text-gray-400 text-xs">
-                Revisá tu carpeta de Downloads.<br />
-                Una vez instalado ejecutá: <code className="text-gray-300">ollama pull mistral</code>
+                Terminá la instalación y luego volvé aquí para activar el asistente.
               </p>
               <button
                 onClick={() => setDownloadStarted(false)}
@@ -254,68 +258,54 @@ export function AIPanel({ onClose }: AIPanelProps) {
                 Descargar de nuevo
               </button>
             </div>
-          ) : downloadStarted ? (
-            <div className="space-y-2">
-              <div className="text-xs text-gray-400 mb-1">
-                Descargando Ollama...
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                <div className="bg-blue-500 h-2 rounded-full animate-slide" />
-              </div>
-              <p className="text-gray-500 text-xs text-center animate-pulse">
-                Instalador descargándose, por favor esperá...
-              </p>
-            </div>
           ) : (
             <button
               onClick={handleDownloadOllama}
               className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors"
             >
-              Descargar Ollama ({detectOS() === 'windows' ? 'Windows' : 'macOS'})
+              Descargar Motor IA ({detectOS() === 'windows' ? 'Windows' : 'macOS'})
             </button>
           )}
         </div>
       )}
 
-      {/* Auto-pull Mistral en progreso */}
-      {!statusLoading && status?.ollamaRunning && !status?.mistralReady && (
+      {/* Instalación en progreso */}
+      {!statusLoading && status?.ollamaRunning && !status?.asistenteListo && (
         <div className="mx-4 mt-4 p-4 bg-gray-800 border border-gray-700 rounded-xl space-y-3">
-          {pullError ? (
-            <>
-              <div className="flex items-center gap-2 text-red-400">
-                <AlertCircle size={16} />
-                <span className="text-sm font-semibold">Error descargando modelo</span>
-              </div>
-              <p className="text-red-300 text-xs">{pullError}</p>
-              <button
-                onClick={() => { setPullError(null); setPulling(false); }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded-lg transition-colors"
-              >
-                Reintentar
-              </button>
-            </>
-          ) : (
-            <>
+          {pulling ? (
+            <div className="mt-2 space-y-1">
               <div className="flex items-center gap-2 text-blue-400">
                 <Loader2 size={16} className="animate-spin" />
-                <span className="text-sm font-semibold">Descargando Mistral...</span>
+                <span className="text-sm font-semibold">Instalando asistente...</span>
               </div>
-              <p className="text-gray-400 text-xs">
-                Descargando el modelo de IA (~4 GB). Esto puede tardar varios minutos según tu conexión.
-              </p>
-              <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                <div className="bg-blue-500 h-2 rounded-full animate-slide" />
+              {totalBytes > 0 && (
+                <p className="text-xs text-gray-400">
+                  Descargado: {(bytesDescargados / 1024 / 1024 / 1024).toFixed(1)} GB de {(totalBytes / 1024 / 1024 / 1024).toFixed(1)} GB
+                </p>
+              )}
+              <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                <div 
+                  className="bg-blue-500 h-full transition-all duration-300" 
+                  style={{ width: `${(bytesDescargados / totalBytes) * 100}%` }}
+                />
               </div>
-              <p className="text-gray-500 text-xs text-center animate-pulse">
-                No cierres esta ventana...
-              </p>
-            </>
+            </div>
+          ) : (
+            <button
+              onClick={iniciarInstalacion}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 size={16} /> Instalar Asistente IA
+            </button>
+          )}
+          {pullError && (
+            <p className="text-xs text-red-400">Error al instalar. Intentá de nuevo.</p>
           )}
         </div>
       )}
 
       {/* Comandos rápidos — solo si no hay mensajes */}
-      {messages.length === 0 && status?.mistralReady && (
+      {messages.length === 0 && status?.asistenteListo && (
         <div className="p-4 space-y-2">
           <p className="text-gray-400 text-xs mb-3">Comandos rápidos:</p>
           {QUICK_COMMANDS.map((cmd) => (
@@ -358,14 +348,14 @@ export function AIPanel({ onClose }: AIPanelProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isStreaming || !status?.mistralReady}
-            placeholder={status?.mistralReady ? 'Preguntá algo... (Enter para enviar)' : 'Ollama offline'}
+            disabled={isStreaming || !status?.asistenteListo}
+            placeholder={status?.asistenteListo ? 'Preguntá algo... (Enter para enviar)' : 'Asistente offline'}
             rows={2}
             className="flex-1 bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 resize-none placeholder-gray-400 focus:outline-none focus:border-blue-500 disabled:opacity-50"
           />
           <button
             onClick={() => sendMessage(input)}
-            disabled={isStreaming || !input.trim() || !status?.mistralReady}
+            disabled={isStreaming || !input.trim() || !status?.asistenteListo}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white p-2 rounded-lg transition-colors flex-shrink-0"
           >
             {isStreaming

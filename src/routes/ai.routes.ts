@@ -18,15 +18,16 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
     try {
       const res = await fetch("http://localhost:11434/api/tags");
       if (!res.ok) throw new Error("Ollama not responding");
-      const data = await res.json() as any;
-      const models = data.models?.map((m: any) => m.name) ?? [];
-      const mistralReady = models.some((m: string) => m.includes("mistral"));
+      const { models } = await res.json() as { models: Array<{ name: string }> };
+      const modelNames = models?.map(m => m.name) ?? [];
+      const asistenteListo = modelNames.some(m => m.includes("phi3"));
+      
       return {
         success: true,
         data: {
           ollamaRunning: true,
-          mistralReady,
-          availableModels: models
+          asistenteListo,
+          availableModels: modelNames
         }
       };
     } catch {
@@ -34,7 +35,7 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
         success: false,
         data: {
           ollamaRunning: false,
-          mistralReady: false,
+          asistenteListo: false,
           availableModels: []
         }
       };
@@ -53,7 +54,6 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
       });
     }
 
-    // Inyectar contexto para validación post-respuesta
     const context = await buildFinancialContext(companyId);
     const encoder = new TextEncoder();
     const generator = chatWithOllama(messages, companyId);
@@ -67,7 +67,6 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
             controller.enqueue(encoder.encode(chunk));
           }
 
-          // Post-response validation: detect numbers in response not present in context
           const numbersInResponse = accumulated.match(/\$[\d,]+\.?\d*/g) ?? [];
           const contextString = JSON.stringify(context);
           const hallucinated = numbersInResponse.filter(n => {
@@ -78,8 +77,9 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
             const warning = `\n\n⚠️ *Nota: Los siguientes valores no fueron encontrados en el contexto financiero verificado: ${hallucinated.join(", ")}. Verificá manualmente.*`;
             controller.enqueue(encoder.encode(warning));
           }
-        } catch (err: any) {
-          const msg = err?.name === "AbortError"
+        } catch (err: unknown) {
+          const errorMsg = err instanceof Error ? err.name : "UnknownError";
+          const msg = errorMsg === "AbortError"
             ? "\n[Error: AI response timed out after 60 seconds]"
             : "\n[Error: AI service unavailable]";
           controller.enqueue(encoder.encode(msg));
@@ -110,10 +110,66 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
     })
   })
 
+  // ── GET /ai/pull-model — streaming de descarga ────────────
+  .get("/pull-model", async ({ set }) => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const res = await fetch("http://localhost:11434/api/pull", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: "phi3:mini", stream: true }),
+          });
+
+          if (!res.body) {
+            controller.close();
+            return;
+          }
+
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value, { stream: true });
+            const lines = text.split("\n").filter(Boolean);
+
+            for (const line of lines) {
+              try {
+                const json = JSON.parse(line);
+                if (json.completed && json.total) {
+                  const data = { bytesDescargados: json.completed, total: json.total, status: json.status };
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                }
+                if (json.status === "success") {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ completo: true })}\n\n`));
+                }
+              } catch { /* ignorar ruido */ }
+            }
+          }
+        } catch {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: true })}\n\n`));
+        } finally {
+          controller.close();
+        }
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive"
+      }
+    });
+  })
+
   // ── GET /ai/download-ollama — proxy de descarga ───────────
   .get("/download-ollama", async ({ query, set }) => {
     const os = query.os as string;
-
     const urls: Record<string, string> = {
       windows: "https://ollama.com/download/OllamaSetup.exe",
       mac:     "https://ollama.com/download/Ollama-darwin.zip",
@@ -131,57 +187,14 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
       return { error: "Failed to fetch from ollama.com" };
     }
 
-    const contentLength = response.headers.get("Content-Length");
-
     return new Response(response.body, {
       headers: {
         "Content-Type":        "application/octet-stream",
         "Content-Disposition": `attachment; filename="${os === "windows" ? "OllamaSetup.exe" : "Ollama-darwin.zip"}"`,
-        ...(contentLength ? { "Content-Length": contentLength } : {}),
-        "Cache-Control": "no-cache",
+        "Cache-Control":       "no-cache",
       },
     });
   }, {
     query: t.Object({ os: t.String() })
-  })
-
-  // ── POST /ai/pull-model — inicia descarga de Mistral en Ollama ──
-  .post("/pull-model", async ({ set }) => {
-    try {
-      // Verificar que Ollama está corriendo
-      const ping = await fetch("http://localhost:11434/api/tags").catch(() => null);
-      if (!ping?.ok) {
-        set.status = 503;
-        return { success: false, error: "Ollama no está corriendo" };
-      }
-
-      // Lanzar el pull en un task asíncrono independiente.
-      // Ollama REQUIERE que el cliente drene el stream para que la descarga progrese.
-      // No usamos await aquí — el endpoint retorna inmediatamente.
-      (async () => {
-        try {
-          const res = await fetch("http://localhost:11434/api/pull", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: "mistral", stream: true }),
-          });
-          if (!res.body) return;
-          // Drenar el stream para que Ollama procese la descarga
-          const reader = res.body.getReader();
-          while (true) {
-            const { done } = await reader.read();
-            if (done) break;
-            // Descartamos el valor — solo importa mantener la conexión
-          }
-          console.log("[AI] Mistral pull completed");
-        } catch (err: any) {
-          console.error("[AI] Mistral pull failed:", err.message);
-        }
-      })();
-
-      return { success: true, message: "Pull initiated" };
-    } catch (err: any) {
-      set.status = 500;
-      return { success: false, error: err.message };
-    }
   });
+

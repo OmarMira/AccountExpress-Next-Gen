@@ -172,6 +172,36 @@ async function main() {
     err(`Ollama no responde. Inicialo manualmente con: ollama serve`);
   }
 
+  // Paso 5: Configurar arranque automático de Ollama
+  log("Configurando arranque automático de Ollama...");
+  if (os === "windows") {
+    const startupCmd = `"${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe" serve`;
+    spawnSync("reg", [
+      "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "/v", "OllamaServe",
+      "/t", "REG_SZ",
+      "/d", startupCmd,
+      "/f"
+    ], { shell: true });
+    log("Ollama configurado para iniciar con Windows. ✓");
+  } else if (os === "linux") {
+    const service = `[Unit]\nDescription=Ollama Service\nAfter=network.target\n\n[Service]\nExecStart=/usr/local/bin/ollama serve\nRestart=always\n\n[Install]\nWantedBy=default.target`;
+    const fs = require("fs");
+    const userDir = `${process.env.HOME}/.config/systemd/user`;
+    if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+    fs.writeFileSync(`${userDir}/ollama.service`, service);
+    spawnSync("systemctl", ["--user", "enable", "ollama"], { shell: true });
+    spawnSync("systemctl", ["--user", "start", "ollama"], { shell: true });
+    log("Ollama configurado como servicio systemd. ✓");
+  } else if (os === "macos") {
+    const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>Label</key><string>ollama.serve</string><key>ProgramArguments</key><array><string>/usr/local/bin/ollama</string><string>serve</string></array><key>RunAtLoad</key><true/></dict></plist>`;
+    const fs = require("fs");
+    const plistPath = `${process.env.HOME}/Library/LaunchAgents/ollama.serve.plist`;
+    fs.writeFileSync(plistPath, plist);
+    spawnSync("launchctl", ["load", plistPath], { shell: true });
+    log("Ollama configurado como LaunchAgent en macOS. ✓");
+  }
+
   log("=== Setup completo. El sistema de IA está listo. ✓ ===");
 }
 
