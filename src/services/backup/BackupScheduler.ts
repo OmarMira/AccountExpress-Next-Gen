@@ -59,7 +59,11 @@ export class BackupScheduler {
   }
 
   private async runScheduledBackup() {
-    const tempPassword = process.env.AUTO_BACKUP_SECRET || crypto.randomUUID();
+    const tempPassword = process.env.AUTO_BACKUP_SECRET;
+    if (!tempPassword) {
+      console.error("[BackupScheduler] AUTO_BACKUP_SECRET not set — scheduled backup aborted.");
+      return;
+    }
     let filename = "";
     try {
       const result = await this.backupService.createBackup(tempPassword);
