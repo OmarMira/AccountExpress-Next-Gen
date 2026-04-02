@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // DATABASE INDEXES
 // All 8 mandatory performance indexes for multi-tenant queries.
 // Applied once after migrations run.

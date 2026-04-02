@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // SCHEMA INDEX
 // Re-exports all table definitions for Drizzle Kit and app use.
 // Import from here — never import directly from individual schema files

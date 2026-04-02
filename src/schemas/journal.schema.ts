@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 // ============================================================
 // JOURNAL SCHEMAS — Input validation for journal routes

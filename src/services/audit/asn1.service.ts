@@ -1,4 +1,4 @@
-﻿// Manual ASN.1 TSQ (Timestamp Query) generator without external libraries
+// Manual ASN.1 TSQ (Timestamp Query) generator without external libraries
 
 export function buildTSQ_ASN1(messageHashHex: string): Uint8Array {
   // Convert hex to bytes

@@ -1,4 +1,4 @@
-﻿import { buildTSQ_ASN1 } from "./asn1.service.ts";
+import { buildTSQ_ASN1 } from "./asn1.service.ts";
 
 export async function stampChain(chainHash: string): Promise<string> {
   const encoder = new TextEncoder();

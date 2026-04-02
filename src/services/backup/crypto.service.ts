@@ -1,4 +1,4 @@
-﻿import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 
 const MAGIC = new TextEncoder().encode("AEX1");
 
