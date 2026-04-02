@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
@@ -7,7 +7,7 @@ import { FileBarChart, Download, Building, Calendar } from 'lucide-react';
 export function Reports() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   
-  const [activeTab, setActiveTab] = useState<'balance-sheet' | 'income-statement' | 'trial-balance' | 'cash-flow'>('balance-sheet');
+  const [activeTab, setActiveTab] = useState<'balance-sheet' | 'income-statement' | 'trial-balance' | 'cash-flow' | 'aging'>('balance-sheet');
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().substring(0, 10));
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().substring(0, 10));
   const [endDate, setEndDate] = useState(new Date().toISOString().substring(0, 10));
@@ -34,6 +34,12 @@ export function Reports() {
     queryKey: ['report-cash-flow', activeCompany?.id, startDate, endDate],
     queryFn: () => fetchApi(`/reports/cash-flow?companyId=${activeCompany?.id}&startDate=${startDate}&endDate=${endDate}`),
     enabled: !!activeCompany && activeTab === 'cash-flow'
+  });
+
+  const { data: agingReport, isLoading: loadAging } = useQuery({
+    queryKey: ['report-aging', activeCompany?.id, asOfDate],
+    queryFn: () => fetchApi(/reports/aging?companyId=+activeCompany?.id+&asOfDate=+asOfDate),
+    enabled: !!activeCompany && activeTab === 'aging'
   });
 
   const exportToCSV = (filename: string, rows: string[][]) => {
@@ -180,7 +186,8 @@ export function Reports() {
             { id: 'balance-sheet', name: 'Balance General' },
             { id: 'income-statement', name: 'Estado de Resultados' },
             { id: 'cash-flow', name: 'Flujo de Caja' },
-            { id: 'trial-balance', name: 'Bal. Comprobación' }
+            { id: 'trial-balance', name: 'Bal. Comprobación' },
+            { id: 'aging', name: 'Antigüedad' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -196,7 +203,7 @@ export function Reports() {
         <div className="flex-1 flex flex-col h-full bg-gray-800/20">
           <div className="p-4 border-b border-gray-700/80 bg-gray-900/30 flex items-center gap-4">
             <Calendar className="w-5 h-5 text-gray-500" />
-            {(activeTab === 'balance-sheet' || activeTab === 'trial-balance') ? (
+            {(activeTab === 'balance-sheet' || activeTab === 'trial-balance' || activeTab === 'aging') ? (
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-gray-400">A la fecha:</span>
                 <input 
@@ -233,7 +240,7 @@ export function Reports() {
           <div className="p-6 md:p-8 flex-1 overflow-auto bg-gray-900/20">
             
             {/* Loading State */}
-            {(loadBS || loadCF || loadIS || loadTB) && (
+            {(loadBS || loadCF || loadIS || loadTB || loadAging) && (
               <div className="flex flex-col items-center justify-center p-12 text-gray-500">
                 <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                 Compilando reporte contable...
@@ -397,6 +404,46 @@ export function Reports() {
                     {cashFlow.data.netCashChange.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* AGING REPORT RENDER */}
+            {!loadAging && activeTab === 'aging' && agingReport?.data && (
+              <div className="max-w-5xl mx-auto bg-gray-900 border border-gray-800 p-8 rounded-xl shadow-2xl">
+                <div className="text-center mb-8 border-b border-gray-800 pb-6">
+                  <h2 className="text-2xl font-black text-white uppercase tracking-widest">{activeCompany?.legalName}</h2>
+                  <h3 className="text-lg text-gray-400 mt-1">Reporte de Antigüedad — Transacciones Pendientes</h3>
+                  <p className="text-sm text-gray-500">A la fecha: {asOfDate}</p>
+                  <div className="flex justify-center gap-8 mt-4">
+                    <span className="text-sm text-gray-400">Total pendientes: <span className="font-bold text-white">{agingReport.data.totalPending}</span></span>
+                    <span className="text-sm text-gray-400">Monto total: <span className="font-bold text-amber-400">$\{agingReport.data.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></span>
+                  </div>
+                </div>
+                {agingReport.data.buckets.map((bucket: any) => (
+                  <div key={bucket.label} className="mb-6">
+                    <div className={lex justify-between items-center p-3 rounded-lg mb-2 +$\{bucket.minDays >= 91 ? 'bg-red-900/30 border border-red-800/50' : bucket.minDays >= 61 ? 'bg-orange-900/30 border border-orange-800/50' : bucket.minDays >= 31 ? 'bg-yellow-900/30 border border-yellow-800/50' : 'bg-gray-800/50 border border-gray-700/50'}}>
+                      <span className={ont-bold text-sm +$\{bucket.minDays >= 91 ? 'text-red-400' : bucket.minDays >= 61 ? 'text-orange-400' : bucket.minDays >= 31 ? 'text-yellow-400' : 'text-gray-300'}}>{bucket.label}</span>
+                      <div className="flex gap-4 text-sm">
+                        <span className="text-gray-400">{bucket.count} transacciones</span>
+                        <span className="font-mono font-bold text-white">$\{bucket.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                    {bucket.transactions.length > 0 && (
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-800/30">
+                          {bucket.transactions.map((tx: any) => (
+                            <tr key={tx.id} className="hover:bg-gray-800/20">
+                              <td className="py-2 pl-4 text-gray-500 font-mono w-28">{tx.transactionDate}</td>
+                              <td className="py-2 text-gray-300">{tx.description}</td>
+                              <td className="py-2 pr-4 text-right font-mono text-gray-400">{tx.daysPending}d</td>
+                              <td className="py-2 pr-4 text-right font-mono text-white">$\{Math.abs(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
