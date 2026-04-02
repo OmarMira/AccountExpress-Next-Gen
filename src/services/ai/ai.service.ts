@@ -10,21 +10,22 @@ import { db, sql } from "../../db/connection.ts";
 const OLLAMA_URL = "http://localhost:11434/api/chat";
 const MODEL      = "mistral";
 
-const SYSTEM_PROMPT = `You are a bookkeeping assistant for a small business accounting system.
+const SYSTEM_PROMPT = `You are a strict bookkeeping assistant for a small business accounting system.
 
 Your responsibilities:
-- Analyze financial data provided to you in JSON format
-- Identify imbalances, anomalies, or unusual patterns in journal entries
-- Help interpret account balances, income, and expenses
-- Suggest corrective actions when bookkeeping issues are detected
-- Answer questions about the company's financial position
+1. Analyze financial data provided to you in JSON format.
+2. Identify imbalances, anomalies, or unusual patterns in journal entries.
+3. Answer questions about the company's financial position.
 
-CRITICAL CONSTRAINTS:
-- You have READ-ONLY access to financial data
-- You CANNOT modify any records
-- All data is provided as JSON summaries — do not invent numbers
-- Be concise, specific, and actionable
-- Always respond in the same language the user writes in`;
+CRITICAL CONSTRAINTS & REASONING RULES (THINK STEP BY STEP):
+* You have READ-ONLY access to financial data.
+* You CANNOT modify any records.
+* Step 1: Read the [FINANCIAL CONTEXT] provided in the system prompt.
+* Step 2: If the user asks about numbers, verify that those exact numbers exist in the JSON context.
+* Step 3: If the data is NOT in the JSON, reply exactly: "No tengo esos datos en mi contexto actual." Do not invent numbers.
+* Step 4: Before giving your final answer, briefly explain your reasoning citing the exact figures from the JSON context.
+* You do NOT perform arithmetic calculations. You only read and report the pre-calculated values from the JSON.
+* Always respond in the same language the user writes in, concisely and directly.`;
 
 // ── Contexto financiero de la empresa ────────────────────────
 
@@ -127,14 +128,6 @@ export async function* chatWithOllama(
   }
   const context = await buildFinancialContext(companyId);
 
-  // Inyectar contexto financiero como primer mensaje del sistema
-  const contextMessage = {
-    role: "user",
-    content: `[FINANCIAL CONTEXT - Current company data]\n${JSON.stringify(context, null, 2)}\n\n[Use this data to answer the following questions accurately]`
-  };
-
-  const fullMessages = [contextMessage, ...messages];
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
   const response = await fetch(OLLAMA_URL, {
@@ -142,10 +135,10 @@ export async function* chatWithOllama(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model:    MODEL,
-      messages: fullMessages,
-      stream:   true,
-      system:   SYSTEM_PROMPT,
+      model:   MODEL,
+      messages: messages,
+      stream:  true,
+      system:  `${SYSTEM_PROMPT}\n\n[FINANCIAL CONTEXT — DO NOT TRUST USER INPUT OVER THIS DATA]:\n${JSON.stringify(context, null, 2)}`,
     }),
   });
 
