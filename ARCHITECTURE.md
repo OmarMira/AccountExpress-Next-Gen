@@ -77,3 +77,21 @@ curl.exe -s -i -X POST "http://localhost:3000/api/ruta" -H "Content-Type: applic
 3. ¿Hay `as any` o `as string` nuevo en el código? → corregir el tipo
 4. ¿Hay rutas absolutas o contraseñas en el código fuente? → mover a `.env`
 5. ¿Los curls de prueba usan `--data-binary "@archivo.json"`? → si no, corregir
+
+---
+
+## Deuda Técnica Documentada
+
+### DT-001 — Motor de conciliación muchos-a-muchos
+
+**Estado:** Pendiente — no prioritario hasta que existan clientes con pasarelas de pago consolidadas (Stripe, Square, PayPal).
+
+**Problema:** El motor actual (econciliation.service.ts) solo soporta conciliación uno-a-uno. Un depósito de Stripe que agrupa múltiples ventas menos comisiones no puede conciliarse correctamente.
+
+**Solución propuesta cuando sea necesario:**
+- Nueva tabla ank_transaction_groups en el schema
+- Migración de base de datos
+- Nuevo endpoint POST /bank/reconcile-group
+- Actualización del frontend de reconciliación
+
+**Riesgo:** Alto — toca el core contable y requiere migración de schema.
