@@ -1,17 +1,19 @@
 import { Glob } from "bun";
-const glob = new Glob("src/**/*.ts");
-let out = "================================================\nAccount Express Bookkeeping Core - Codebase Digest\n================================================\n\n";
+
+const glob = new Glob("src/**/*.{ts,tsx}");
+let out = "";
 
 for await (const file of glob.scan(".")) {
+  out += "================================================\n";
+  out += "FILE: " + file + "\n";
+  out += "================================================\n";
   try {
     const fileContent = await Bun.file(file).text();
-    out += "================================================\n";
-    out += "File: " + file + "\n";
-    out += "================================================\n";
     out += fileContent + "\n\n";
   } catch (e) {
-    console.warn("Could not read " + file);
+    out += "[Could not read file]\n\n";
   }
 }
+
 await Bun.write("gitingest-output.txt", out);
-console.log("Digest saved successfully to gitingest-output.txt");
+console.log("Digest saved to gitingest-output.txt");
