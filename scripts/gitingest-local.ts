@@ -1,17 +1,23 @@
 import { Glob } from "bun";
 
-const glob = new Glob("src/**/*.{ts,tsx}");
+const globs = [
+  new Glob("src/**/*.{ts,tsx}"),
+  new Glob("frontend/src/**/*.{ts,tsx}"),
+];
+
 let out = "";
 
-for await (const file of glob.scan(".")) {
-  out += "================================================\n";
-  out += "FILE: " + file + "\n";
-  out += "================================================\n";
-  try {
-    const fileContent = await Bun.file(file).text();
-    out += fileContent + "\n\n";
-  } catch (e) {
-    out += "[Could not read file]\n\n";
+for (const glob of globs) {
+  for await (const file of glob.scan(".")) {
+    out += "================================================\n";
+    out += "FILE: " + file + "\n";
+    out += "================================================\n";
+    try {
+      const fileContent = await Bun.file(file).text();
+      out += fileContent + "\n\n";
+    } catch (e) {
+      out += "[Could not read file]\n\n";
+    }
   }
 }
 
