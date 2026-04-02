@@ -14,6 +14,19 @@ const MODEL_NAME = "phi3:mini";
 
 // ── Utilidades ───────────────────────────────────────────────
 
+function downloadFile(url: string, dest: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        return downloadFile(res.headers.location!, dest).then(resolve).catch(reject);
+      }
+      const file = require("fs").createWriteStream(dest);
+      res.pipe(file);
+      file.on("finish", () => { file.close(); resolve(); });
+    }).on("error", reject);
+  });
+}
+
 function log(msg: string) { console.log(`[setup-ollama] ${msg}`); }
 function err(msg: string) { console.error(`[setup-ollama] ERROR: ${msg}`); process.exit(1); }
 
@@ -49,21 +62,11 @@ async function installWindows(): Promise<void> {
   const installer = path.join(tmpDir, "OllamaSetup.exe");
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
 
-  const file = require("fs").createWriteStream(installer);
   const url = "https://ollama.com/download/OllamaSetup.exe";
-
-  return new Promise<void>((resolve, reject) => {
-    https.get(url, (res) => {
-      res.pipe(file);
-      file.on("finish", () => {
-        file.close();
-        log("Instalador descargado. Ejecutando...");
-        const ok = runCommand(installer, ["/S"]);
-        if (!ok) reject(new Error("El instalador de Ollama falló en Windows."));
-        else resolve();
-      });
-    }).on("error", reject);
-  });
+  await downloadFile(url, installer);
+  log("Instalador descargado. Ejecutando...");
+  const ok = runCommand(installer, ["/S"]);
+  if (!ok) err("El instalador de Ollama falló en Windows.");
 }
 
 function installLinux(): void {
@@ -80,6 +83,40 @@ function installMacOS(): void {
   }
   const ok = runCommand("brew", ["install", "ollama"]);
   if (!ok) err("La instalación de Ollama via Homebrew falló.");
+}
+
+async function installGitleaks(os: "windows" | "linux" | "macos" | "unsupported"): Promise<void> {
+  const version = "8.18.4";
+  const homeDir = require("os").homedir();
+  const binDestDir = os === "windows" ? path.join(homeDir, ".local", "bin") : "/usr/local/bin";
+  const binName = os === "windows" ? "gitleaks.exe" : "gitleaks";
+  const binPath = path.join(binDestDir, binName);
+
+  const urls: Record<string, string> = {
+    windows: `https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_windows_x64.zip`,
+    linux:   `https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz`,
+    macos:   `https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_darwin_x64.tar.gz`,
+  };
+
+  const tmpDir  = os === "windows" ? path.join(homeDir, "AppData", "Local", "Temp", "gitleaks-setup") : "/tmp/gitleaks-setup";
+  const archive = os === "windows" ? path.join(tmpDir, "gitleaks.zip") : path.join(tmpDir, "gitleaks.tar.gz");
+
+  if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
+  if (!existsSync(binDestDir)) mkdirSync(binDestDir, { recursive: true });
+
+  log(`Descargando gitleaks v${version} para ${os}...`);
+  await downloadFile(urls[os], archive);
+
+  log("Extrayendo gitleaks...");
+  if (os === "windows") {
+    const ok = runCommand("powershell", ["-Command", `Expand-Archive -Path '${archive}' -DestinationPath '${tmpDir}' -Force; Copy-Item '${tmpDir}\\gitleaks.exe' '${binPath}' -Force`]);
+    if (!ok) err("No se pudo extraer o copiar gitleaks.exe en Windows.");
+  } else {
+    const ok = runCommand("tar", ["-xzf", archive, "-C", tmpDir]) &&
+               runCommand("sudo", ["cp", `${tmpDir}/gitleaks`, binPath]) &&
+               runCommand("sudo", ["chmod", "+x", binPath]);
+    if (!ok) err("No se pudo instalar gitleaks en Linux/macOS. Verificá permisos sudo.");
+  }
 }
 
 // ── Main ─────────────────────────────────────────────────────
@@ -116,7 +153,19 @@ async function main() {
     log(`Modelo ${MODEL_NAME} descargado correctamente. ✓`);
   }
 
-  // Paso 3: Verificar que Ollama responde
+  // Paso 3: Verificar/instalar gitleaks
+  const gitleaksCheck = spawnSync("gitleaks", ["version"], { stdio: "pipe", shell: true });
+  if (gitleaksCheck.status === 0) {
+    log("gitleaks ya está instalado. ✓");
+  } else {
+    log("gitleaks no encontrado. Instalando...");
+    await installGitleaks(os);
+    const verify = spawnSync("gitleaks", ["version"], { stdio: "pipe", shell: true });
+    if (verify.status !== 0) err("gitleaks se instaló pero no es detectable. Reiniciá la terminal.");
+    log("gitleaks instalado correctamente. ✓");
+  }
+
+  // Paso 4: Verificar que Ollama responde
   log("Verificando que Ollama está activo en localhost:11434...");
   const check = spawnSync("ollama", ["list"], { stdio: "pipe", shell: true });
   if (check.status !== 0) {
