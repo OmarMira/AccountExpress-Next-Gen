@@ -7,7 +7,7 @@
 
 import { Elysia, t } from "elysia";
 
-import { chatWithOllama } from "../services/ai/ai.service.ts";
+import { chatWithOllama, buildFinancialContext } from "../services/ai/ai.service.ts";
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const aiRoutes = new Elysia({ prefix: "/ai" })
@@ -53,20 +53,36 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
       });
     }
 
-    // Stream de respuesta
+    // Inyectar contexto para validación post-respuesta
+    const context = await buildFinancialContext(companyId);
+    const encoder = new TextEncoder();
     const generator = chatWithOllama(messages, companyId);
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          let accumulated = "";
           for await (const chunk of generator) {
-            controller.enqueue(new TextEncoder().encode(chunk));
+            accumulated += chunk;
+            controller.enqueue(encoder.encode(chunk));
+          }
+
+          // Post-response validation: detect numbers in response not present in context
+          const numbersInResponse = accumulated.match(/\$[\d,]+\.?\d*/g) ?? [];
+          const contextString = JSON.stringify(context);
+          const hallucinated = numbersInResponse.filter(n => {
+            const raw = n.replace(/[$,]/g, "");
+            return !contextString.includes(raw);
+          });
+          if (hallucinated.length > 0) {
+            const warning = `\n\n⚠️ *Nota: Los siguientes valores no fueron encontrados en el contexto financiero verificado: ${hallucinated.join(", ")}. Verificá manualmente.*`;
+            controller.enqueue(encoder.encode(warning));
           }
         } catch (err: any) {
           const msg = err?.name === "AbortError"
             ? "\n[Error: AI response timed out after 60 seconds]"
             : "\n[Error: AI service unavailable]";
-          controller.enqueue(new TextEncoder().encode(msg));
+          controller.enqueue(encoder.encode(msg));
         } finally {
           controller.close();
         }
