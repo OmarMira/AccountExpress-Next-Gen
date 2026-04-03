@@ -63,8 +63,9 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   // POST /fiscal-periods/:id/close
   .use(requirePermission("periods", "close"))
   .post("/:id/close", async ({ params, user, set }) => {
+    const uid = user!;
     try {
-      await closePeriod((params.id as string), user);
+      await closePeriod((params.id as string), uid);
       return { message: "Fiscal period closed" };
     } catch (err) {
       set.status = 422;
@@ -82,4 +83,3 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
       return { error: err instanceof Error ? err.message : "Unknown error" };
     }
   });
-

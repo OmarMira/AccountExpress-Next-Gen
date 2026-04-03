@@ -23,7 +23,7 @@ export function Dashboard() {
       try {
         setLoading(true);
         // We will implement the backend /api/dashboard endpoint, but for now we catch safely
-        const resp = await fetchApi('/dashboard').catch(() => ({ 
+        const resp = await fetchApi(`/dashboard?companyId=${activeCompany.id}`).catch(() => ({ 
           bankBalance: 0, 
           pendingCount: 0,
           income: 0,

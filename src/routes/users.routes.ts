@@ -40,6 +40,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
 
   // ── POST /users ───────────────────────────────────────────
   .post("/", async ({ body, set, user }) => {
+    const uid = user!;
     const { username, email, password, firstName, lastName, companyId, roleId } = body;
 
     try {
@@ -47,7 +48,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
         username, email, password,
         firstName, lastName,
         companyId, roleId,
-        grantedBy: user,
+        grantedBy: uid,
       });
       set.status = 201;
       return { success: true, data: result };
@@ -73,10 +74,11 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
 
   // ── PATCH /users/:userId ──────────────────────────────────
   .patch("/:userId", async ({ params, body, set, user, companyId: sessionCompanyId }) => {
+    const uid = user!;
     const [callerUser] = await db
       .select({ isSuperAdmin: users.isSuperAdmin })
       .from(users)
-      .where(eq(users.id, user))
+      .where(eq(users.id, uid))
       .limit(1);
 
     if (!callerUser?.isSuperAdmin) {
@@ -88,7 +90,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
         .from(userCompanyRoles)
         .where(
           and(
-            eq(userCompanyRoles.userId, user),
+            eq(userCompanyRoles.userId, uid),
             eq(userCompanyRoles.companyId, companyId),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
@@ -117,10 +119,11 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
 
   // ── PUT /users/:userId/role ───────────────────────────────
   .put("/:userId/role", async ({ params, body, set, user }) => {
+    const uid = user!;
     const [callerUser] = await db
       .select({ isSuperAdmin: users.isSuperAdmin })
       .from(users)
-      .where(eq(users.id, user))
+      .where(eq(users.id, uid))
       .limit(1);
 
     const { companyId, roleId } = body;
@@ -131,7 +134,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
         .from(userCompanyRoles)
         .where(
           and(
-            eq(userCompanyRoles.userId, user),
+            eq(userCompanyRoles.userId, uid),
             eq(userCompanyRoles.companyId, companyId),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
@@ -149,7 +152,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       userId: params.userId,
       companyId,
       roleId,
-      grantedBy: user,
+      grantedBy: uid,
     });
 
     return { success: true, data: result };
@@ -162,10 +165,11 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
 
   // ── POST /users/:userId/reset-password ────────────────────
   .post("/:userId/reset-password", async ({ params, body, set, user }) => {
+    const uid = user!;
     const [callerUser] = await db
       .select({ isSuperAdmin: users.isSuperAdmin })
       .from(users)
-      .where(eq(users.id, user))
+      .where(eq(users.id, uid))
       .limit(1);
 
     if (!callerUser?.isSuperAdmin) {

@@ -6,17 +6,17 @@ import { eq, and } from "drizzle-orm";
 export const authMiddleware = new Elysia({ name: "auth-data" })
   .derive({ as: "global" }, async ({ cookie }) => {
     const sessionId = cookie.session?.value ? String(cookie.session.value) : "";
-    if (!sessionId) return { user: "", companyId: null, sessionId: "" };
+    if (!sessionId) return { user: null as string | null, companyId: null as string | null, sessionId: "" };
 
     const dbSession = await db.query.sessions.findFirst({
       where: and(eq(sessions.id, sessionId), eq(sessions.isValid, true))
     });
 
-    if (!dbSession) return { user: "", companyId: null, sessionId: "" };
+    if (!dbSession) return { user: null as string | null, companyId: null as string | null, sessionId: "" };
 
     if (new Date(dbSession.expiresAt) < new Date()) {
       await db.update(sessions).set({ isValid: false }).where(eq(sessions.id, sessionId));
-      return { user: "", companyId: null, sessionId: "" };
+      return { user: null as string | null, companyId: null as string | null, sessionId: "" };
     }
 
     const now = new Date();
@@ -26,8 +26,8 @@ export const authMiddleware = new Elysia({ name: "auth-data" })
       .where(eq(sessions.id, sessionId));
 
     return {
-      user: dbSession.userId,
-      companyId: dbSession.companyId ?? null,
+      user: dbSession.userId as string,
+      companyId: dbSession.companyId ?? null as string | null,
       sessionId
     };
   });

@@ -41,6 +41,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   .post(
     "/",
     async ({ body, set, user }) => {
+      const uid = user!;
       try {
         const id = await createDraft(
           {
@@ -50,7 +51,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
             reference:   body.reference ?? null,
             isAdjusting: body.isAdjusting ?? false,
             periodId:    body.periodId,
-            createdBy:   user,
+            createdBy:   uid,
           },
           body.lines.map((l: any) => ({ ...l, description: l.description ?? null }))
         );
@@ -89,9 +90,11 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   // POST /journal/:id/post — validate + post
   .use(requirePermission("journal", "approve"))
   .post("/:id/post", async ({ params, request, set, user, sessionId }) => {
+    const uid = user!;
+    const sid = sessionId!;
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     try {
-      await post((params.id as string), user, sessionId, ip);
+      await post((params.id as string), uid, sid, ip);
       return { message: "Journal entry posted" };
     } catch (err) {
       if (err instanceof ValidationError) {
@@ -105,9 +108,11 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   // POST /journal/:id/void
   .use(requirePermission("journal", "void"))
   .post("/:id/void", async ({ params, request, set, user, sessionId }) => {
+    const uid = user!;
+    const sid = sessionId!;
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     try {
-      await voidEntry((params.id as string), user, sessionId, ip);
+      await voidEntry((params.id as string), uid, sid, ip);
       return { message: "Journal entry voided" };
     } catch (err) {
       if (err instanceof ValidationError) {
@@ -117,4 +122,3 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
       throw err;
     }
   });
-

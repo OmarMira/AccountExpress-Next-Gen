@@ -172,6 +172,8 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .post(
     "/reconcile/:id",
     async ({ params, body, request, set, user, sessionId }) => {
+      const uid = user!;
+      const sid = sessionId!;
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
       const draftId = await matchTransaction(
@@ -180,8 +182,8 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         body.targetAccountId,
         body.bankAccountId,
         body.periodId,
-        user,
-        sessionId,
+        uid,
+        sid,
         ip
       );
       
@@ -208,9 +210,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     .post(
     "/ignore/:id",
     async ({ params, body, request, set, user }) => {
+      const uid = user!;
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
-      await ignoreTransaction(body.companyId, params.id, user, ip);
+      await ignoreTransaction(body.companyId, params.id, uid, ip);
       return { success: true };
     },
     {

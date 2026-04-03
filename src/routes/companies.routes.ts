@@ -17,23 +17,26 @@ import {
   listCompanyUsers
 } from "../services/companies.service.ts";
 import { createAuditEntry } from "../services/audit.service.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
+import { authMiddleware, requireAuth } from "../middleware/auth.middleware.ts";
 
 export const companiesRoutes = new Elysia({ prefix: "/companies" })
   .use(authMiddleware)
+  .onBeforeHandle(requireAuth)
 
   // ── GET /companies ──────────────────────────────────────────
   .get("/", async ({ user }) => {
-    const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+    const uid = user!;
+    const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
     const isSuperAdmin = dbUser?.isSuperAdmin === true;
-    return await listCompanies(user, isSuperAdmin);
+    return await listCompanies(uid, isSuperAdmin);
   })
 
   // ── POST /companies ─────────────────────────────────────────
   .post(
     "/",
     async ({ body, user, sessionId, request, set }) => {
-      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      const uid = user!;
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
       if (!dbUser || !dbUser.isSuperAdmin) {
         set.status = 403; return { error: "Super Admin privileges required" };
       }
@@ -42,7 +45,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
       await createAuditEntry({
-        companyId: companyId, userId: user, sessionId,
+        companyId: companyId, userId: uid, sessionId,
         action: "companies:create", module: "companies",
         entityType: "company", entityId: companyId,
         beforeState: null, afterState: body, ipAddress: ip,
@@ -72,7 +75,8 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   .put(
     "/:id",
     async ({ params, body, user, sessionId, request, set }) => {
-      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      const uid = user!;
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
       const isSuperAdmin = dbUser?.isSuperAdmin === true;
 
       if (!isSuperAdmin) {
@@ -81,7 +85,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
           .from(userCompanyRoles)
           .where(
             and(
-              eq(userCompanyRoles.userId, user),
+              eq(userCompanyRoles.userId, uid),
               eq(userCompanyRoles.companyId, params.id),
               eq(userCompanyRoles.isActive, true),
               isNull(userCompanyRoles.revokedAt)
@@ -97,7 +101,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       await updateCompany(params.id, body);
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
-        companyId: params.id, userId: user, sessionId,
+        companyId: params.id, userId: uid, sessionId,
         action: "companies:update", module: "companies",
         entityType: "company", entityId: params.id,
         beforeState: null, afterState: body, ipAddress: ip,
@@ -126,7 +130,8 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   .delete(
     "/:id",
     async ({ params, user, sessionId, request, set }) => {
-      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      const uid = user!;
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
       if (!dbUser || !dbUser.isSuperAdmin) {
         set.status = 403; return { error: "Super Admin privileges required" };
       }
@@ -134,7 +139,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       await archiveCompany(params.id);
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
-        companyId: params.id, userId: user, sessionId,
+        companyId: params.id, userId: uid, sessionId,
         action: "companies:delete", module: "companies",
         entityType: "company", entityId: params.id,
         beforeState: null, afterState: { is_active: 0 }, ipAddress: ip,
@@ -146,7 +151,8 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
 
   // ── GET /companies/:id/users ────────────────────────────────
   .get("/:id/users", async ({ params, user, set }) => {
-    const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+    const uid = user!;
+    const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
     const isSuperAdmin = dbUser?.isSuperAdmin === true;
 
     if (!isSuperAdmin) {
@@ -155,7 +161,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
         .from(userCompanyRoles)
         .where(
           and(
-            eq(userCompanyRoles.userId, user),
+            eq(userCompanyRoles.userId, uid),
             eq(userCompanyRoles.companyId, params.id),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
@@ -174,7 +180,8 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   .post(
     "/:id/users",
     async ({ params, body, user, sessionId, request, set }) => {
-      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      const uid = user!;
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
       const isSuperAdmin = dbUser?.isSuperAdmin === true;
 
       if (!isSuperAdmin) {
@@ -183,7 +190,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
           .from(userCompanyRoles)
           .where(
             and(
-              eq(userCompanyRoles.userId, user),
+              eq(userCompanyRoles.userId, uid),
               eq(userCompanyRoles.companyId, params.id),
               eq(userCompanyRoles.isActive, true),
               isNull(userCompanyRoles.revokedAt)
@@ -197,11 +204,11 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       }
 
       try {
-        const ucrId = await addUserToCompany(params.id, body.userId, body.roleId, user);
+        const ucrId = await addUserToCompany(params.id, body.userId, body.roleId, uid);
         
         const ip = request.headers.get("x-forwarded-for") ?? "unknown";
         await createAuditEntry({
-          companyId: params.id, userId: user, sessionId,
+          companyId: params.id, userId: uid, sessionId,
           action: "company_users:create", module: "companies",
           entityType: "user_company_roles", entityId: ucrId,
           beforeState: null, afterState: { targetUserId: body.userId, roleId: body.roleId }, ipAddress: ip,
@@ -226,7 +233,8 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
   .delete(
     "/:id/users/:userId",
     async ({ params, user, sessionId, request, set }) => {
-      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, user)).limit(1);
+      const uid = user!;
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
       const isSuperAdmin = dbUser?.isSuperAdmin === true;
 
       if (!isSuperAdmin) {
@@ -235,7 +243,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
           .from(userCompanyRoles)
           .where(
             and(
-              eq(userCompanyRoles.userId, user),
+              eq(userCompanyRoles.userId, uid),
               eq(userCompanyRoles.companyId, params.id),
               eq(userCompanyRoles.isActive, true),
               isNull(userCompanyRoles.revokedAt)
@@ -253,7 +261,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
         
         const ip = request.headers.get("x-forwarded-for") ?? "unknown";
         await createAuditEntry({
-          companyId: params.id, userId: user, sessionId,
+          companyId: params.id, userId: uid, sessionId,
           action: "company_users:revoke", module: "companies",
           entityType: "user_company_roles", entityId: params.userId,
           beforeState: null, afterState: { revoked: true }, ipAddress: ip,
