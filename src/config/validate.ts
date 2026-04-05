@@ -4,6 +4,7 @@
 // ============================================================
 
 import { z } from "zod";
+import { logger } from "../lib/logger.ts";
 
 const envSchema = z.object({
   // Database configuration (PostgreSQL)
@@ -32,20 +33,24 @@ const envSchema = z.object({
 
   // Environment mode
   NODE_ENV:             z.enum(["development", "production", "test"]).default("development"),
+
+  // AI Configuration (Ollama)
+  OLLAMA_URL:           z.string().url().optional(),
+  OLLAMA_MODEL:         z.string().optional(),
 });
 
 export function validateEnv() {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-    console.error("\n❌ CRITICAL: Environment configuration is invalid or missing variables!\n");
-    console.error("Please check your .env file and ensure it matches .env.example.\n");
+    logger.error("config", "CRITICAL: Environment configuration is invalid or missing variables");
+    logger.error("config", "Please check your .env file and ensure it matches .env.example");
     
     result.error.issues.forEach((issue) => {
-      console.error(`   [${issue.path.join(".")}] — ${issue.message}`);
+      logger.error("config", "Env validation issue", { field: issue.path.join("."), error: issue.message });
     });
 
-    console.log("\nServer startup aborted.\n");
+    logger.info("config", "Server startup aborted due to configuration errors");
     process.exit(1);
   }
 }

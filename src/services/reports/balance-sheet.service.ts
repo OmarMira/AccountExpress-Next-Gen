@@ -5,7 +5,6 @@
 // ============================================================
 
 import { db, sql } from "../../db/connection.ts";
-import { ValidationError as AccountingError } from "../journal.service.ts";
 
 export interface BalanceItem {
   code: string;
@@ -23,6 +22,15 @@ export interface BalanceSheetData {
 
 export async function getBalanceSheet(companyId: string, asOfDate: string): Promise<BalanceSheetData> {
   // Query to get all balances up to asOfDate
+  interface BalanceSheetRow {
+    code:           string;
+    name:           string;
+    account_type:   string;
+    normal_balance: string;
+    total_debits:   string;
+    total_credits:  string;
+  }
+
   const query = sql`
     SELECT
       ca.code,
@@ -42,7 +50,7 @@ export async function getBalanceSheet(companyId: string, asOfDate: string): Prom
     ORDER BY ca.code ASC
   `;
 
-  const rows = await db.execute(query);
+  const rows = await db.execute(query) as unknown as BalanceSheetRow[];
 
   const data: BalanceSheetData = {
     assets: { items: [], total: 0 },

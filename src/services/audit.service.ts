@@ -5,7 +5,7 @@
 
 import { createHash } from "crypto";
 import { db } from "../db/connection.ts";
-import { auditLogs } from "../db/schema/index.ts";
+import { auditLogs, companies } from "../db/schema/index.ts";
 import { eq, isNull, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
@@ -39,6 +39,17 @@ interface ChainTip {
   entryHash:  string;
 }
 
+interface AuditLogRow {
+  id:          string;
+  userId:      string | null;
+  action:      string;
+  afterState:  string | null;
+  entryHash:   string;
+  prevHash:    string;
+  chainIndex:  number;
+  createdAt:   Date;
+}
+
 // ── SHA-256 helper ───────────────────────────────────────────
 function sha256(data: string): string {
   return createHash("sha256").update(data, "utf8").digest("hex");
@@ -49,7 +60,7 @@ function sha256(data: string): string {
 // The DB call must be done with a sync-compatible approach.
 // We use a cached in-memory tip updated after each insert.
 // For true persistence, use getChainTipAsync instead.
-let _chainCache: Map<string, ChainTip> = new Map();
+const _chainCache: Map<string, ChainTip> = new Map();
 
 function getChainTipCached(companyId: string | null): ChainTip {
   const key = companyId ?? "__system__";
@@ -110,7 +121,7 @@ export async function createAuditEntry(input: AuditEntryInput): Promise<string> 
 
 // ── Initialize chain cache from DB on startup ─────────────────
 export async function initAuditChainCache(): Promise<void> {
-  // Load the last entry for system-level and all companies
+  // 1. Load the system-level tip (companyId = null)
   const systemTip = await db
     .select({ chainIndex: auditLogs.chainIndex, entryHash: auditLogs.entryHash })
     .from(auditLogs)
@@ -123,6 +134,31 @@ export async function initAuditChainCache(): Promise<void> {
       chainIndex: systemTip[0].chainIndex,
       entryHash:  systemTip[0].entryHash,
     });
+  }
+
+  // 2. Query all active companies from the companies table
+  const activeCompanies = await db
+    .select({ id: companies.id })
+    .from(companies)
+    .where(eq(companies.isActive, true));
+
+  // 3. For each company, search for the last record in audit_logs ordered by chain_index DESC
+  for (const company of activeCompanies) {
+    const lastEntry = await db
+      .select({ chainIndex: auditLogs.chainIndex, entryHash: auditLogs.entryHash })
+      .from(auditLogs)
+      .where(eq(auditLogs.companyId, company.id))
+      .orderBy(desc(auditLogs.chainIndex))
+      .limit(1);
+
+    // 4. If it exists, call updateChainCache(companyId, { chainIndex, entryHash })
+    if (lastEntry.length > 0) {
+      updateChainCache(company.id, {
+        chainIndex: lastEntry[0].chainIndex,
+        entryHash:  lastEntry[0].entryHash,
+      });
+    }
+    // 5. If it doesn't exist for that company, do nothing (no entries yet)
   }
 }
 
@@ -137,7 +173,7 @@ export interface ChainVerificationResult {
 export async function verifyAuditChain(
   companyId: string | null = null
 ): Promise<ChainVerificationResult> {
-  const rows = await db
+  const qRows = await db
     .select({
       id:          auditLogs.id,
       userId:      auditLogs.userId,
@@ -152,6 +188,8 @@ export async function verifyAuditChain(
     .where(companyId ? eq(auditLogs.companyId, companyId) : isNull(auditLogs.companyId))
     .orderBy(auditLogs.chainIndex);
 
+  const rows = qRows as unknown as AuditLogRow[];
+
   if (rows.length === 0) {
     return { valid: true, totalEntries: 0, brokenAtIndex: null, message: "Chain is empty — no entries yet" };
   }
@@ -159,14 +197,20 @@ export async function verifyAuditChain(
   let expectedPrevHash = "GENESIS";
 
   for (const row of rows) {
+    // 1. Verify link with previous entry
     if (row.prevHash !== expectedPrevHash) {
       return {
         valid:         false,
         totalEntries:  rows.length,
         brokenAtIndex: row.chainIndex,
-        message:       `Chain broken at index ${row.chainIndex}: prev_hash mismatch`,
+        message:       `Chain broken at index ${row.chainIndex}: prev_hash mismatch (expected ${expectedPrevHash}, found ${row.prevHash})`,
       };
     }
+
+    // 2. Recompute hash
+    // IMPORTANT: Use exact same string construction as createAuditEntry
+    // Use new Date().toISOString() to force UTC and exactly 3 decimal-ms precision
+    const rowDateStr = new Date(row.createdAt).toISOString();
 
     const hashInput = [
       row.id,
@@ -174,7 +218,7 @@ export async function verifyAuditChain(
       row.action,
       row.afterState ?? "",
       row.prevHash,
-      row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+      rowDateStr,
     ].join("|");
     const expectedHash = sha256(hashInput);
 
@@ -183,7 +227,7 @@ export async function verifyAuditChain(
         valid:         false,
         totalEntries:  rows.length,
         brokenAtIndex: row.chainIndex,
-        message:       `Chain broken at index ${row.chainIndex}: entry_hash mismatch (data tampered)`,
+        message:       `Chain broken at index ${row.chainIndex}: entry_hash mismatch (data tampered). Calculated: ${expectedHash}, Stored: ${row.entryHash}`,
       };
     }
 

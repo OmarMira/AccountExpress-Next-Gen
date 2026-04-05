@@ -4,7 +4,7 @@ import { companies, users, sessions, fiscalPeriods, bankTransactions, journalEnt
 import { importTransactions } from "../src/services/bank/csv-import.service.ts";
 import { matchTransaction } from "../src/services/bank/reconciliation.service.ts";
 import { suggestAccountBatch } from "../src/services/bank/smart-match.service.ts";
-import { getAccountTree, getAccountBalance, seedGaapForCompany } from "../src/services/accounts.service.ts";
+import { getAccountsWithBalances, getAccountBalance, seedGaapForCompany } from "../src/services/accounts.service.ts";
 import { eq, and, like } from "drizzle-orm";
 
 async function setupTestContext() {
@@ -76,7 +76,7 @@ async function runTests() {
   console.log("========================================");
 
   const { companyId, userId, periodId, sessionId } = await setupTestContext();
-  const accounts = await getAccountTree(companyId) as any[];
+  const accounts = await getAccountsWithBalances(companyId) as any[];
   
   const repairsAcct = accounts.find(a => a.code === "5200")!; 
   const chaseBankAcct = accounts.find(a => a.code === "1010")!; 

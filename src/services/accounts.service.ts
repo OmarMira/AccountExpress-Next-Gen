@@ -48,23 +48,41 @@ export async function seedGaapForCompany(companyId: string): Promise<void> {
   }
 }
 
-// ── Get the full account tree for a company ──────────────────
-export async function getAccountTree(companyId: string) {
-  // Use a raw SQL aggregate to compute balances efficiently
+interface AccountRow {
+  id: string;
+  company_id: string;
+  code: string;
+  name: string;
+  account_type: string;
+  normal_balance: string;
+  parent_id: string | null;
+  level: number;
+  is_system: boolean;
+  is_active: boolean;
+  tax_category: string | null;
+  description: string | null;
+  total_debits: string;
+  total_credits: string;
+}
+
+// ── Get all accounts with their calculated balances ────────
+export async function getAccountsWithBalances(companyId: string): Promise<any[]> {
+  // Use a raw SQL aggregate to compute balances efficiently in a single query
   const rows = await db.execute(sql`
     SELECT
-      c.*,
-      COALESCE(SUM(CASE WHEN je.status IN ('posted', 'voided') THEN jl.debit_amount ELSE 0 END), 0) as total_debits,
-      COALESCE(SUM(CASE WHEN je.status IN ('posted', 'voided') THEN jl.credit_amount ELSE 0 END), 0) as total_credits
+      c.id, c.company_id, c.code, c.name, c.account_type, c.normal_balance,
+      c.parent_id, c.level, c.is_system, c.is_active, c.tax_category, c.description,
+      COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jl.debit_amount ELSE 0 END), 0) as total_debits,
+      COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jl.credit_amount ELSE 0 END), 0) as total_credits
     FROM chart_of_accounts c
     LEFT JOIN journal_lines jl ON c.id = jl.account_id
     LEFT JOIN journal_entries je ON jl.journal_entry_id = je.id
     WHERE c.company_id = ${companyId} AND c.is_active = true
     GROUP BY c.id
     ORDER BY c.code ASC
-  `);
+  `) as unknown as AccountRow[];
 
-  return (rows as any[]).map((row) => {
+  return rows.map((row) => {
     const debitCents  = Math.round(parseFloat(row.total_debits)  * 100);
     const creditCents = Math.round(parseFloat(row.total_credits) * 100);
     let balance = 0;
@@ -160,6 +178,11 @@ export async function getAccountBalance(companyId: string, accountId: string): P
 
   if (!account) throw new Error(`Account ${accountId} not found`);
 
+  interface BalanceRow {
+    total_debits: string;
+    total_credits: string;
+  }
+
   const [result] = await db.execute(sql`
     SELECT
       COALESCE(SUM(jl.debit_amount), 0)  as total_debits,
@@ -169,7 +192,7 @@ export async function getAccountBalance(companyId: string, accountId: string): P
     WHERE jl.account_id = ${accountId}
       AND jl.company_id = ${companyId}
       AND je.status IN ('posted', 'voided')
-  `) as any[];
+  `) as unknown as BalanceRow[];
 
   const debitCents  = Math.round(parseFloat(result.total_debits)  * 100);
   const creditCents = Math.round(parseFloat(result.total_credits) * 100);

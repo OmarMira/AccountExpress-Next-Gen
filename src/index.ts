@@ -7,12 +7,13 @@ import "./config/validate.ts"; // Side-effect: validates process.env immediately
 
 import { runMigrations } from "./db/migrate.ts";
 import { runSeed }       from "./db/seed/seed.ts";
+import { logger } from "./lib/logger.ts";
 
 const PORT = parseInt(process.env["PORT"] ?? "3000", 10);
 
-console.log("\n═══════════════════════════════════════════════════");
-console.log("  Account Express Bookkeeping Core — v1.0.0");
-console.log("═══════════════════════════════════════════════════\n");
+logger.info("app", "═══════════════════════════════════════════════════");
+logger.info("app", "  Account Express Bookkeeping Core — v1.0.0");
+logger.info("app", "═══════════════════════════════════════════════════");
 
 // 1. Run migrations (idempotent)
 await runMigrations();
@@ -24,6 +25,6 @@ await runSeed();
 const { app } = await import("./server.ts");
 app.listen(PORT);
 
-console.log(`\n✅ Server ready: http://localhost:${PORT}`);
-console.log(`   Health check: http://localhost:${PORT}/health\n`);
+logger.info("app", "Server ready", { url: `http://localhost:${PORT}` });
+logger.info("app", "Health check ready", { url: `http://localhost:${PORT}/health` });
 

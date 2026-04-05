@@ -17,9 +17,9 @@ export default tseslint.config(
       "no-new-func": "error",
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "off",
-      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-require-imports": "warn",
     },
   }
 );

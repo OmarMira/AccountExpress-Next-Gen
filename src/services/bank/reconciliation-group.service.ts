@@ -1,0 +1,171 @@
+import { db } from "../../db/connection.ts";
+import { 
+  bankTransactions, 
+  bankTransactionGroups, 
+  bankTransactionGroupItems, 
+} from "../../db/schema/index.ts";
+import { eq, and, inArray } from "drizzle-orm";
+import { createDraft, post } from "../journal.service.ts";
+
+export async function createGroup(input: {
+  companyId: string;
+  description: string;
+  transactionIds: string[];
+  glAccountId: string;
+}): Promise<{ groupId: string; totalAmount: number }> {
+  if (input.transactionIds.length === 0) {
+    throw new Error("Debe proveer al menos un transactionId");
+  }
+
+  return await db.transaction(async (tx) => {
+    // 1. Verificar transacciones
+    const transactions = await tx
+      .select({
+        id: bankTransactions.id,
+        companyId: bankTransactions.companyId,
+        status: bankTransactions.status,
+        amount: bankTransactions.amount,
+      })
+      .from(bankTransactions)
+      .where(inArray(bankTransactions.id, input.transactionIds));
+
+    if (transactions.length !== input.transactionIds.length) {
+      throw new Error("Una o más transacciones no existen.");
+    }
+
+    let totalAmount = 0;
+
+    for (const txn of transactions) {
+      if (txn.companyId !== input.companyId) {
+        throw new Error(`La transacción ${txn.id} no pertenece a la compañía.`);
+      }
+      if (txn.status !== "pending" && txn.status !== "assigned") {
+        throw new Error(`La transacción ${txn.id} ya no está pendiente o asignada (status: ${txn.status}).`);
+      }
+      // sum amount, convert numeric(15,2) string to cents integer
+      totalAmount += Math.round(Number(txn.amount) * 100);
+    }
+
+    // 2. Crear el grupo
+    const [group] = await tx.insert(bankTransactionGroups).values({
+      companyId: input.companyId,
+      description: input.description,
+      totalAmount,
+      glAccountId: input.glAccountId,
+      status: "pending"
+    }).returning({ id: bankTransactionGroups.id });
+
+    // 3. Crear los items del grupo
+    const groupItems = input.transactionIds.map(tId => ({
+      groupId: group.id,
+      transactionId: tId
+    }));
+
+    await tx.insert(bankTransactionGroupItems).values(groupItems);
+
+    return { groupId: group.id, totalAmount };
+  });
+}
+
+export async function reconcileGroup(input: {
+  groupId: string;
+  companyId: string;
+  periodId: string;
+  userId: string;
+  sessionId: string;
+  ipAddress: string;
+  bankAccountGlId: string;
+}): Promise<{ journalEntryId: string }> {
+  // Nota: createDraft y post manejan sus propias transacciones internamente
+  // contra "db", por lo que esta operación principal no puede estar en un
+  // "await db.transaction(...)" gigante si no podemos inyectar "tx" a journal.service.ts
+  
+  // 1. Buscar grupo y validar
+  const [group] = await db
+    .select()
+    .from(bankTransactionGroups)
+    .where(and(
+      eq(bankTransactionGroups.id, input.groupId),
+      eq(bankTransactionGroups.companyId, input.companyId)
+    ))
+    .limit(1);
+
+  if (!group) {
+    throw new Error("Grupo no encontrado o no pertenece a la compañía.");
+  }
+  if (group.status !== "pending") {
+    throw new Error("El grupo ya se encuentra conciliado.");
+  }
+
+  // 2. Obtener transacciones vía group_items
+  const items = await db
+    .select({ transactionId: bankTransactionGroupItems.transactionId })
+    .from(bankTransactionGroupItems)
+    .where(eq(bankTransactionGroupItems.groupId, group.id));
+
+  const transactionIds = items.map(i => i.transactionId);
+
+  // Fecha del journal entry como el día actual
+  const entryDate = new Date().toISOString().split("T")[0];
+
+  // 3. Preparar líneas del diario contable
+  // El amountFloat se calcula a partir de centavos a una escala normal de dólares
+  const amountFloat = group.totalAmount / 100;
+  const absAmount = Math.abs(amountFloat);
+
+  // Manejamos inteligentemente los ingresos(+) y egresos(-) financieros
+  const bankLine = {
+    accountId: input.bankAccountGlId,
+    debitAmount: amountFloat > 0 ? absAmount : 0,
+    creditAmount: amountFloat < 0 ? absAmount : 0,
+    lineNumber: 1,
+    description: `Conciliación en Grupo: ${group.description}`
+  };
+
+  const targetLine = {
+    accountId: group.glAccountId,
+    debitAmount: amountFloat < 0 ? absAmount : 0,
+    creditAmount: amountFloat > 0 ? absAmount : 0,
+    lineNumber: 2,
+    description: `Acreditación en Grupo: ${group.description}`
+  };
+
+  // Llamar a createDraft() existente
+  const draftId = await createDraft({
+    companyId: input.companyId,
+    entryDate,
+    description: `Grupo Conciliado: ${group.description}`,
+    reference: group.id,
+    isAdjusting: false,
+    periodId: input.periodId,
+    createdBy: input.userId
+  }, [bankLine, targetLine]);
+
+  // Ejecutar el paso de aprobación (genera audit chain e inmutabilidad)
+  await post(draftId, input.userId, input.sessionId, input.ipAddress);
+
+  const now = new Date();
+
+  // 4. Actualizar status del grupo
+  await db.update(bankTransactionGroups)
+    .set({
+      status: "reconciled",
+      journalEntryId: draftId,
+      reconciledAt: now
+    })
+    .where(eq(bankTransactionGroups.id, group.id));
+
+  // 5. Actualizar status de cada transacción individual
+  if (transactionIds.length > 0) {
+    await db.update(bankTransactions)
+      .set({
+        status: "reconciled",
+        journalEntryId: draftId,
+        matchedBy: input.userId,
+        matchedAt: now
+      })
+      .where(inArray(bankTransactions.id, transactionIds));
+  }
+
+  return { journalEntryId: draftId };
+}

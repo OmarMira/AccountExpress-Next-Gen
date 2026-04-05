@@ -21,7 +21,7 @@ export async function nextEntryNumber(companyId: string): Promise<string> {
     SELECT MAX(CAST(SPLIT_PART(entry_number, '-', 3) AS INTEGER)) as max_seq
     FROM journal_entries
     WHERE company_id = ${companyId}
-  `) as any[];
+  `) as Array<{ max_seq: number | null }>;
 
   const year = new Date().getFullYear();
   const seq  = String((row?.max_seq ?? 0) + 1).padStart(4, "0");

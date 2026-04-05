@@ -26,5 +26,9 @@ export {
   journalLines,
   bankTransactions,
 } from "./accounting.schema.ts";
-export * from './bank-accounts.schema.ts';
+export {
+  bankAccounts,
+  bankTransactionGroups,
+  bankTransactionGroupItems,
+} from "./bank-accounts.schema.ts";
 

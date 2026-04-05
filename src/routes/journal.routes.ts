@@ -9,6 +9,7 @@ import {
   post,
   getEntryWithLines,
   listEntries,
+  getDashboardSummary,
   ValidationError,
 } from "../services/journal.service.ts";
 import { voidEntry } from "../services/journal-void.service.ts";
@@ -19,16 +20,30 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   .use(authMiddleware)
   .guard({ beforeHandle: requireAuth })
 
+  .get("/summary", async ({ query }) => {
+    return await getDashboardSummary(query.companyId);
+  }, {
+    query: t.Object({
+      companyId: t.String()
+    })
+  })
+  
   // GET /journal?companyId=&status=&periodId=
-  .get("/", async ({ query, set }) => {
-    if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
-
-    return await listEntries((query.companyId as string), {
-      status:   (query.status as string),
-      periodId: (query.periodId as string),
-      limit:    (query.limit as string) ? parseInt((query.limit as string)) : 100,
-      offset:   (query.offset as string) ? parseInt((query.offset as string)) : 0,
+  .get("/", async ({ query }) => {
+    return await listEntries(query.companyId, {
+      status:   query.status,
+      periodId: query.periodId,
+      limit:    query.limit  ? parseInt(query.limit)  : 100,
+      offset:   query.offset ? parseInt(query.offset) : 0,
     });
+  }, {
+    query: t.Object({
+      companyId: t.String(),
+      status:    t.Optional(t.String()),
+      periodId:  t.Optional(t.String()),
+      limit:     t.Optional(t.String()),
+      offset:    t.Optional(t.String()),
+    })
   })
 
   // GET /journal/:id
@@ -53,7 +68,13 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
             periodId:    body.periodId,
             createdBy:   uid,
           },
-          body.lines.map((l: any) => ({ ...l, description: l.description ?? null }))
+          body.lines.map((l) => ({
+            accountId:    l.accountId,
+            debitAmount:  l.debitAmount,
+            creditAmount: l.creditAmount,
+            description:  l.description ?? null,
+            lineNumber:   l.lineNumber,
+          }))
         );
         set.status = 201;
         return { id, message: "Draft journal entry created" };

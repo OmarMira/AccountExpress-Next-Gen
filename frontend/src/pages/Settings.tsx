@@ -31,7 +31,7 @@ export function Settings() {
       alert("Datos de la empresa actualizados");
       setActiveCompany({ ...activeCompany, ...companyForm } as any);
     },
-    onError: (err: any) => alert(`Error: ${err.message}`)
+    onError: (err: Error) => alert(`Error: ${err.message}`)
   });
 
   const handleCompanySubmit = (e: React.FormEvent) => {
@@ -44,7 +44,7 @@ export function Settings() {
     queryKey: ['users', activeCompany?.id],
     queryFn: () => fetchApi(`/users?companyId=${activeCompany?.id}`),
     enabled: activeTab === 'users' && !!activeCompany,
-    select: (res: any) => res.data ?? [],
+    select: (res: { data: any[] }) => res.data ?? [],
   });
   const users: any[] = usersData ?? [];
 
@@ -76,7 +76,7 @@ export function Settings() {
       setCreateError('');
       refetchUsers();
     },
-    onError: (err: any) => setCreateError(err.message ?? 'Error al crear usuario'),
+    onError: (err: Error) => setCreateError(err.message ?? 'Error al crear usuario'),
   });
 
   const handleCreateUser = (e: React.FormEvent) => {
@@ -94,7 +94,7 @@ export function Settings() {
       body: JSON.stringify({ isActive: false }),
     }),
     onSuccess: () => refetchUsers(),
-    onError: (err: any) => alert(`Error: ${err.message}`),
+    onError: (err: Error) => alert(`Error: ${err.message}`),
   });
 
   const assignRoleMutation = useMutation({
@@ -104,7 +104,7 @@ export function Settings() {
         body: JSON.stringify({ companyId: activeCompany?.id, roleId }),
       }),
     onSuccess: () => refetchUsers(),
-    onError: (err: any) => alert(`Error al cambiar rol: ${err.message}`),
+    onError: (err: Error) => alert(`Error al cambiar rol: ${err.message}`),
   });
 
   // --- Fiscal Periods State ---
@@ -122,7 +122,7 @@ export function Settings() {
       alert("Periodo cerrado exitosamente");
       queryClient.invalidateQueries({ queryKey: ['fiscal-periods'] });
     },
-    onError: (err: any) => alert(`Error al cerrar periodo: ${err.message}`)
+    onError: (err: Error) => alert(`Error al cerrar periodo: ${err.message}`)
   });
 
   // (Backup Hooks have been migrated to BackupPanel component)

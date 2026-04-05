@@ -36,6 +36,12 @@ export async function generateCpaSummary(companyId: string, periodId: string): P
   }
 
   // 2. Aggregate P&L accounts by tax_category
+  interface TaxRow {
+    tax_category:  string;
+    total_debits:  string;
+    total_credits: string;
+  }
+
   const query = sql`
     SELECT
       ca.tax_category as "tax_category",
@@ -54,7 +60,7 @@ export async function generateCpaSummary(companyId: string, periodId: string): P
     ORDER BY ca.tax_category ASC
   `;
 
-  const rows = await db.execute(query);
+  const rows = await db.execute(query) as unknown as TaxRow[];
 
   const taxes: TaxLine[] = [];
   
@@ -66,10 +72,10 @@ export async function generateCpaSummary(companyId: string, periodId: string): P
     const credits = Math.round(totalCredits * 100);
     // Note: Net calculation logic per Tax category. Usually represented as absolute numbers in IRS forms based on normal balance.
     // For simplicity: Net = debits - credits
-    let balance = (debits - credits) / 100;
+    const balance = (debits - credits) / 100;
     
     taxes.push({
-      taxCategory: row.tax_category as string,
+      taxCategory: row.tax_category,
       totalBalance: balance, // Positive means Net Debit (Expense dominant), Negative means Net Credit (Revenue dominant)
     });
   }

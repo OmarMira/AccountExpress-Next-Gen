@@ -270,8 +270,27 @@ export async function listEntries(
   const safeLimit  = Number.isFinite(opts?.limit)  && (opts?.limit  ?? 0) > 0  ? opts!.limit!  : 100;
   const safeOffset = Number.isFinite(opts?.offset) && (opts?.offset ?? 0) >= 0 ? opts!.offset! : 0;
 
+  interface JournalRow {
+    id:            string;
+    entry_number:  number;
+    entry_date:    string;
+    description:   string;
+    reference:     string | null;
+    status:        string;
+    is_adjusting:  boolean;
+    is_reversing:  boolean;
+    period_id:     string;
+    created_by:    string;
+    total_amount:  string;
+    total_debits:  string;
+    total_credits: string;
+  }
+
   const rows = await db.execute(sql`
-    SELECT e.*, COALESCE(SUM(l.debit_amount), 0) as total_amount
+    SELECT e.*, 
+           COALESCE(SUM(l.debit_amount), 0) as total_amount,
+           COALESCE(SUM(l.debit_amount), 0) as total_debits,
+           COALESCE(SUM(l.credit_amount), 0) as total_credits
     FROM journal_entries e
     LEFT JOIN journal_lines l ON e.id = l.journal_entry_id
     WHERE e.company_id = ${companyId}
@@ -280,9 +299,71 @@ export async function listEntries(
     GROUP BY e.id
     ORDER BY e.entry_date DESC, e.entry_number DESC
     LIMIT ${safeLimit} OFFSET ${safeOffset}
-  `);
+  `) as unknown as JournalRow[];
 
-  return rows as any[];
+  return rows.map(row => ({
+    ...row,
+    total_amount:  parseFloat(row.total_amount),
+    total_debits:  parseFloat(row.total_debits),
+    total_credits: parseFloat(row.total_credits),
+    // Compatibility helpers for possible JS-side camelCase consumers
+    entryNumber:   row.entry_number,
+    entryDate:     row.entry_date,
+    isAdjusting:   row.is_adjusting,
+    isReversing:   row.is_reversing,
+    periodId:      row.period_id,
+    createdBy:     row.created_by,
+  }));
+}
+
+// ── Get financial summary for dashboard ──────────────────────
+export async function getDashboardSummary(companyId: string) {
+  interface SummaryRow {
+    account_type: "asset" | "liability" | "equity" | "revenue" | "expense";
+    sum_debits:   string;
+    sum_credits:  string;
+  }
+
+  const rows = await db.execute(sql`
+    SELECT
+      c.account_type,
+      COALESCE(SUM(jl.debit_amount), 0)  as sum_debits,
+      COALESCE(SUM(jl.credit_amount), 0) as sum_credits
+    FROM chart_of_accounts c
+    LEFT JOIN journal_lines   jl ON c.id = jl.account_id
+    LEFT JOIN journal_entries je ON jl.journal_entry_id = je.id
+    WHERE c.company_id = ${companyId}
+      AND (je.status = 'posted' OR jl.id IS NULL)
+    GROUP BY c.account_type
+  `) as unknown as SummaryRow[];
+
+  const sums = {
+    asset:     0,
+    liability: 0,
+    equity:    0,
+    revenue:   0,
+    expense:   0
+  };
+
+  for (const row of rows) {
+    const d = parseFloat(row.sum_debits);
+    const c = parseFloat(row.sum_credits);
+    
+    if (row.account_type === "asset")     sums.asset     += (d - c);
+    if (row.account_type === "liability") sums.liability += (c - d);
+    if (row.account_type === "equity")    sums.equity    += (c - d);
+    if (row.account_type === "revenue")   sums.revenue   += (c - d);
+    if (row.account_type === "expense")   sums.expense   += (d - c);
+  }
+
+  return {
+    totalAssets:      sums.asset,
+    totalLiabilities: sums.liability,
+    totalEquity:      sums.equity,
+    totalRevenue:     sums.revenue,
+    totalExpense:     sums.expense,
+    netIncome:        sums.revenue - sums.expense,
+  };
 }
 
 export { validateDoubleEntry };

@@ -1,7 +1,7 @@
 import { db, sql } from "../src/db/connection.ts";
 import { users, companies, sessions, fiscalPeriods, chartOfAccounts, journalEntries } from "../src/db/schema/index.ts";
 import { createDraft, post, voidEntry, getEntryWithLines } from "../src/services/journal.service.ts";
-import { getAccountTree, getAccountBalance, seedGaapForCompany } from "../src/services/accounts.service.ts";
+import { getAccountsWithBalances, getAccountBalance, seedGaapForCompany } from "../src/services/accounts.service.ts";
 import { v4 as uuidv4 } from "uuid";
 import { eq, and } from "drizzle-orm";
 
@@ -71,7 +71,7 @@ async function runTests() {
   console.log("========================================");
 
   const { companyId, userId, periodId, sessionId } = await setupTestContext();
-  const accounts = await getAccountTree(companyId) as any[];
+  const accounts = await getAccountsWithBalances(companyId) as any[];
 
   if (accounts.length === 0) {
     console.error(`❌ FATAL: 0 accounts loaded for company ${companyId}. Seeding failed!`);

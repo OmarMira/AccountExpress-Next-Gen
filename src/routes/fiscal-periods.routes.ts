@@ -18,9 +18,13 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   .guard({ beforeHandle: requireAuth })
 
   // GET /fiscal-periods?companyId=&status=
-  .get("/", async ({ query, set }) => {
-    if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
-    return await listPeriods((query.companyId as string), (query.status as string) as "open" | "closed" | "locked" | undefined);
+  .get("/", async ({ query }) => {
+    return await listPeriods(query.companyId, query.status as "open" | "closed" | "locked" | undefined);
+  }, {
+    query: t.Object({
+      companyId: t.String(),
+      status:    t.Optional(t.String()),
+    })
   })
 
   // POST /fiscal-periods

@@ -11,7 +11,9 @@ import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
 import { db, sql } from "../db/connection.ts";
 import { eq, and } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { bankTransactions } from "../db/schema/index.ts";
+import { logger } from "../lib/logger.ts";
 
 export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(authMiddleware)
@@ -47,7 +49,9 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
             set.status = 400;
             return { error: 'UNKNOWN_BANK', bankName: parsed.bankName };
           }
-        } catch(e) {}
+        } catch (e) {
+          logger.error("bank.routes", "unexpected error in catch block", e);
+        }
         set.status = 500;
         return { error: err.message };
       }
@@ -84,7 +88,9 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
             set.status = 400;
             return { error: 'UNKNOWN_BANK', bankName: parsed.bankName, accountNumber: parsed.accountNumber };
           }
-        } catch(e) {}
+        } catch (e) {
+          logger.error("bank.routes", "unexpected error in catch block", e);
+        }
         set.status = 500;
         return { error: err.message };
       }
@@ -116,7 +122,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     async ({ query }) => {
       let condition = eq(bankTransactions.companyId, query.companyId);
       if (query.status) {
-        condition = and(condition, eq(bankTransactions.status, query.status)) as any;
+        condition = and(condition, eq(bankTransactions.status, query.status)) as SQL<unknown>;
       }
 
       const txs = await db

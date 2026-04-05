@@ -36,6 +36,15 @@ export async function getAgingReport(
   companyId: string,
   asOfDate: string
 ): Promise<AgingReport> {
+  interface AgingRow {
+    id:              string;
+    bankAccount:     string;
+    transactionDate: string;
+    description:     string;
+    amount:          number;
+    daysPending:     number;
+  }
+
   const rows = await db.execute(sql`
     SELECT
       id,
@@ -49,7 +58,7 @@ export async function getAgingReport(
       AND status = 'pending'
       AND created_at::date <= ${asOfDate}::date
     ORDER BY created_at ASC
-  `) as any[];
+  `) as unknown as AgingRow[];
 
   const buckets: AgingBucket[] = [
     { label: "0-30 days",  minDays: 0,  maxDays: 30,  count: 0, total: 0, transactions: [] },

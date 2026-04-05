@@ -15,6 +15,8 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
   return crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // REASON: WebCrypto SubtleCrypto buffer type incompatibility in Bun runtime
       salt: salt as any,
       iterations: 210000,
       hash: "SHA-256"
@@ -48,6 +50,8 @@ export async function encryptFile(inputPath: string, password: string, metadata:
   const encryptedBuffer = await crypto.subtle.encrypt(
     {
       name: "AES-GCM",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // REASON: WebCrypto SubtleCrypto buffer type incompatibility in Bun runtime
       iv: iv as any
     },
     key,
@@ -88,6 +92,8 @@ export async function decryptFile(inputPath: string, password: string): Promise<
     decryptedBuffer = await crypto.subtle.decrypt(
       {
         name: "AES-GCM",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // REASON: WebCrypto SubtleCrypto buffer type incompatibility in Bun runtime
         iv: iv as any
       },
       key,

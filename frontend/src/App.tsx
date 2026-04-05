@@ -12,6 +12,7 @@ import { CpaExport } from './pages/CpaExport';
 import { Settings } from './pages/Settings';
 import { Banks } from './pages/Banks';
 import { Users } from './pages/Users';
+import { Onboarding } from './pages/Onboarding';
 
 export default function App() {
   return (
@@ -32,6 +33,8 @@ export default function App() {
             </div>
           </div>
         } />
+        
+        <Route path="/onboarding" element={<Onboarding />} />
 
         {/* Fully Authenticated Routes */}
         <Route element={<AppShell />}>

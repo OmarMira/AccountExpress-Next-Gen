@@ -7,6 +7,7 @@ import { createGzip, gunzipSync } from 'zlib';
 import { promisify } from 'util';
 import { pipeline } from 'stream';
 import { createReadStream, createWriteStream } from 'fs';
+import { logger } from '../../lib/logger.ts';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -44,7 +45,9 @@ export class BackupService {
   private async ensureDir() {
     try {
       await mkdir(BACKUPS_DIR, { recursive: true });
-    } catch {}
+    } catch (e) {
+      logger.error("BackupService", "Directory initialization failed", e);
+    }
   }
 
   /**
@@ -195,7 +198,9 @@ export class BackupService {
     
     const toDelete = backups.slice(keepCount);
     for (const b of toDelete) {
-      await unlink(join(BACKUPS_DIR, b.filename)).catch(() => {});
+      await unlink(join(BACKUPS_DIR, b.filename)).catch((e) => {
+        logger.error("BackupService", "Error deleting backup file durante prune", e);
+      });
     }
   }
 

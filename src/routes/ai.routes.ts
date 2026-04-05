@@ -1,30 +1,47 @@
 // ============================================================
 // AI ROUTES
-// Endpoint de chat con streaming hacia Ollama local.
+// Endpoint de chat con streaming hacia Ollama.
 // POST /api/ai/chat
 // GET  /api/ai/status
 // ============================================================
 
 import { Elysia, t } from "elysia";
-
 import { chatWithOllama, buildFinancialContext } from "../services/ai/ai.service.ts";
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const aiRoutes = new Elysia({ prefix: "/ai" })
   .use(authMiddleware)
 
-  // ── GET /ai/status — verificar que Ollama está corriendo ──
+  // ── GET /ai/status — verificar estado del servicio de IA ──
   .get("/status", async ({ set }) => {
+    const OLLAMA_BASE = process.env.OLLAMA_URL;
+    
+    if (!OLLAMA_BASE) {
+      return {
+        success: false,
+        data: {
+          configured: false,
+          status: "not_configured",
+          ollamaRunning: false,
+          asistenteListo: false
+        }
+      };
+    }
+
     try {
-      const res = await fetch("http://localhost:11434/api/tags");
+      const res = await fetch(`${OLLAMA_BASE}/api/tags`);
       if (!res.ok) throw new Error("Ollama not responding");
+      
       const { models } = await res.json() as { models: Array<{ name: string }> };
       const modelNames = models?.map(m => m.name) ?? [];
-      const asistenteListo = modelNames.some(m => m.includes("phi3"));
+      const targetModel = process.env.OLLAMA_MODEL ?? "phi3";
+      const asistenteListo = modelNames.some(m => m.includes(targetModel));
       
       return {
         success: true,
         data: {
+          configured: true,
+          status: "connected",
           ollamaRunning: true,
           asistenteListo,
           availableModels: modelNames
@@ -34,6 +51,8 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
       return {
         success: false,
         data: {
+          configured: true,
+          status: "unavailable",
           ollamaRunning: false,
           asistenteListo: false,
           availableModels: []
@@ -108,93 +127,4 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
       ),
       companyId: t.String()
     })
-  })
-
-  // ── GET /ai/pull-model — streaming de descarga ────────────
-  .get("/pull-model", async ({ set }) => {
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          const res = await fetch("http://localhost:11434/api/pull", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: "phi3:mini", stream: true }),
-          });
-
-          if (!res.body) {
-            controller.close();
-            return;
-          }
-
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const text = decoder.decode(value, { stream: true });
-            const lines = text.split("\n").filter(Boolean);
-
-            for (const line of lines) {
-              try {
-                const json = JSON.parse(line);
-                if (json.completed && json.total) {
-                  const data = { bytesDescargados: json.completed, total: json.total, status: json.status };
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-                }
-                if (json.status === "success") {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ completo: true })}\n\n`));
-                }
-              } catch { /* ignorar ruido */ }
-            }
-          }
-        } catch {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: true })}\n\n`));
-        } finally {
-          controller.close();
-        }
-      }
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
-      }
-    });
-  })
-
-  // ── GET /ai/download-ollama — proxy de descarga ───────────
-  .get("/download-ollama", async ({ query, set }) => {
-    const os = query.os as string;
-    const urls: Record<string, string> = {
-      windows: "https://ollama.com/download/OllamaSetup.exe",
-      mac:     "https://ollama.com/download/Ollama-darwin.zip",
-    };
-
-    const url = urls[os];
-    if (!url) {
-      set.status = 400;
-      return { error: "Invalid OS" };
-    }
-
-    const response = await fetch(url, { redirect: 'follow' });
-    if (!response.ok || !response.body) {
-      set.status = 502;
-      return { error: "Failed to fetch from ollama.com" };
-    }
-
-    return new Response(response.body, {
-      headers: {
-        "Content-Type":        "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${os === "windows" ? "OllamaSetup.exe" : "Ollama-darwin.zip"}"`,
-        "Cache-Control":       "no-cache",
-      },
-    });
-  }, {
-    query: t.Object({ os: t.String() })
   });
-

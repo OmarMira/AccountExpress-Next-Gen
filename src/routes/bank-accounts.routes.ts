@@ -27,7 +27,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
   })
 
   .post('/', async ({ body, set }) => {
-    const data = body as any;
+    const data = body as { companyId: string, accountName: string, bankName: string, accountNumber?: string, accountType?: string, balance?: number, glAccountId?: string };
     try {
       if (data.companyId && data.accountNumber) {
         const existing = await db.query.bankAccounts.findFirst({
@@ -77,11 +77,20 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
 
   .put('/:id', async ({ params, body, set }) => {
     const { id } = params;
-    const data = body as any;
+    const data = body as { accountName?: string, bankName?: string, accountNumber?: string, accountType?: string, balance?: number, glAccountId?: string, isActive?: boolean };
     try {
       const now = new Date();
       
-      const updateData: any = {
+      const updateData: {
+        updatedAt: Date;
+        accountName?: string;
+        bankName?: string;
+        accountNumber?: string;
+        accountType?: string;
+        balance?: number;
+        glAccountId?: string;
+        isActive?: boolean;
+      } = {
         updatedAt: now
       };
       

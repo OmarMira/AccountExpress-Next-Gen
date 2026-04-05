@@ -38,8 +38,8 @@ function normalizeDate(rawDate: string): string {
     // MM/DD/YYYY or MM-DD-YYYY or M/D/YY
     const parts = rawDate.split(/[\/\-]/);
     if (parts.length === 3) {
-        let m = parts[0].padStart(2, '0');
-        let d = parts[1].padStart(2, '0');
+        const m = parts[0].padStart(2, '0');
+        const d = parts[1].padStart(2, '0');
         let y = parts[2];
         if (y.length === 2) y = '20' + y;
         return `${y}-${m}-${d}`;

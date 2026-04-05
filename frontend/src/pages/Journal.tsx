@@ -88,7 +88,7 @@ export function Journal() {
       queryClient.invalidateQueries({ queryKey: ['journal', activeCompany?.id] });
       closeModal();
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       setFormError(err.message || 'Error al crear el asiento de diario');
     }
   });
@@ -96,13 +96,13 @@ export function Journal() {
   const postMutation = useMutation({
     mutationFn: async (id: string) => fetchApi(`/journal/${id}/post`, { method: 'POST' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['journal', activeCompany?.id] }),
-    onError: (err: any) => alert(`Error al publicar: ${err.message}`)
+    onError: (err: Error) => alert(`Error al publicar: ${err.message}`)
   });
 
   const voidMutation = useMutation({
     mutationFn: async (id: string) => fetchApi(`/journal/${id}/void`, { method: 'POST' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['journal', activeCompany?.id] }),
-    onError: (err: any) => alert(`Error al anular: ${err.message}`)
+    onError: (err: Error) => alert(`Error al anular: ${err.message}`)
   });
 
   const closeModal = () => {
@@ -148,7 +148,8 @@ export function Journal() {
         lines: formattedLines
       });
     } catch (err: any) {
-      setFormError(err.message);
+      const error = err as Error;
+      setFormError(error.message);
     } finally {
       setIsSubmitting(false);
     }

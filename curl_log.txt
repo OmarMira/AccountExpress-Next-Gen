@@ -1,0 +1,29 @@
+﻿curl.exe : Note: Unnecessary use of -X or --request, POST is already inferred.
+En línea: 1 Carácter: 1
++ curl.exe -v -X POST http://localhost:3000/api/auth/login -H "Content- ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Note: Unnecessa...ready inferred.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+* Uses proxy env variable no_proxy == '*.azureedge.net'
+* Host localhost:3000 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+
+  0      0   0      0   0      0      0      0                              0*   Trying [::1]:3000...
+*   Trying 127.0.0.1:3000...
+
+  0      0   0      0   0      0      0      0           00:01              0* connect to ::1 port 3000 from :: port 
+54845 failed: Connection refused
+* connect to 127.0.0.1 port 3000 from 0.0.0.0 port 54846 failed: Connection refused
+* Failed to connect to localhost port 3000 after 2258 ms: Could not connect to server
+
+  0      0   0      0   0      0      0      0           00:02              0
+* closing connection #0
+curl: (7) Failed to connect to localhost port 3000 after 2258 ms: Could not connect to server
+Note: Unnecessary use of -X or --request, POST is already inferred.
+* URL rejected: Port number was not a decimal number between 0 and 65535
+* closing connection #-1
+curl: (3) URL rejected: Port number was not a decimal number between 0 and 65535

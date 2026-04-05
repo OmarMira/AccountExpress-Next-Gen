@@ -23,6 +23,15 @@ export interface IncomeStatementData {
 }
 
 export async function getIncomeStatement(companyId: string, startDate: string, endDate: string): Promise<IncomeStatementData> {
+  interface PnlRow {
+    code:           string;
+    name:           string;
+    account_type:   string;
+    normal_balance: string;
+    total_debits:   string;
+    total_credits:  string;
+  }
+
   const query = sql`
     SELECT
       ca.code,
@@ -43,7 +52,7 @@ export async function getIncomeStatement(companyId: string, startDate: string, e
     ORDER BY ca.code ASC
   `;
 
-  const rows = await db.execute(query);
+  const rows = await db.execute(query) as unknown as PnlRow[];
 
   const data: IncomeStatementData = {
     revenue: { items: [], total: 0 },
@@ -72,14 +81,14 @@ export async function getIncomeStatement(companyId: string, startDate: string, e
     if (balanceCents === 0) continue;
 
     if (row.account_type === "revenue") {
-      data.revenue.items.push({ code: row.code as string, name: row.name as string, balance: balanceCents / 100 });
+      data.revenue.items.push({ code: row.code, name: row.name, balance: balanceCents / 100 });
       data.revenue.total += balanceCents;
     } else if (row.account_type === "expense") {
-      if ((row.code as string).startsWith("50")) { // 5000 COGS conventionally
-        data.cogs.items.push({ code: row.code as string, name: row.name as string, balance: balanceCents / 100 });
+      if (row.code.startsWith("50")) { // 5000 COGS conventionally
+        data.cogs.items.push({ code: row.code, name: row.name, balance: balanceCents / 100 });
         data.cogs.total += balanceCents;
       } else {
-        data.expenses.items.push({ code: row.code as string, name: row.name as string, balance: balanceCents / 100 });
+        data.expenses.items.push({ code: row.code, name: row.name, balance: balanceCents / 100 });
         data.expenses.total += balanceCents;
       }
     }

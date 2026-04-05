@@ -5,7 +5,7 @@
 import { Elysia, t } from "elysia";
 
 import {
-  getAccountTree,
+  getAccountsWithBalances,
   addAccount,
   deactivateAccount,
 } from "../services/accounts.service.ts";
@@ -17,9 +17,12 @@ export const accountsRoutes = new Elysia({ prefix: "/accounts" })
 
   // GET /accounts?companyId=
   .use(requirePermission("accounts", "read"))
-  .get("/", async ({ query, set }) => {
-    if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
-    return await getAccountTree((query.companyId as string));
+  .get("/", async ({ query }) => {
+    return await getAccountsWithBalances(query.companyId);
+  }, {
+    query: t.Object({
+      companyId: t.String()
+    })
   })
 
   // POST /accounts
@@ -61,14 +64,16 @@ export const accountsRoutes = new Elysia({ prefix: "/accounts" })
 
   // DELETE /accounts/:id?companyId=
   .delete("/:id", async ({ params, query, set }) => {
-    if (!(query.companyId as string)) { set.status = 400; return { error: "companyId required" }; }
-
     try {
-      await deactivateAccount((params.id as string), (query.companyId as string));
+      await deactivateAccount((params.id as string), query.companyId);
       return { message: "Account deactivated" };
     } catch (err) {
       set.status = 422;
       return { error: err instanceof Error ? err.message : "Unknown error" };
     }
+  }, {
+    query: t.Object({
+      companyId: t.String()
+    })
   });
 

@@ -3,6 +3,7 @@ import { db } from '../../db/connection.ts';
 import { systemConfig, auditLogs } from '../../db/schema/index.ts';
 import { createAuditEntry } from '../audit.service.ts';
 import { eq, sql } from 'drizzle-orm';
+import { logger } from '../../lib/logger.ts';
 
 export interface LastBackupInfo {
   filename: string | null;
@@ -24,7 +25,7 @@ export class BackupScheduler {
     try {
       await this.checkSchedule(); // check on start
     } catch (e) {
-      console.error("[BackupScheduler] Error during initial checkSchedule:", e);
+      logger.error("BackupScheduler", "Error during initial checkSchedule", e);
     }
   }
 
@@ -49,19 +50,19 @@ export class BackupScheduler {
          `) as { ran: number }[];
 
          if (!ranToday) {
-             console.log("[Backup] Starting scheduled backup.");
+             logger.info("BackupScheduler", "Starting scheduled backup");
              await this.runScheduledBackup();
          }
       }
     } catch (e) {
-      console.error("[Backup] Scheduled check error: ", e);
+      logger.error("BackupScheduler", "Scheduled check error", e);
     }
   }
 
   private async runScheduledBackup() {
     const tempPassword = process.env.AUTO_BACKUP_SECRET;
     if (!tempPassword) {
-      console.error("[BackupScheduler] AUTO_BACKUP_SECRET not set — scheduled backup aborted.");
+      logger.error("BackupScheduler", "AUTO_BACKUP_SECRET not set — scheduled backup aborted");
       return;
     }
     let filename = "";
@@ -127,7 +128,9 @@ export class BackupScheduler {
       if (row && row.backupScheduleHour !== null) {
         scheduledHourUTC = row.backupScheduleHour;
       }
-    } catch (e) {}
+    } catch (e) {
+      logger.error("BackupScheduler", "Error fetching scheduled hour", e);
+    }
 
     return { filename, date, status, scheduledHourUTC };
   }

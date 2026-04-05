@@ -31,7 +31,7 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
 
   // POST /gl-accounts — crear cuenta nueva
   .post('/', async ({ body, set }) => {
-    const { companyId, code, name, accountType, normalBalance, description, parentCode } = body as any;
+    const { companyId, code, name, accountType, normalBalance, description, parentCode } = body as { companyId: string, code: string, name: string, accountType: string, normalBalance: string, description?: string, parentCode?: string };
     if (!companyId || !code || !name || !accountType || !normalBalance) {
       set.status = 400; return { error: 'Faltan campos requeridos' };
     }
@@ -51,12 +51,12 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
   // PATCH /gl-accounts/:id — editar nombre/descripción/código
   .patch('/:id', async ({ params, body, set }) => {
     const { id } = params;
-    const { companyId, name, description, code } = body as any;
+    const { companyId, name, description, code } = body as { companyId: string, name?: string, description?: string, code?: string };
     if (!companyId) { set.status = 400; return { error: 'companyId requerido' }; }
     const account = await db.select().from(chartOfAccounts)
       .where(and(eq(chartOfAccounts.id, id), eq(chartOfAccounts.companyId, companyId))).limit(1);
     if (account.length === 0) { set.status = 404; return { error: 'Cuenta no encontrada' }; }
-    const updates: any = { updatedAt: new Date() };
+    const updates: { updatedAt: Date, name?: string, description?: string, code?: string } = { updatedAt: new Date() };
     if (name) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (code) {

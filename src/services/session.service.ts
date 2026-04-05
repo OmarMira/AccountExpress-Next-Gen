@@ -53,7 +53,7 @@ export async function invalidateAllUserSessions(userId: string): Promise<number>
     .set({ isValid: false })
     .where(and(eq(sessions.userId, userId), eq(sessions.isValid, true)));
   // postgres.js returns an array of affected rows; rowCount from the command tag
-  return (result as any).count ?? 0;
+  return (result as unknown as { count: number }).count ?? 0;
 }
 
 // ── Switch active company within a session ───────────────────

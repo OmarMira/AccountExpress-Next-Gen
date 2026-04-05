@@ -8,6 +8,7 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema/index.ts";
+import { logger } from "../lib/logger.ts";
 
 const DATABASE_URL =
   process.env["DATABASE_URL"] ??
@@ -23,4 +24,4 @@ export const db = drizzle(client, { schema });
 // Re-export sql tag for raw SQL fragments when needed in complex queries
 export { sql } from "drizzle-orm";
 
-console.log("[DB] Connected to PostgreSQL");
+logger.info("db", "Connected to PostgreSQL");

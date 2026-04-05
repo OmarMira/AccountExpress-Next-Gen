@@ -6,9 +6,12 @@
 // ============================================================
 
 import { db, sql } from "../../db/connection.ts";
+import { logger } from "../../lib/logger.ts";
 
-const OLLAMA_URL = "http://localhost:11434/api/chat";
-const MODEL      = "phi3:mini";
+const OLLAMA_URL = process.env.OLLAMA_URL 
+  ? `${process.env.OLLAMA_URL}/api/chat` 
+  : null;
+const MODEL = process.env.OLLAMA_MODEL ?? "phi3:mini";
 
 const SYSTEM_PROMPT = `You are a Forensic Auditor and Florida Tax Consultant for a small business accounting system.
 
@@ -32,17 +35,31 @@ HARD CONSTRAINTS:
 
 // ── Contexto financiero de la empresa ────────────────────────
 
-export async function buildFinancialContext(companyId: string): Promise<object> {
+interface BankRow        { total: string; }
+interface PendingRow     { count: string; }
+interface PeriodRow      { name: string; start_date: string; end_date: string; }
+interface JournalRow     { date: string; description: string; reference: string; total_debits: string; total_credits: string; }
+interface BalanceRow     { debits: string; credits: string; }
+interface TopAccountRow  { account_code: string; account_name: string; account_type: string; activity: string; }
+
+export async function buildFinancialContext(companyId: string, months: number = 3): Promise<object> {
   try {
+    const intervalStr = `${months} months`;
+
     // Balance bancario
     const bankQuery = sql`SELECT SUM(balance) as "total" FROM bank_accounts WHERE company_id = ${companyId}`;
-    const bankRows = await db.execute(bankQuery);
-    const bank = bankRows[0] as any;
+    const bankRows = await db.execute(bankQuery) as unknown as BankRow[];
+    const bank = bankRows[0];
 
-    // Transacciones pendientes
-    const pendingQuery = sql`SELECT COUNT(*) as "count" FROM bank_transactions WHERE company_id = ${companyId} AND status = 'pending'`;
-    const pendingRows = await db.execute(pendingQuery);
-    const pending = pendingRows[0] as any;
+    // Transacciones pendientes en el período
+    const pendingQuery = sql`
+      SELECT COUNT(*) as "count" FROM bank_transactions 
+      WHERE company_id = ${companyId} 
+        AND status = 'pending'
+        AND transaction_date >= current_date - ${sql.raw(`interval '${intervalStr}'`)}
+    `;
+    const pendingRows = await db.execute(pendingQuery) as unknown as PendingRow[];
+    const pending = pendingRows[0];
 
     // Período fiscal activo
     const periodQuery = sql`
@@ -50,10 +67,10 @@ export async function buildFinancialContext(companyId: string): Promise<object> 
        WHERE company_id = ${companyId} AND status = 'open'
        ORDER BY start_date ASC LIMIT 1
     `;
-    const periodRows = await db.execute(periodQuery);
-    const period = periodRows[0] as any;
+    const periodRows = await db.execute(periodQuery) as unknown as PeriodRow[];
+    const period = periodRows[0];
 
-    // Últimos 10 asientos del diario
+    // Últimos 10 asientos del diario en el período
     const journalQuery = sql`
        SELECT je.entry_date as "date", je.description as "description", je.reference as "reference",
               SUM(jl.debit_amount)  as "total_debits",
@@ -61,23 +78,24 @@ export async function buildFinancialContext(companyId: string): Promise<object> 
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl.journal_entry_id = je.id
        WHERE je.company_id = ${companyId}
+         AND je.entry_date >= current_date - ${sql.raw(`interval '${intervalStr}'`)}
        GROUP BY je.id
        ORDER BY je.entry_date DESC LIMIT 10
     `;
-    const journal = await db.execute(journalQuery) as any[];
+    const journal = await db.execute(journalQuery) as unknown as JournalRow[];
 
-    // Verificar balance de partida doble (últimos 30 días)
+    // Verificar balance de partida doble (período solicitado)
     const balanceQuery = sql`
        SELECT SUM(jl.debit_amount) as "debits", SUM(jl.credit_amount) as "credits"
        FROM journal_lines jl
        INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
        WHERE je.company_id = ${companyId}
-         AND je.entry_date >= current_date - interval '30 days'
+         AND je.entry_date >= current_date - ${sql.raw(`interval '${intervalStr}'`)}
     `;
-    const balanceRows = await db.execute(balanceQuery);
-    const balance = balanceRows[0] as any;
+    const balanceRows = await db.execute(balanceQuery) as unknown as BalanceRow[];
+    const balance = balanceRows[0];
 
-    // Top 5 cuentas por actividad
+    // Top 5 cuentas por actividad en el período
     const topAccountsQuery = sql`
        SELECT ca.code as "account_code", ca.name as "account_name", ca.account_type as "account_type",
               SUM(jl.debit_amount + jl.credit_amount) as "activity"
@@ -85,16 +103,26 @@ export async function buildFinancialContext(companyId: string): Promise<object> 
        INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
        INNER JOIN chart_of_accounts ca ON ca.id = jl.account_id
        WHERE je.company_id = ${companyId}
+         AND je.entry_date >= current_date - ${sql.raw(`interval '${intervalStr}'`)}
        GROUP BY ca.id
        ORDER BY activity DESC LIMIT 5
     `;
-    const topAccounts = await db.execute(topAccountsQuery) as any[];
+    const topAccounts = await db.execute(topAccountsQuery) as unknown as TopAccountRow[];
 
     const debitTotal  = Number(balance?.debits || 0);
     const creditTotal = Number(balance?.credits || 0);
 
+    // Si no hay actividad en el periodo, retornar aviso
+    if (journal.length === 0 && Number(pending?.count || 0) === 0) {
+      return { 
+        companyId, 
+        message: "No hay transacciones recientes en los últimos " + months + " meses.",
+        logic_clock: 0
+      };
+    }
+
     const lcResult = await db.execute(sql`SELECT MAX(logic_clock) as lc FROM journal_entries`);
-    const lcValue = (lcResult[0] as { lc: number } | null)?.lc ?? 0;
+    const lcValue = (lcResult[0] as { lc: number | null } | undefined)?.lc ?? 0;
 
     return {
       companyId,
@@ -135,6 +163,11 @@ export async function* chatWithOllama(
   }
   const context = await buildFinancialContext(companyId);
 
+  if (!OLLAMA_URL) {
+    yield "AI not configured. Set OLLAMA_URL in environment.";
+    return;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
   const response = await fetch(OLLAMA_URL, {
@@ -151,7 +184,7 @@ export async function* chatWithOllama(
 
   clearTimeout(timeout);
   if (!response.ok || !response.body) {
-    yield `Error connecting to Ollama. Make sure it is running on localhost:11434 and the model "${MODEL}" is installed.`;
+    yield `AI service is not available. Check OLLAMA_URL configuration.`;
     return;
   }
 
@@ -171,8 +204,8 @@ export async function* chatWithOllama(
         if (json.message?.content) {
           yield json.message.content;
         }
-      } catch {
-        // línea incompleta, ignorar
+      } catch (e) {
+        logger.error("ai.service", "stream parsing error", e);
       }
     }
   }

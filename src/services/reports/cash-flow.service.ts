@@ -39,8 +39,13 @@ export async function getCashFlow(companyId: string, startDate: string, endDate:
       AND transaction_date >= ${startDate}::date AND transaction_date <= ${endDate}::date
   `;
 
-  const rows = await db.execute(query2);
-  const result = rows[0] || { inflows: 0, outflows: 0 };
+  interface InflowOutflowRow {
+    inflows:  string;
+    outflows: string;
+  }
+
+  const rows = await db.execute(query2) as unknown as InflowOutflowRow[];
+  const result = rows[0] || { inflows: "0", outflows: "0" };
   
   const totalInflows = Number(result.inflows || 0);
   const totalOutflows = Number(result.outflows || 0);

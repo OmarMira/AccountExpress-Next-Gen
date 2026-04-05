@@ -56,7 +56,7 @@ export function SelectCompany() {
           <p className="text-sm text-gray-400 mb-6">Contacta al administrador del sistema</p>
           {user?.isSuperAdmin && (
             <button 
-              onClick={() => navigate('/setup')}
+              onClick={() => navigate('/onboarding')}
               className="inline-flex items-center justify-center py-2 px-5 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900"
             >
               Crear primera empresa

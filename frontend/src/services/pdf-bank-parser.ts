@@ -47,7 +47,7 @@ function parseDateToISO(raw: string): string {
 
 function parseAmount(raw: string): number {
   const isNeg = raw.includes('(') && raw.includes(')');
-  let s = raw.replace(/[()$€£\s]/g, '');
+  const s = raw.replace(/[()$€£\s]/g, '');
   let num: number;
   if (s.includes(',') && s.includes('.') && s.indexOf(',') < s.indexOf('.')) {
     num = parseFloat(s.replace(/,/g, ''));

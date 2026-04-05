@@ -12,6 +12,19 @@ import { v4 as uuidv4 } from "uuid";
 export type PeriodStatus = "open" | "closed" | "locked";
 export type PeriodType   = "monthly" | "quarterly" | "annual";
 
+export interface PeriodRow {
+  id:         string;
+  companyId:  string;
+  name:       string;
+  periodType: string;
+  startDate:  string;
+  endDate:    string;
+  status:     string;
+  closedBy:   string | null;
+  closedAt:   Date | null;
+  createdAt:  Date;
+}
+
 // ── Create a new fiscal period ───────────────────────────────
 export async function openPeriod(opts: {
   companyId:  string;
@@ -21,6 +34,7 @@ export async function openPeriod(opts: {
   endDate:    string;
 }): Promise<string> {
   // Validate: no overlap with existing active periods of same type
+  interface OverlapRow { id: string }
   const [overlapping] = await db.execute(sql`
     SELECT id FROM fiscal_periods
     WHERE company_id  = ${opts.companyId}
@@ -28,7 +42,7 @@ export async function openPeriod(opts: {
       AND status NOT IN ('closed', 'locked')
       AND NOT (end_date < ${opts.startDate} OR start_date > ${opts.endDate})
     LIMIT 1
-  `) as any[];
+  `) as unknown as OverlapRow[];
 
   if (overlapping) {
     throw new Error(
@@ -118,13 +132,13 @@ export async function lockPeriod(periodId: string): Promise<void> {
 }
 
 // ── Get a period by ID ────────────────────────────────────────
-export async function getPeriod(periodId: string) {
+export async function getPeriod(periodId: string): Promise<PeriodRow | null> {
   const [result] = await db
     .select()
     .from(fiscalPeriods)
     .where(eq(fiscalPeriods.id, periodId))
     .limit(1);
-  return result ?? null;
+  return (result as PeriodRow) ?? null;
 }
 
 // ── Find the open period containing a specific date ──────────
@@ -132,14 +146,16 @@ export async function findOpenPeriodForDate(
   companyId: string,
   entryDate: string
 ): Promise<string> {
-  const [period] = await db.execute(sql`
+  interface RawPeriodRow { id: string; status: string }
+  const rRows = await db.execute(sql`
     SELECT id, status FROM fiscal_periods
     WHERE company_id = ${companyId}
       AND start_date <= ${entryDate}
       AND end_date   >= ${entryDate}
     ORDER BY start_date DESC
     LIMIT 1
-  `) as any[];
+  `);
+  const [period] = rRows as unknown as RawPeriodRow[];
 
   if (!period) {
     throw new Error(`No fiscal period found covering date ${entryDate} for company ${companyId}`);
@@ -152,14 +168,16 @@ export async function findOpenPeriodForDate(
 }
 
 // ── List periods for a company ────────────────────────────────
-export async function listPeriods(companyId: string, status?: PeriodStatus) {
+export async function listPeriods(companyId: string, status?: PeriodStatus): Promise<PeriodRow[]> {
   const conditions = status
     ? and(eq(fiscalPeriods.companyId, companyId), eq(fiscalPeriods.status, status))
     : eq(fiscalPeriods.companyId, companyId);
 
-  return db
+  const results = await db
     .select()
     .from(fiscalPeriods)
     .where(conditions)
     .orderBy(fiscalPeriods.startDate);
+  
+  return results as PeriodRow[];
 }

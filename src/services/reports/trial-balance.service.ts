@@ -4,7 +4,6 @@
 // ============================================================
 
 import { db, sql } from "../../db/connection.ts";
-import { ValidationError as AccountingError } from "../journal.service.ts";
 
 export interface TrialBalanceItem {
   code: string;
@@ -21,6 +20,14 @@ export interface TrialBalanceData {
 }
 
 export async function getTrialBalance(companyId: string, asOfDate: string): Promise<TrialBalanceData> {
+  interface TrialBalanceRow {
+    code: string;
+    name: string;
+    normal_balance: string;
+    total_debits: string;
+    total_credits: string;
+  }
+
   const query = sql`
     SELECT
       ca.code,
@@ -39,7 +46,7 @@ export async function getTrialBalance(companyId: string, asOfDate: string): Prom
     ORDER BY ca.code ASC
   `;
 
-  const rows = await db.execute(query);
+  const rows = await db.execute(query) as unknown as TrialBalanceRow[];
 
   const items: TrialBalanceItem[] = [];
   let sumDebitsCents = 0;
@@ -55,13 +62,13 @@ export async function getTrialBalance(companyId: string, asOfDate: string): Prom
     const net = debits - credits; // Positive = Debit bound, Negative = Credit bound
     
     if (net > 0) {
-      items.push({ code: row.code as string, name: row.name as string, debit: net / 100, credit: 0 });
+      items.push({ code: row.code, name: row.name, debit: net / 100, credit: 0 });
       sumDebitsCents += net;
     } else if (net < 0) {
-      items.push({ code: row.code as string, name: row.name as string, debit: 0, credit: Math.abs(net) / 100 });
+      items.push({ code: row.code, name: row.name, debit: 0, credit: Math.abs(net) / 100 });
       sumCreditsCents += Math.abs(net);
     } else {
-      items.push({ code: row.code as string, name: row.name as string, debit: 0, credit: 0 });
+      items.push({ code: row.code, name: row.name, debit: 0, credit: 0 });
     }
   }
 

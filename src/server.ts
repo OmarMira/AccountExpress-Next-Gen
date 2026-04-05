@@ -20,6 +20,9 @@ import { dashboardRoutes }     from "./routes/dashboard.routes.ts";
 import { usersRoutes }         from "./routes/users.routes.ts";
 import { aiRoutes }            from "./routes/ai.routes.ts";
 import { backupRoutes, backupScheduler } from "./api/routes/backup.routes.ts";
+import { reconciliationGroupRoutes } from "./routes/reconciliation-group.routes.ts";
+import { globalRateLimiter } from "./middleware/rate-limit.ts";
+import { logger } from "./lib/logger.ts";
 
 const PORT = parseInt(process.env["PORT"] ?? "3000", 10);
 
@@ -40,6 +43,7 @@ export const app = new Elysia()
   }))
 
   .group("/api", (app) => app
+    .onBeforeHandle(globalRateLimiter(100, 60 * 1000))
     .use(authMiddleware)
     .use(authRoutes)
     .use(companiesRoutes)
@@ -55,15 +59,51 @@ export const app = new Elysia()
     .use(usersRoutes)
     .use(aiRoutes)
     .use(backupRoutes)
+    .use(reconciliationGroupRoutes)
   )
 
   // ── 404 handler ───────────────────────────────────────────
   .onError(({ code, error, set }) => {
-    if ((code as string) === "NOT_FOUND") {
+    // Definimos los códigos posibles de forma explícita para cubrir todos los casos reales detectados
+    type ErrorCode = 
+      | 'UNKNOWN' 
+      | 'VALIDATION' 
+      | 'INTERNAL_SERVER_ERROR' 
+      | 'INVALID_FILE_TYPE' 
+      | 'INVALID_COOKIE_SIGNATURE'
+      | 'PARSE' 
+      | 'NOT_FOUND' 
+      | number;
+    
+    const errorCode: ErrorCode = code;
+
+    if (errorCode === 'NOT_FOUND') {
       set.status = 404;
-      return { error: "Route not found" };
+      return { error: 'Route not found' };
     }
-    console.error("[SERVER] Unhandled error:", error);
+
+    if (errorCode === 'VALIDATION') {
+      set.status = 400;
+      const errorMessage = error instanceof Error ? error.message : 'Validation failed';
+      return { error: 'Validation failed', detail: errorMessage };
+    }
+
+    if (errorCode === 'INVALID_FILE_TYPE') {
+      set.status = 400;
+      return { error: 'Invalid file type' };
+    }
+
+    if (errorCode === 'INVALID_COOKIE_SIGNATURE') {
+      set.status = 401;
+      return { error: 'Invalid session cookie' };
+    }
+
+    if (error instanceof Error && error.name === 'ValidationError') {
+      set.status = 400;
+      return { error: error.message };
+    }
+
+    logger.error("server", "Unhandled error", error);
     set.status = 500;
     return { error: "Internal server error" };
   });
@@ -73,10 +113,8 @@ if (import.meta.main) {
   app.listen(PORT);
   
   await backupScheduler.start();
-  console.log('✅ Backup scheduler activo');
-  console.log(`   Próximo backup automático: ${await backupScheduler.getNextBackupTime()}`);
+  logger.info("server", "Backup scheduler active");
+  logger.info("server", "Next automatic backup scheduled", { nextBackup: await backupScheduler.getNextBackupTime() });
   
-  console.log(
-    `\n✅ Account Express Bookkeeping Core running on http://localhost:${PORT}\n`
-  );
+  logger.info("server", "Account Express Bookkeeping Core running", { url: `http://localhost:${PORT}` });
 }

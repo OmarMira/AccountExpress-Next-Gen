@@ -3,7 +3,7 @@
 // PostgreSQL 16 / Drizzle ORM
 // ============================================================
 
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { db, sql } from "../db/connection.ts";
 import { auditLogs } from "../db/schema/index.ts";
 import { eq, and, desc } from "drizzle-orm";
@@ -15,17 +15,17 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
   .guard({ beforeHandle: requireAuth })
 
   // GET /audit?companyId=&module=&limit=&offset=
-  .get("/", async ({ query, set }) => {
+  .get("/", async ({ query }) => {
     const conditions = [];
-    if (query.companyId) conditions.push(eq(auditLogs.companyId, query.companyId as string));
-    if (query.module)    conditions.push(eq(auditLogs.module, query.module as string));
-    if (query.action)    conditions.push(eq(auditLogs.action, query.action as string));
+    if (query.companyId) conditions.push(eq(auditLogs.companyId, query.companyId));
+    if (query.module)    conditions.push(eq(auditLogs.module, query.module));
+    if (query.action)    conditions.push(eq(auditLogs.action, query.action));
 
-    const limitVal  = parseInt((query.limit  as string)) || 100;
-    const offsetVal = parseInt((query.offset as string)) || 0;
+    const limitVal  = query.limit  ? parseInt(query.limit)  : 100;
+    const offsetVal = query.offset ? parseInt(query.offset) : 0;
     const safeLimit  = Number.isFinite(limitVal)  && limitVal > 0  ? limitVal : 100;
     const safeOffset = Number.isFinite(offsetVal) && offsetVal >= 0 ? offsetVal : 0;
- 
+
     return await db
       .select()
       .from(auditLogs)
@@ -33,6 +33,14 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
       .limit(safeLimit)
       .offset(safeOffset)
       .orderBy(desc(auditLogs.chainIndex));
+  }, {
+    query: t.Object({
+      companyId: t.Optional(t.String()),
+      module:    t.Optional(t.String()),
+      action:    t.Optional(t.String()),
+      limit:     t.Optional(t.String()),
+      offset:    t.Optional(t.String()),
+    })
   })
 
   // GET /audit/verify — cryptographic chain validation

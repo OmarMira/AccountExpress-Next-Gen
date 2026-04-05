@@ -56,3 +56,50 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+
+const globalStore = new Map<string, RateLimitInfo>();
+
+/**
+ * Global rate limiter for the entire API.
+ * 100 requests per IP per minute.
+ */
+export const globalRateLimiter = (max: number, windowMs: number) => {
+  return async ({ request, set }: any) => {
+    const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+    const now = Date.now();
+    
+    let info = globalStore.get(ip);
+    
+    if (info && now > info.resetAt) {
+      globalStore.delete(ip);
+      info = undefined;
+    }
+
+    if (!info) {
+      info = { count: 1, resetAt: now + windowMs };
+      globalStore.set(ip, info);
+      return;
+    }
+    
+    if (info.count >= max) {
+      set.status = 429;
+      set.headers['Retry-After'] = "60";
+      return { 
+        error: "Too many requests",
+        retryAfter: 60
+      };
+    }
+    
+    info.count++;
+  };
+};
+
+// Cleanup globalStore
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, info] of globalStore.entries()) {
+    if (now > info.resetAt) {
+      globalStore.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000);

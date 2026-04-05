@@ -6,7 +6,7 @@
 
 import { db }                 from "../db/connection.ts";
 import { users, userCompanyRoles, roles } from "../db/schema/index.ts";
-import { eq, and, isNull }    from "drizzle-orm";
+import { eq, and }    from "drizzle-orm";
 import { hashPassword }        from "./auth.service.ts";
 import { randomUUID }         from "crypto";
 
