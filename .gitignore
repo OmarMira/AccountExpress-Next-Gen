@@ -40,3 +40,15 @@ test_l*.txt
 test.json
 cookies.txt
 fix-types.ts
+# Temporary diagnostic files
+*_lint.json
+*_lint.txt
+lint_errors*.txt
+console_audit.txt
+curl*.txt
+curl*.json
+tsc_*.log
+tsc_*.txt
+server_error*.log
+tmp*.txt
+tmp*.json
