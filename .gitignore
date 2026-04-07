@@ -1,20 +1,46 @@
+# --- Dependency Directories ---
 node_modules/
 dist/
+build/
+.husky/
+.bundle/
+
+# --- Local Databases & Data ---
 data/
-.env
 *.db
 *.db-shm
 *.db-wal
 drizzle/migrations/
+
+# --- Environment & Sensitive Files ---
+.env
+.env.local
+.env.*.local
+cookies.txt
+*.pem
+*.key
+*.cert
+*.pfx
+
+# --- Logs & Performance Traces ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 bun.lockb
-temp_*.ts
+server-log.txt
+backend.log
+install.log
+error-trace.json
+
+# --- Temporary & Diagnostic Files ---
 tmp/
+temp_*.ts
 run-parser*.ts
 debug-*.ts
 test-pdf.js
-
-# Debug and temporary files
-*.log
+test.json
 out*.txt
 out*.json
 *_output*.txt
@@ -23,32 +49,36 @@ out*.json
 *_err*.txt
 ts_*.txt
 tsc_*.txt
-server-log.txt
-backend.log
-install.log
-migrate_error.txt
-fetch_out.txt
-fetch_gl_out*.json
-gitingest-output.txt
-all_files.txt
-AccountExpress_Clean.txt
-cleanup_err.txt
-demo_company_log.txt
-login_test_result.txt
-create_admin_log.txt
-test_l*.txt
-test.json
-cookies.txt
-fix-types.ts
-# Temporary diagnostic files
-*_lint.json
-*_lint.txt
-lint_errors*.txt
-console_audit.txt
-curl*.txt
-curl*.json
-tsc_*.log
-tsc_*.txt
-server_error*.log
-tmp*.txt
-tmp*.json
+*.txt
+!README.md
+!SECURITY.md
+!CONTRIBUTING.md
+!ARCHITECTURE.md
+!STRATEGY.md
+!AUDIT_AI_STRATEGY.md
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+
+# --- Tooling Overlays (Root level files to ignore) ---
+/all_files.txt
+/AccountExpress_Clean.txt
+/gitingest-output.txt
+/errors.txt
+/lint_errors*.txt
+/ts_errors*.log
+/tsc_errors.log
+/tsc_output*.txt
+/fetch_*.json
+/fetch_out.txt
+/cleanup_err.txt
+/demo_company_log.txt
+/login_test_result.txt
+/create_admin_log.txt
+/test_l*.txt
+/tmp*.txt
+/tmp*.json
+/curl*.txt
+/curl*.json
+/fix-types.ts
