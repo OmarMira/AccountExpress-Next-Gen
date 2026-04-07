@@ -5,7 +5,7 @@ import {
   bankTransactionGroupItems, 
 } from "../../db/schema/index.ts";
 import { eq, and, inArray } from "drizzle-orm";
-import { createDraft, post } from "../journal.service.ts";
+import { createDraft, post } from "../journal-core.service.ts";
 
 export async function createGroup(input: {
   companyId: string;
@@ -76,96 +76,88 @@ export async function reconcileGroup(input: {
   ipAddress: string;
   bankAccountGlId: string;
 }): Promise<{ journalEntryId: string }> {
-  // Nota: createDraft y post manejan sus propias transacciones internamente
-  // contra "db", por lo que esta operación principal no puede estar en un
-  // "await db.transaction(...)" gigante si no podemos inyectar "tx" a journal.service.ts
-  
-  // 1. Buscar grupo y validar
-  const [group] = await db
-    .select()
-    .from(bankTransactionGroups)
-    .where(and(
-      eq(bankTransactionGroups.id, input.groupId),
-      eq(bankTransactionGroups.companyId, input.companyId)
-    ))
-    .limit(1);
 
-  if (!group) {
-    throw new Error("Grupo no encontrado o no pertenece a la compañía.");
-  }
-  if (group.status !== "pending") {
-    throw new Error("El grupo ya se encuentra conciliado.");
-  }
+  return await db.transaction(async (tx) => {
+    // 1. Buscar grupo y validar
+    const [group] = await tx
+      .select()
+      .from(bankTransactionGroups)
+      .where(and(
+        eq(bankTransactionGroups.id, input.groupId),
+        eq(bankTransactionGroups.companyId, input.companyId)
+      ))
+      .limit(1);
 
-  // 2. Obtener transacciones vía group_items
-  const items = await db
-    .select({ transactionId: bankTransactionGroupItems.transactionId })
-    .from(bankTransactionGroupItems)
-    .where(eq(bankTransactionGroupItems.groupId, group.id));
+    if (!group) throw new Error("Grupo no encontrado o no pertenece a la compañía.");
+    if (group.status !== "pending") throw new Error("El grupo ya se encuentra conciliado.");
 
-  const transactionIds = items.map(i => i.transactionId);
+    // 2. Obtener transacciones vía group_items
+    const items = await tx
+      .select({ transactionId: bankTransactionGroupItems.transactionId })
+      .from(bankTransactionGroupItems)
+      .where(eq(bankTransactionGroupItems.groupId, group.id));
 
-  // Fecha del journal entry como el día actual
-  const entryDate = new Date().toISOString().split("T")[0];
+    const transactionIds = items.map(i => i.transactionId);
 
-  // 3. Preparar líneas del diario contable
-  // El amountFloat se calcula a partir de centavos a una escala normal de dólares
-  const amountFloat = group.totalAmount / 100;
-  const absAmount = Math.abs(amountFloat);
+    const entryDate = new Date().toISOString().split("T")[0];
 
-  // Manejamos inteligentemente los ingresos(+) y egresos(-) financieros
-  const bankLine = {
-    accountId: input.bankAccountGlId,
-    debitAmount: amountFloat > 0 ? absAmount : 0,
-    creditAmount: amountFloat < 0 ? absAmount : 0,
-    lineNumber: 1,
-    description: `Conciliación en Grupo: ${group.description}`
-  };
+    // 3. Preparar líneas del diario contable
+    const amountFloat = group.totalAmount / 100;
+    const absAmount = Math.abs(amountFloat);
 
-  const targetLine = {
-    accountId: group.glAccountId,
-    debitAmount: amountFloat < 0 ? absAmount : 0,
-    creditAmount: amountFloat > 0 ? absAmount : 0,
-    lineNumber: 2,
-    description: `Acreditación en Grupo: ${group.description}`
-  };
+    const bankLine = {
+      accountId: input.bankAccountGlId,
+      debitAmount: amountFloat > 0 ? absAmount : 0,
+      creditAmount: amountFloat < 0 ? absAmount : 0,
+      lineNumber: 1,
+      description: `Conciliación en Grupo: ${group.description}`
+    };
 
-  // Llamar a createDraft() existente
-  const draftId = await createDraft({
-    companyId: input.companyId,
-    entryDate,
-    description: `Grupo Conciliado: ${group.description}`,
-    reference: group.id,
-    isAdjusting: false,
-    periodId: input.periodId,
-    createdBy: input.userId
-  }, [bankLine, targetLine]);
+    const targetLine = {
+      accountId: group.glAccountId,
+      debitAmount: amountFloat < 0 ? absAmount : 0,
+      creditAmount: amountFloat > 0 ? absAmount : 0,
+      lineNumber: 2,
+      description: `Acreditación en Grupo: ${group.description}`
+    };
 
-  // Ejecutar el paso de aprobación (genera audit chain e inmutabilidad)
-  await post(draftId, input.userId, input.sessionId, input.ipAddress);
+    // 4. Crear draft dentro de la misma transacción
+    const draftId = await createDraft({
+      companyId: input.companyId,
+      entryDate,
+      description: `Grupo Conciliado: ${group.description}`,
+      reference: group.id,
+      isAdjusting: false,
+      periodId: input.periodId,
+      createdBy: input.userId
+    }, [bankLine, targetLine], tx);
 
-  const now = new Date();
+    // 5. Postear dentro de la misma transacción
+    await post(draftId, input.userId, input.sessionId, input.ipAddress, tx);
 
-  // 4. Actualizar status del grupo
-  await db.update(bankTransactionGroups)
-    .set({
-      status: "reconciled",
-      journalEntryId: draftId,
-      reconciledAt: now
-    })
-    .where(eq(bankTransactionGroups.id, group.id));
+    const now = new Date();
 
-  // 5. Actualizar status de cada transacción individual
-  if (transactionIds.length > 0) {
-    await db.update(bankTransactions)
+    // 6. Actualizar status del grupo — atómico con el journal entry
+    await tx.update(bankTransactionGroups)
       .set({
         status: "reconciled",
         journalEntryId: draftId,
-        matchedBy: input.userId,
-        matchedAt: now
+        reconciledAt: now
       })
-      .where(inArray(bankTransactions.id, transactionIds));
-  }
+      .where(eq(bankTransactionGroups.id, group.id));
 
-  return { journalEntryId: draftId };
+    // 7. Actualizar status de cada transacción — atómico con todo lo anterior
+    if (transactionIds.length > 0) {
+      await tx.update(bankTransactions)
+        .set({
+          status: "reconciled",
+          journalEntryId: draftId,
+          matchedBy: input.userId,
+          matchedAt: now
+        })
+        .where(inArray(bankTransactions.id, transactionIds));
+    }
+
+    return { journalEntryId: draftId };
+  });
 }

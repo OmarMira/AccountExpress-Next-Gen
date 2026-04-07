@@ -8,7 +8,8 @@
 import { db } from "../../db/connection.ts";
 import { bankTransactions } from "../../db/schema/index.ts";
 import { eq, and } from "drizzle-orm";
-import { createDraft, post, ValidationError } from "../journal.service.ts";
+import { createDraft, post } from "../journal-core.service.ts";
+import { ValidationError } from "../../lib/errors.ts";
 import { v4 as uuidv4 } from "uuid";
 
 // ── Perform Bank Reconciliation ─────────────────────────────
@@ -70,10 +71,10 @@ export async function matchTransaction(
       isAdjusting: false,
       periodId,
       createdBy: userId
-    }, [bankLine, targetLine]); // pass tx here to keep transaction bound
+    }, [bankLine, targetLine], tx); // pass tx here to keep transaction bound
 
     // 4. Force strict double-entry verification via Post() mechanically
-    await post(draftId, userId, sessionId, ipAddress); // pass tx here as well
+    await post(draftId, userId, sessionId, ipAddress, tx); // pass tx here as well
 
     // 5. Hard link completion to the Bank state
     await tx.update(bankTransactions)

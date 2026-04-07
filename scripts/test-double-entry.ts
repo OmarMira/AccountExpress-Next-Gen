@@ -5,7 +5,8 @@ process.env.DATABASE_PATH = "./data/test.db";
 // Verifies that the journal service correctly rejects imbalanced entries.
 // ============================================================
 
-import { validateDoubleEntry, ValidationError } from "../src/services/journal.service.ts";
+import { validateDoubleEntry } from "../src/services/journal-math.service.ts";
+import { ValidationError } from "../src/lib/errors.ts";
 
 let passed = 0;
 let failed = 0;

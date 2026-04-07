@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
-    "dev": "concurrently \"bun run src/index.ts\" \"cd frontend && bun run dev\"",
-    "dev:all": "concurrently \"bun run src/index.ts\" \"cd frontend && bun run dev\"",
+    "dev": "concurrently \"bun run --watch src/index.ts\" \"cd frontend && bun run dev\"",
+    "dev:all": "concurrently \"bun run --watch src/index.ts\" \"cd frontend && bun run dev\"",
     "dev:frontend": "cd frontend && bun run dev",
-    "start": "bun run src/index.ts",
+    "start": "bun run --watch src/index.ts",
     "migrate": "bun run src/db/migrate.ts",
     "db:migrate": "bun run src/db/migrate.ts",
     "seed": "bun run src/db/seed/seed.ts",

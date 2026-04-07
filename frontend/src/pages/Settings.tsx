@@ -62,6 +62,62 @@ export function Settings() {
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
 
+  // --- Edit User State ---
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    id: '',
+    firstName: '',
+    lastName: '',
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    roleId: '',
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: async (data: typeof editForm) => fetchApi(`/users/${data.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        username: data.username,
+        email: data.email,
+        password: data.password || undefined,
+        roleId: data.roleId,
+        companyId: activeCompany?.id,
+      }),
+    }),
+    onSuccess: () => {
+      setShowEditModal(false);
+      refetchUsers();
+    },
+    onError: (err: Error) => alert(`Error al actualizar usuario: ${err.message}`),
+  });
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editForm.password && editForm.password !== editForm.confirmPassword) {
+      alert('Las contraseñas no coinciden');
+      return;
+    }
+    updateUserMutation.mutate(editForm);
+  };
+
+  const openEditModal = (u: any) => {
+    setEditForm({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      username: u.username,
+      email: u.email,
+      password: '',
+      confirmPassword: '',
+      roleId: u.roleId || 'viewer',
+    });
+    setShowEditModal(true);
+  };
+
   const createUserMutation = useMutation({
     mutationFn: async () => fetchApi('/users', {
       method: 'POST',
@@ -354,15 +410,15 @@ export function Settings() {
                     {users.map((u: any) => (
                       <tr key={u.id} className="hover:bg-gray-800/30">
                         <td className="py-3 px-4">
-                          <div className="font-medium text-gray-200">{u.first_name} {u.last_name}</div>
+                          <div className="font-medium text-gray-200">{u.firstName} {u.lastName}</div>
                           <div className="text-xs text-gray-500">{u.username}</div>
                         </td>
                         <td className="py-3 px-4 text-gray-400">{u.email}</td>
                         <td className="py-3 px-4">
                           <select
-                            value={u.role_id ?? 'viewer'}
+                            value={u.roleId ?? 'viewer'}
                             onChange={e => assignRoleMutation.mutate({ userId: u.id, roleId: e.target.value })}
-                            disabled={u.is_super_admin === 1 || assignRoleMutation.isPending}
+                            disabled={u.isSuperAdmin || assignRoleMutation.isPending}
                             className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs font-medium focus:border-indigo-500 outline-none disabled:opacity-40 cursor-pointer"
                           >
                             <option value="admin">Administrador</option>
@@ -371,19 +427,27 @@ export function Settings() {
                         </td>
                         <td className="py-3 px-4">
                           <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                            u.is_active !== 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-600/40 text-gray-400'
+                            u.isActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-600/40 text-gray-400'
                           }`}>
-                            {u.is_active !== 0 ? 'Activo' : 'Inactivo'}
+                            {u.isActive ? 'Activo' : 'Inactivo'}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <button
-                            onClick={() => confirm('\u00bfDesactivar este usuario?') && revokeUserMutation.mutate(u.id)}
-                            disabled={user?.id === u.id || u.is_super_admin === 1}
-                            className="text-rose-400 hover:text-rose-300 disabled:opacity-30 transition-colors flex items-center gap-1 justify-end ml-auto"
-                          >
-                            <XCircle className="w-4 h-4" /> Desactivar
-                          </button>
+                          <div className="flex items-center justify-end gap-3 ml-auto">
+                            <button
+                              onClick={() => openEditModal(u)}
+                              className="text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
+                            >
+                              <SettingsIcon className="w-4 h-4" /> Editar
+                            </button>
+                            <button
+                              onClick={() => confirm('\u00bfDesactivar este usuario?') && revokeUserMutation.mutate(u.id)}
+                              disabled={user?.id === u.id || u.isSuperAdmin}
+                              className="text-rose-400 hover:text-rose-300 disabled:opacity-30 transition-colors flex items-center gap-1"
+                            >
+                              <XCircle className="w-4 h-4" /> Desactivar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -498,6 +562,138 @@ export function Settings() {
 
         </div>
       </div>
+
+      {/* Modal: Editar Usuario (Paridad Total con Formulario de Creación) */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-2xl space-y-6 animate-in zoom-in duration-200">
+            <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
+              <UserPlus className="w-6 h-6 text-indigo-400" />
+              <div>
+                <h3 className="text-xl font-bold text-white tracking-tight">Modificar Perfil de Usuario</h3>
+                <p className="text-xs text-gray-500 mt-1">Actualice cualquier atributo de la cuenta. Deje la contraseña en blanco para no cambiarla.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Nombre *</label>
+                  <input
+                    required
+                    value={editForm.firstName}
+                    onChange={e => setEditForm({...editForm, firstName: e.target.value})}
+                    placeholder="Ej: Juan"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Apellido *</label>
+                  <input
+                    required
+                    value={editForm.lastName}
+                    onChange={e => setEditForm({...editForm, lastName: e.target.value})}
+                    placeholder="Ej: Pérez"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Correo Electrónico *</label>
+                  <input
+                    required
+                    type="email"
+                    value={editForm.email}
+                    onChange={e => setEditForm({...editForm, email: e.target.value})}
+                    placeholder="juan@empresa.com"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Nombre de Usuario *</label>
+                  <input
+                    required
+                    value={editForm.username}
+                    onChange={e => setEditForm({...editForm, username: e.target.value})}
+                    placeholder="jperez"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Nueva Contraseña</label>
+                  <div className="relative">
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      minLength={8}
+                      value={editForm.password}
+                      onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                      placeholder="Dejar en blanco para no cambiar"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 pr-10 text-white text-sm focus:border-indigo-500 outline-none transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Confirmar Contraseña</label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPass ? 'text' : 'password'}
+                      value={editForm.confirmPassword}
+                      onChange={e => setEditForm({ ...editForm, confirmPassword: e.target.value })}
+                      placeholder="Repetir nueva contraseña"
+                      className={`w-full bg-gray-800 border rounded-xl px-4 py-2.5 pr-10 text-white text-sm focus:outline-none transition-all ${
+                        editForm.confirmPassword && editForm.password !== editForm.confirmPassword
+                          ? 'border-rose-500 focus:border-rose-500'
+                          : 'border-gray-700 focus:border-indigo-500'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPass(!showConfirmPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Rol de Usuario *</label>
+                  <select
+                    value={editForm.roleId}
+                    onChange={e => setEditForm({ ...editForm, roleId: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="admin">Administrador</option>
+                    <option value="viewer">Solo Lectura</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="submit"
+                  disabled={updateUserMutation.isPending}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3 rounded-2xl transition-all shadow-lg shadow-indigo-500/20"
+                >
+                  {updateUserMutation.isPending ? 'Procesando...' : 'Guardar Cambios'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-2xl transition-all border border-gray-700"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

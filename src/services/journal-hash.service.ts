@@ -8,7 +8,7 @@ import { createHash }      from "crypto";
 import { db, sql }         from "../db/connection.ts";
 import { journalEntries }  from "../db/schema/index.ts";
 import { eq, desc }        from "drizzle-orm";
-import type { JournalEntryInput, JournalLineInput } from "./journal.service.ts";
+import type { JournalEntryInput, JournalLineInput } from "../lib/journal-types.ts";
 
 export function sha256(data: string): string {
   return createHash("sha256").update(data, "utf8").digest("hex");

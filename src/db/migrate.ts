@@ -21,7 +21,10 @@ export async function runMigrations(): Promise<void> {
   console.log("[MIGRATE] Starting PostgreSQL migration runner...");
 
   const connectionString = process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
-  const migrationClient = postgres(connectionString as string, { max: 1 });
+  if (!connectionString) {
+    throw new Error("DATABASE_URL or DATABASE_ADMIN_URL environment variable is required.");
+  }
+  const migrationClient = postgres(connectionString, { max: 1 });
   const migrationDb = drizzle(migrationClient);
 
   // Run Drizzle Kit migrations

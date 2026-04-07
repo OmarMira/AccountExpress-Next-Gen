@@ -25,12 +25,13 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   .guard({ beforeHandle: requireAuth })
 
   // ── GET /users?companyId=xxx ──────────────────────────────
-  .get("/", async ({ query, set }) => {
-    const companyId = query.companyId;
-    if (!companyId) { set.status = 400; return { success: false, error: "companyId required" }; }
-
-    const users = await listUsers(companyId as string);
+  .get("/", async ({ query }) => {
+    const users = await listUsers(query.companyId);
     return { success: true, data: users };
+  }, {
+    query: t.Object({
+      companyId: t.String()
+    })
   })
 
   // ── GET /users/roles ──────────────────────────────────────
@@ -104,16 +105,23 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     const result = await updateUser({
       userId: params.userId,
       ...payload,
+      grantedBy: uid,
     });
 
     return { success: true, data: result };
   }, {
+    params: t.Object({
+      userId: t.String()
+    }),
     body: t.Object({
       isActive:  t.Optional(t.Boolean()),
       firstName: t.Optional(t.String({ minLength: 1 })),
       lastName:  t.Optional(t.String({ minLength: 1 })),
+      username:  t.Optional(t.String({ minLength: 1 })),
       email:     t.Optional(t.String()),
+      password:  t.Optional(t.String({ minLength: 8 })),
       companyId: t.Optional(t.String()),
+      roleId:    t.Optional(t.String()),
     }),
   })
 
@@ -157,6 +165,9 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
 
     return { success: true, data: result };
   }, {
+    params: t.Object({
+      userId: t.String()
+    }),
     body: t.Object({
       companyId: t.String(),
       roleId:    t.String(),
@@ -193,6 +204,9 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
 
     return { success: true, message: "Password reset. User must change it on next login." };
   }, {
+    params: t.Object({
+      userId: t.String()
+    }),
     body: t.Object({
       newPassword: t.String({ minLength: 8 }),
     }),

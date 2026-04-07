@@ -11,9 +11,7 @@ import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
 import { db, sql } from "../db/connection.ts";
 import { eq, and } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
 import { bankTransactions } from "../db/schema/index.ts";
-import { logger } from "../lib/logger.ts";
 
 export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(authMiddleware)
@@ -37,23 +35,13 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       try {
         const result = await statementImportService.processFile(
           body.companyId,
-          body.bankAccountId || "",
+          body.bankAccountId ?? "",
           buffer,
           file.name
         );
         return { success: true, ...result };
-      } catch (err: any) {
-        try {
-          const parsed = JSON.parse(err.message);
-          if (parsed.code === 'UNKNOWN_BANK') {
-            set.status = 400;
-            return { error: 'UNKNOWN_BANK', bankName: parsed.bankName };
-          }
-        } catch (e) {
-          logger.error("bank.routes", "unexpected error in catch block", e);
-        }
-        set.status = 500;
-        return { error: err.message };
+      } catch (err) {
+        throw err;
       }
     },
     {
@@ -74,25 +62,15 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       try {
         const result = await statementImportService.processParsedBatch(
           body.companyId,
-          body.bankAccountId || undefined,
+          body.bankAccountId ?? undefined,
           body.transactions,
-          body.bankName || undefined,
-          body.accountNumber || undefined,
+          body.bankName ?? undefined,
+          body.accountNumber ?? undefined,
           body.importBatchId
         );
         return { success: true, ...result };
-      } catch (err: any) {
-        try {
-          const parsed = JSON.parse(err.message);
-          if (parsed.code === 'UNKNOWN_BANK') {
-            set.status = 400;
-            return { error: 'UNKNOWN_BANK', bankName: parsed.bankName, accountNumber: parsed.accountNumber };
-          }
-        } catch (e) {
-          logger.error("bank.routes", "unexpected error in catch block", e);
-        }
-        set.status = 500;
-        return { error: err.message };
+      } catch (err) {
+        throw err;
       }
     },
     {
@@ -120,15 +98,15 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .get(
     "/transactions",
     async ({ query }) => {
-      let condition = eq(bankTransactions.companyId, query.companyId);
+      const conditions = [eq(bankTransactions.companyId, query.companyId)];
       if (query.status) {
-        condition = and(condition, eq(bankTransactions.status, query.status)) as SQL<unknown>;
+        conditions.push(eq(bankTransactions.status, query.status));
       }
 
       const txs = await db
         .select()
         .from(bankTransactions)
-        .where(condition)
+        .where(and(...conditions))
         .orderBy(sql`${bankTransactions.transactionDate} DESC`);
 
       const descriptions = txs.map(tx => tx.description);
@@ -234,11 +212,6 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .patch(
     "/transactions/:id/assign",
     async ({ params, body, set }) => {
-      if (!body.companyId || !body.glAccountId) {
-        set.status = 400;
-        return { error: "companyId y glAccountId requeridos" };
-      }
-
       const [existing] = await db
         .select({ id: bankTransactions.id })
         .from(bankTransactions)
@@ -250,7 +223,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         )
         .limit(1);
 
-      if (!existing) { set.status = 404; return { error: "Transacción no encontrada" }; }
+      if (!existing) {
+        set.status = 404;
+        return { error: "Transacción no encontrada" };
+      }
 
       await db.update(bankTransactions)
         .set({ glAccountId: body.glAccountId, status: "assigned" })

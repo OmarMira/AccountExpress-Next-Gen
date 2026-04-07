@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // REPORTS & EXPORT ROUTES
 // Routes for financial reports and CPA tax export
 // ============================================================
@@ -22,13 +22,8 @@ export const reportsRoutes = new Elysia()
       .guard({ beforeHandle: requireAuth })
       .use(requirePermission("reports", "read"))
 
-      .get("/balance-sheet", async ({ query, set }) => {
-        try {
-          return { success: true, data: await getBalanceSheet(query.companyId, query.asOfDate) };
-        } catch (err: any) {
-          set.status = 400;
-          return { success: false, error: err.message };
-        }
+      .get("/balance-sheet", async ({ query }) => {
+        return { success: true, data: await getBalanceSheet(query.companyId, query.asOfDate) };
       }, {
         query: t.Object({
           companyId: t.String(),
@@ -46,13 +41,8 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/trial-balance", async ({ query, set }) => {
-        try {
-          return { success: true, data: await getTrialBalance(query.companyId, query.asOfDate) };
-        } catch (err: any) {
-          set.status = 400;
-          return { success: false, error: err.message };
-        }
+      .get("/trial-balance", async ({ query }) => {
+        return { success: true, data: await getTrialBalance(query.companyId, query.asOfDate) };
       }, {
         query: t.Object({
           companyId: t.String(),
@@ -92,13 +82,8 @@ export const reportsRoutes = new Elysia()
       .guard({ beforeHandle: requireAuth })
       .use(requirePermission("reports", "export"))
 
-      .post("/cpa-summary", async ({ body, set }) => {
-        try {
-          return { success: true, data: await generateCpaSummary(body.companyId, body.periodId) };
-        } catch (err: any) {
-          set.status = 400;
-          return { success: false, error: err.message };
-        }
+      .post("/cpa-summary", async ({ body }) => {
+        return { success: true, data: await generateCpaSummary(body.companyId, body.periodId) };
       }, {
         body: t.Object({
           companyId: t.String(),
@@ -106,24 +91,19 @@ export const reportsRoutes = new Elysia()
         })
       })
 
-      .get("/cpa-summary/download", async ({ query, set }) => {
+      .get("/cpa-summary/download", async ({ query }) => {
         const companyId = query.companyId;
         const periodId  = query.periodId;
 
-        try {
-          const summary = await generateCpaSummary(companyId, periodId);
-          const pdfBytes = await buildCpaPdf(summary);
+        const summary = await generateCpaSummary(companyId, periodId);
+        const pdfBytes = await buildCpaPdf(summary);
 
-          return new Response(pdfBytes, {
-            headers: {
-              "Content-Type": "application/pdf",
-              "Content-Disposition": `attachment; filename="tax-summary-${periodId}.pdf"`
-            }
-          });
-        } catch (err: any) {
-          set.status = 400;
-          return { success: false, error: err.message };
-        }
+        return new Response(pdfBytes, {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="tax-summary-${periodId}.pdf"`
+          }
+        });
       }, {
         query: t.Object({
           companyId: t.String(),

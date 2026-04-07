@@ -78,17 +78,17 @@ export async function getBalanceSheet(companyId: string, asOfDate: string): Prom
 
     if (row.account_type === "asset") {
       if (balanceCents !== 0) {
-        data.assets.items.push({ code: row.code as string, name: row.name as string, balance: balanceCents / 100 });
+        data.assets.items.push({ code: row.code, name: row.name, balance: balanceCents / 100 });
         data.assets.total += balanceCents;
       }
     } else if (row.account_type === "liability") {
       if (balanceCents !== 0) {
-        data.liabilities.items.push({ code: row.code as string, name: row.name as string, balance: balanceCents / 100 });
+        data.liabilities.items.push({ code: row.code, name: row.name, balance: balanceCents / 100 });
         data.liabilities.total += balanceCents;
       }
     } else if (row.account_type === "equity") {
       if (balanceCents !== 0) {
-        data.equity.items.push({ code: row.code as string, name: row.name as string, balance: balanceCents / 100 });
+        data.equity.items.push({ code: row.code, name: row.name, balance: balanceCents / 100 });
         data.equity.total += balanceCents;
       }
     } else if (row.account_type === "revenue") {

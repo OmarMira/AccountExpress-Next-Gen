@@ -66,7 +66,7 @@ interface AccountRow {
 }
 
 // ── Get all accounts with their calculated balances ────────
-export async function getAccountsWithBalances(companyId: string): Promise<any[]> {
+export async function getAccountsWithBalances(companyId: string): Promise<AccountRow[]> {
   // Use a raw SQL aggregate to compute balances efficiently in a single query
   const rows = await db.execute(sql`
     SELECT
@@ -162,6 +162,17 @@ export async function deactivateAccount(accountId: string, companyId: string): P
 
   if (!account) throw new Error(`Account ${accountId} not found`);
   if (account.isSystem) throw new Error("System accounts cannot be deactivated");
+
+  // Verify no posted journal lines reference this account
+  const [usage] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(journalLines)
+    .where(eq(journalLines.accountId, accountId))
+    .limit(1);
+
+  if (usage && usage.count > 0) {
+    throw new Error(`Account cannot be deactivated: it has ${usage.count} journal line(s) referencing it`);
+  }
 
   await db.update(chartOfAccounts)
     .set({ isActive: false, updatedAt: new Date() })

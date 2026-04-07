@@ -7,6 +7,7 @@ import "./config/validate.ts"; // Side-effect: validates process.env immediately
 
 import { runMigrations } from "./db/migrate.ts";
 import { runSeed }       from "./db/seed/seed.ts";
+import { initAuditChainCache } from "./services/audit.service.ts";
 import { logger } from "./lib/logger.ts";
 
 const PORT = parseInt(process.env["PORT"] ?? "3000", 10);
@@ -21,7 +22,11 @@ await runMigrations();
 // 2. Run seed (idempotent)
 await runSeed();
 
-// 3. Start server
+// 3. Initialize Audit Chain Cache (CRITICAL: Step 5 of the report)
+await initAuditChainCache();
+logger.info("app", "Audit chain cache initialized");
+
+// 4. Start server
 const { app } = await import("./server.ts");
 app.listen(PORT);
 

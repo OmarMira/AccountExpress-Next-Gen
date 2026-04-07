@@ -53,9 +53,13 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
     const [entry] = await db
       .select()
       .from(auditLogs)
-      .where(eq(auditLogs.id, params.id as string))
+      .where(eq(auditLogs.id, params.id))
       .limit(1);
 
     if (!entry) { set.status = 404; return { error: "Audit entry not found" }; }
     return entry;
+  }, {
+    params: t.Object({
+      id: t.String()
+    })
   });

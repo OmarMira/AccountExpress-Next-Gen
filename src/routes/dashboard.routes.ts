@@ -18,88 +18,83 @@ export const dashboardRoutes = new Elysia({ prefix: "/dashboard" })
   .get("/", async ({ query, set }) => {
     const companyId = query.companyId;
 
-    try {
-      // Get bank balance
-      const [bankResult] = await db
-        .select({ total: sql`SUM(${bankAccounts.balance})`.mapWith(Number) })
-        .from(bankAccounts)
-        .where(eq(bankAccounts.companyId, companyId))
-        .limit(1);
+    // Get bank balance
+    const [bankResult] = await db
+      .select({ total: sql`SUM(${bankAccounts.balance})`.mapWith(Number) })
+      .from(bankAccounts)
+      .where(eq(bankAccounts.companyId, companyId))
+      .limit(1);
 
-      // Get pending transactions
-      const [pendingResult] = await db
-        .select({ count: sql`COUNT(*)`.mapWith(Number) })
-        .from(bankTransactions)
-        .where(
-          and(
-            eq(bankTransactions.companyId, companyId),
-            eq(bankTransactions.status, "pending")
-          )
+    // Get pending transactions
+    const [pendingResult] = await db
+      .select({ count: sql`COUNT(*)`.mapWith(Number) })
+      .from(bankTransactions)
+      .where(
+        and(
+          eq(bankTransactions.companyId, companyId),
+          eq(bankTransactions.status, "pending")
         )
-        .limit(1);
+      )
+      .limit(1);
 
-      // Ensure chain integrity
-      const chainValidObj = await verifyAuditChain();
-      const chainValid = chainValidObj.valid;
+    // Ensure chain integrity
+    const chainValidObj = await verifyAuditChain();
+    const chainValid = chainValidObj.valid;
 
-      // Active Period
-      const [periodResult] = await db
-        .select({ name: fiscalPeriods.name, endDate: fiscalPeriods.endDate })
-        .from(fiscalPeriods)
-        .where(
-          and(
-            eq(fiscalPeriods.companyId, companyId),
-            eq(fiscalPeriods.status, "open")
-          )
+    // Active Period
+    const [periodResult] = await db
+      .select({ name: fiscalPeriods.name, endDate: fiscalPeriods.endDate })
+      .from(fiscalPeriods)
+      .where(
+        and(
+          eq(fiscalPeriods.companyId, companyId),
+          eq(fiscalPeriods.status, "open")
         )
-        .orderBy(sql`${fiscalPeriods.startDate} ASC`)
-        .limit(1);
+      )
+      .orderBy(sql`${fiscalPeriods.startDate} ASC`)
+      .limit(1);
 
-      const today = new Date().toISOString().split('T')[0];
-      const bs = await getBalanceSheet(companyId, today);
+    const today = new Date().toISOString().split('T')[0];
+    const bs = await getBalanceSheet(companyId, today);
 
-      // Raw query for revenue/expense summary using Drizzle tagged template
-      const [revExp] = await db
-        .select({
-          revenue: sql`SUM(CASE WHEN ${chartOfAccounts.accountType} = 'revenue' THEN (${journalLines.creditAmount} - ${journalLines.debitAmount}) ELSE 0 END)`.mapWith(Number),
-          expenses: sql`SUM(CASE WHEN ${chartOfAccounts.accountType} = 'expense' THEN (${journalLines.debitAmount} - ${journalLines.creditAmount}) ELSE 0 END)`.mapWith(Number)
-        })
-        .from(journalLines)
-        .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
-        .innerJoin(chartOfAccounts, eq(journalLines.accountId, chartOfAccounts.id))
-        .where(
-          and(
-            eq(journalEntries.companyId, companyId),
-            eq(journalEntries.status, "posted"),
-            lte(journalEntries.entryDate, sql`${today}::date`)
-          )
+    // Raw query for revenue/expense summary using Drizzle tagged template
+    const [revExp] = await db
+      .select({
+        revenue: sql`SUM(CASE WHEN ${chartOfAccounts.accountType} = 'revenue' THEN (${journalLines.creditAmount} - ${journalLines.debitAmount}) ELSE 0 END)`.mapWith(Number),
+        expenses: sql`SUM(CASE WHEN ${chartOfAccounts.accountType} = 'expense' THEN (${journalLines.debitAmount} - ${journalLines.creditAmount}) ELSE 0 END)`.mapWith(Number)
+      })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+      .innerJoin(chartOfAccounts, eq(journalLines.accountId, chartOfAccounts.id))
+      .where(
+        and(
+          eq(journalEntries.companyId, companyId),
+          eq(journalEntries.status, "posted"),
+          lte(journalEntries.entryDate, sql`${today}::date`)
         )
-        .limit(1);
+      )
+      .limit(1);
 
-      const inc = revExp?.revenue || 0;
-      const exp = revExp?.expenses || 0;
+    const inc = revExp?.revenue || 0;
+    const exp = revExp?.expenses || 0;
 
-      return {
-        success: true,
-        data: {
-          bankBalance: bankResult?.total || 0,
-          pendingCount: pendingResult?.count || 0,
-          totalAssets: bs.assets.total,
-          totalLiabilities: bs.liabilities.total,
-          netIncome: inc - exp,
-          income: inc,
-          expenses: exp,
-          activePeriod: {
-            name: periodResult?.name || "No open period",
-            endDate: periodResult?.endDate || "N/A"
-          },
-          chainValid: chainValid
-        }
-      };
-    } catch (err: any) {
-      set.status = 400;
-      return { error: err.message };
-    }
+    return {
+      success: true,
+      data: {
+        bankBalance: bankResult?.total || 0,
+        pendingCount: pendingResult?.count || 0,
+        totalAssets: bs.assets.total,
+        totalLiabilities: bs.liabilities.total,
+        netIncome: inc - exp,
+        income: inc,
+        expenses: exp,
+        activePeriod: {
+          name: periodResult?.name || "No open period",
+          endDate: periodResult?.endDate || "N/A"
+        },
+        chainValid: chainValid
+      }
+    };
   }, {
     query: t.Object({
       companyId: t.String()

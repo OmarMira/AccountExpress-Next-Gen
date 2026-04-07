@@ -6,7 +6,7 @@
 // ============================================================
 
 import { db, sql } from "../../db/connection.ts";
-import { ValidationError as AccountingError } from "../journal.service.ts";
+import { ValidationError as AccountingError } from "../../lib/errors.ts";
 import { getPeriod } from "../fiscal-period.service.ts";
 import { verifyAuditChain } from "../audit.service.ts";
 import { auditLogs } from "../../db/schema/index.ts";

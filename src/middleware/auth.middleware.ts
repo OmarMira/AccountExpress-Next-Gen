@@ -26,13 +26,13 @@ export const authMiddleware = new Elysia({ name: "auth-data" })
       .where(eq(sessions.id, sessionId));
 
     return {
-      user: dbSession.userId as string,
-      companyId: dbSession.companyId ?? null as string | null,
+      user: dbSession.userId,
+      companyId: dbSession.companyId,
       sessionId
     };
   });
 
-export const requireAuth = ({ user, set }: any) => {
+export const requireAuth = ({ user, set }: { user?: string | null; set: { status?: number | string } }) => {
   if (!user) {
     set.status = 401;
     return { error: "Not authenticated" };

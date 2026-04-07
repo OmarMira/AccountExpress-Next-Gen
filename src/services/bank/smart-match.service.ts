@@ -31,15 +31,20 @@ export async function suggestAccountBatch(
     ORDER BY "frequency" DESC
   `;
 
-  const records = await db.execute(recordsQuery);
+  interface RawMatchRecord {
+    rawDescription: string;
+    accountId:      string;
+    frequency:      number;
+  }
+  const records = (await db.execute(recordsQuery)) as unknown as RawMatchRecord[];
 
   const grouped = new Map<string, { accountId: string; frequency: number }[]>();
   for (const r of records) {
-    const key = (r.rawDescription as string).trim().toLowerCase();
+    const key = r.rawDescription.trim().toLowerCase();
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push({
-      accountId: r.accountId as string,
-      frequency: r.frequency as number,
+      accountId: r.accountId,
+      frequency: r.frequency,
     });
   }
 

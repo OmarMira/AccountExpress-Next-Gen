@@ -151,14 +151,19 @@ export async function initAuditChainCache(): Promise<void> {
       .orderBy(desc(auditLogs.chainIndex))
       .limit(1);
 
-    // 4. If it exists, call updateChainCache(companyId, { chainIndex, entryHash })
+    // 4. Si existe, guardamos en memoria
     if (lastEntry.length > 0) {
       updateChainCache(company.id, {
         chainIndex: lastEntry[0].chainIndex,
         entryHash:  lastEntry[0].entryHash,
       });
+    } else {
+      // 5. Si NO existe (Paso 4 del reporte): inicializar con "GENESIS"
+      updateChainCache(company.id, {
+        chainIndex: -1,
+        entryHash:  "GENESIS"
+      });
     }
-    // 5. If it doesn't exist for that company, do nothing (no entries yet)
   }
 }
 

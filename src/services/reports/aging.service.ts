@@ -75,12 +75,12 @@ export async function getAgingReport(
     totalAmount += Math.abs(amount);
 
     const tx: AgingTransaction = {
-      id: row.id as string,
-      transactionDate: row.transactionDate as string,
-      description: row.description as string,
+      id: row.id,
+      transactionDate: row.transactionDate,
+      description: row.description,
       amount,
       daysPending: days,
-      bankAccount: row.bankAccount as string,
+      bankAccount: row.bankAccount,
     };
 
     const bucket = buckets.find(

@@ -22,10 +22,11 @@ export const reconciliationGroupRoutes = new Elysia({ prefix: "/bank/groups" })
         });
         set.status = 201;
         return result;
-      } catch (err: any) {
+      } catch (err) {
         logger.error("reconciliation-group.routes", "Error creating group", err);
         set.status = 400;
-        return { error: err.message || "Unknown error creating group" };
+        const message = err instanceof Error ? err.message : "Unknown error creating group";
+        return { error: message };
       }
     },
     {
@@ -59,10 +60,11 @@ export const reconciliationGroupRoutes = new Elysia({ prefix: "/bank/groups" })
         
         set.status = 200;
         return result;
-      } catch (err: any) {
+      } catch (err) {
         logger.error("reconciliation-group.routes", "Error reconciling group", err);
         set.status = 400;
-        return { error: err.message || "Unknown error reconciling group" };
+        const message = err instanceof Error ? err.message : "Unknown error reconciling group";
+        return { error: message };
       }
     },
     {

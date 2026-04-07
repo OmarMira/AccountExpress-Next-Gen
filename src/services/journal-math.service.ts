@@ -4,7 +4,8 @@
 // INVARIANT: SUM(debits) MUST equal SUM(credits) to the cent.
 // ============================================================
 
-import { JournalLineInput, ValidationError } from "./journal.service.ts";
+import type { JournalLineInput } from "../lib/journal-types.ts";
+import { ValidationError } from "../lib/errors.ts";
 
 export function validateDoubleEntry(lines: JournalLineInput[]): void {
   if (lines.length < 2) {

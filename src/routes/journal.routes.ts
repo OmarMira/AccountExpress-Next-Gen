@@ -10,8 +10,8 @@ import {
   getEntryWithLines,
   listEntries,
   getDashboardSummary,
-  ValidationError,
-} from "../services/journal.service.ts";
+} from "../services/journal-core.service.ts";
+import { ValidationError } from "../lib/errors.ts";
 import { voidEntry } from "../services/journal-void.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
@@ -48,7 +48,11 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
 
   // GET /journal/:id
   .get("/:id", async ({ params }) => {
-    return await getEntryWithLines((params.id as string));
+    return await getEntryWithLines(params.id);
+  }, {
+    params: t.Object({
+      id: t.String()
+    })
   })
 
   // POST /journal — create draft
@@ -115,7 +119,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
     const sid = sessionId!;
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     try {
-      await post((params.id as string), uid, sid, ip);
+      await post(params.id, uid, sid, ip);
       return { message: "Journal entry posted" };
     } catch (err) {
       if (err instanceof ValidationError) {
@@ -124,6 +128,10 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
       }
       throw err;
     }
+  }, {
+    params: t.Object({
+      id: t.String()
+    })
   })
 
   // POST /journal/:id/void
@@ -133,7 +141,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
     const sid = sessionId!;
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     try {
-      await voidEntry((params.id as string), uid, sid, ip);
+      await voidEntry(params.id, uid, sid, ip);
       return { message: "Journal entry voided" };
     } catch (err) {
       if (err instanceof ValidationError) {
@@ -142,4 +150,8 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
       }
       throw err;
     }
+  }, {
+    params: t.Object({
+      id: t.String()
+    })
   });

@@ -251,8 +251,8 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
 
   // ── POST /auth/logout ─────────────────────────────────────
   .post("/logout", async ({ cookie }) => {
-    const token = (cookie["session"].value as string);
-    if (token) {
+    const token = cookie["session"].value;
+    if (typeof token === "string" && token) {
       await invalidateSession(token);
       cookie["session"].remove();
     }

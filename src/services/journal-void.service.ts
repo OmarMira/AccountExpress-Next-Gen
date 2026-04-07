@@ -9,9 +9,9 @@ import { journalEntries, journalLines, fiscalPeriods } from "../db/schema/index.
 import { eq }               from "drizzle-orm";
 import { createAuditEntry } from "./audit.service.ts";
 import { v4 as uuidv4 }     from "uuid";
-import { ValidationError }  from "./journal.service.ts";
+import { ValidationError } from "../lib/errors.ts";
 import { nextEntryNumber, getJournalChainTip, computeEntryHash } from "./journal-hash.service.ts";
-import type { JournalEntryInput } from "./journal.service.ts";
+import type { JournalEntryInput } from "../lib/journal-types.ts";
 
 export async function voidEntry(
   entryId:   string,

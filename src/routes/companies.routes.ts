@@ -110,6 +110,9 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       return { message: "Company updated" };
     },
     {
+      params: t.Object({
+        id: t.String()
+      }),
       body: t.Partial(t.Object({
         legalName: t.String(),
         tradeName: t.Optional(t.String()),
@@ -146,6 +149,11 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       });
 
       return { message: "Company archived" };
+    },
+    {
+      params: t.Object({
+        id: t.String()
+      })
     }
   )
 
@@ -174,6 +182,10 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       }
     }
     return await listCompanyUsers(params.id);
+  }, {
+    params: t.Object({
+      id: t.String()
+    })
   })
 
   // ── POST /companies/:id/users ───────────────────────────────
@@ -203,25 +215,23 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
         }
       }
 
-      try {
-        const ucrId = await addUserToCompany(params.id, body.userId, body.roleId, uid);
+      const ucrId = await addUserToCompany(params.id, body.userId, body.roleId, uid);
         
-        const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-        await createAuditEntry({
-          companyId: params.id, userId: uid, sessionId,
-          action: "company_users:create", module: "companies",
-          entityType: "user_company_roles", entityId: ucrId,
-          beforeState: null, afterState: { targetUserId: body.userId, roleId: body.roleId }, ipAddress: ip,
-        });
+      const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+      await createAuditEntry({
+        companyId: params.id, userId: uid, sessionId,
+        action: "company_users:create", module: "companies",
+        entityType: "user_company_roles", entityId: ucrId,
+        beforeState: null, afterState: { targetUserId: body.userId, roleId: body.roleId }, ipAddress: ip,
+      });
 
-        set.status = 201;
-        return { id: ucrId, message: "User added to company" };
-      } catch (e: any) {
-        set.status = 400;
-        return { error: e.message };
-      }
+      set.status = 201;
+      return { id: ucrId, message: "User added to company" };
     },
     {
+      params: t.Object({
+        id: t.String()
+      }),
       body: t.Object({
         userId: t.String(),
         roleId: t.String()
@@ -256,21 +266,22 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
         }
       }
 
-      try {
-        await revokeUserFromCompany(params.id, params.userId);
+      await revokeUserFromCompany(params.id, params.userId);
         
-        const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-        await createAuditEntry({
-          companyId: params.id, userId: uid, sessionId,
-          action: "company_users:revoke", module: "companies",
-          entityType: "user_company_roles", entityId: params.userId,
-          beforeState: null, afterState: { revoked: true }, ipAddress: ip,
-        });
+      const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+      await createAuditEntry({
+        companyId: params.id, userId: uid, sessionId,
+        action: "company_users:revoke", module: "companies",
+        entityType: "user_company_roles", entityId: params.userId,
+        beforeState: null, afterState: { revoked: true }, ipAddress: ip,
+      });
 
-        return { message: "User access revoked" };
-      } catch (e: any) {
-        set.status = 400;
-        return { error: e.message };
-      }
+      return { message: "User access revoked" };
+    },
+    {
+      params: t.Object({
+        id: t.String(),
+        userId: t.String()
+      })
     }
   );

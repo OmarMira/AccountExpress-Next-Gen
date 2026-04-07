@@ -27,8 +27,14 @@ export interface UpdateUserInput {
   userId:             string;
   firstName?:         string;
   lastName?:          string;
+  username?:          string;
+  email?:             string;
+  password?:          string;
   isActive?:          boolean;
   mustChangePassword?: boolean;
+  companyId?:         string;
+  roleId?:            string;
+  grantedBy?:         string;
 }
 
 export interface AssignRoleInput {
@@ -49,6 +55,7 @@ export async function listUsers(companyId: string) {
       lastName:            users.lastName,
       isActive:            users.isActive,
       isLocked:            users.isLocked,
+      isSuperAdmin:        users.isSuperAdmin,
       mustChangePassword:  users.mustChangePassword,
       lastLoginAt:         users.lastLoginAt,
       createdAt:           users.createdAt,
@@ -116,17 +123,56 @@ export async function createUser(input: CreateUserInput) {
 
 // ── Actualizar datos del usuario ──────────────────────────────
 export async function updateUser(input: UpdateUserInput): Promise<{ updated: boolean }> {
-  const updates: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
+  return await db.transaction(async (tx) => {
+    const updates: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
 
-  if (input.firstName          !== undefined) updates.firstName          = input.firstName;
-  if (input.lastName           !== undefined) updates.lastName           = input.lastName;
-  if (input.isActive           !== undefined) updates.isActive           = input.isActive;
-  if (input.mustChangePassword !== undefined) updates.mustChangePassword = input.mustChangePassword;
+    if (input.firstName          !== undefined) updates.firstName          = input.firstName;
+    if (input.lastName           !== undefined) updates.lastName           = input.lastName;
+    if (input.username           !== undefined) updates.username           = input.username;
+    if (input.email              !== undefined) updates.email              = input.email;
+    if (input.isActive           !== undefined) updates.isActive           = input.isActive;
+    if (input.mustChangePassword !== undefined) updates.mustChangePassword = input.mustChangePassword;
 
-  if (Object.keys(updates).length <= 1) return { updated: false }; // only updatedAt, nothing real
+    if (input.password) {
+      const { hash, salt } = await hashPassword(input.password);
+      updates.passwordHash       = hash;
+      updates.passwordSalt       = salt;
+      updates.mustChangePassword = true;
+    }
 
-  await db.update(users).set(updates).where(eq(users.id, input.userId));
-  return { updated: true };
+    // 1. Update basic fields
+    if (Object.keys(updates).length > 1) {
+      await tx.update(users).set(updates).where(eq(users.id, input.userId));
+    }
+
+    // 2. Handle role update if provided
+    if (input.roleId && input.companyId && input.grantedBy) {
+      const now = new Date();
+      // Revoke previous
+      await tx.update(userCompanyRoles)
+        .set({ isActive: false, revokedAt: now })
+        .where(
+          and(
+            eq(userCompanyRoles.userId, input.userId),
+            eq(userCompanyRoles.companyId, input.companyId),
+            eq(userCompanyRoles.isActive, true)
+          )
+        );
+      
+      // Assign new
+      await tx.insert(userCompanyRoles).values({
+        id:        randomUUID(),
+        userId:    input.userId,
+        companyId: input.companyId,
+        roleId:    input.roleId,
+        isActive:  true,
+        grantedBy: input.grantedBy,
+        grantedAt: now,
+      });
+    }
+
+    return { updated: true };
+  });
 }
 
 // ── Reasignar rol en tenant ───────────────────────────────────

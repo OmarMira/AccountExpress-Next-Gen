@@ -5,7 +5,7 @@ import { seedGaapForCompany } from "../src/services/accounts.service.ts";
 import { openPeriod, closePeriod } from "../src/services/fiscal-period.service.ts";
 import { importTransactions } from "../src/services/bank/csv-import.service.ts";
 import { matchTransaction } from "../src/services/bank/reconciliation.service.ts";
-import { createDraft } from "../src/services/journal.service.ts";
+import { createDraft } from "../src/services/journal-core.service.ts";
 import { generateCpaSummary } from "../src/services/reports/cpa-summary.service.ts";
 import { verifyAuditChain } from "../src/services/audit.service.ts";
 import { eq, and } from "drizzle-orm";

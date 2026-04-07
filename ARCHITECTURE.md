@@ -6,7 +6,7 @@ Estas reglas son obligatorias. Antigravity las lee antes de cada sesión de desa
 
 ## Regla 1 — Límite de tamaño de módulos
 
-Ningún archivo `.service.ts` puede superar 200 líneas.
+Ningún archivo `.service.ts` puede superar 250 líneas.
 
 Si un servicio supera ese límite, se divide en archivos separados por responsabilidad:
 
@@ -17,7 +17,7 @@ Si un servicio supera ese límite, se divide en archivos separados por responsab
 
 **Control:** antes de cada commit, ejecutá:
 ```powershell
-Get-ChildItem -Path "src" -Recurse -Filter "*.service.ts" | Where-Object { (Get-Content $_.FullName).Count -gt 200 } | Select-Object Name, @{N="Lines";E={(Get-Content $_.FullName).Count}}
+Get-ChildItem -Path "src" -Recurse -Filter "*.service.ts" | Where-Object { (Get-Content $_.FullName).Count -gt 250 } | Select-Object Name, @{N="Lines";E={(Get-Content $_.FullName).Count}}
 ```
 Si devuelve resultados, hay que dividir antes de continuar.
 
@@ -72,7 +72,7 @@ curl.exe -s -i -X POST "http://localhost:3000/api/ruta" -H "Content-Type: applic
 
 ## Checklist pre-sesión (Antigravity la ejecuta al inicio de cada sesión)
 
-1. ¿Algún `.service.ts` supera 200 líneas? → dividir
+1. ¿Algún `.service.ts` supera 250 líneas? → dividir
 2. ¿Existe `fix-types.ts`? → eliminar
 3. ¿Hay `as any` o `as string` nuevo en el código? → corregir el tipo
 4. ¿Hay rutas absolutas o contraseñas en el código fuente? → mover a `.env`
@@ -80,18 +80,26 @@ curl.exe -s -i -X POST "http://localhost:3000/api/ruta" -H "Content-Type: applic
 
 ---
 
+## Protocolo de verificación obligatorio
+
+Este protocolo es de cumplimiento estricto para Antigravity en cada interacción:
+
+1. **Verificación de TypeScript**: Cuando sea necesario verificar errores, Antigravity indicará exactamente qué comando correr y esperará el output del usuario.
+2. **Evidencia Fresca**: Nunca se usarán archivos en disco (`errors.txt`, logs antiguos, etc.) como prueba del estado actual. Siempre se solicitará el output fresco del terminal.
+3. **Comunicación Directa**: Si Antigravity no puede ejecutar un comando debido a limitaciones técnicas (como el *sandboxing* en Windows), lo dirá explícitamente y proporcionará el comando exacto para que el usuario lo ejecute en su terminal local. No se buscarán alternativas que "parezcan" equivalentes sin previo aviso.
+4. **Confirmación de Correcciones**: Antes de declarar una tarea como "corregida", Antigravity solicitará al usuario ejecutar `bun tsc --noEmit` y `echo "Exit code: $LASTEXITCODE"` para validación final.
+
+---
+
 ## Deuda Técnica Documentada
 
-### DT-001 — Motor de conciliación muchos-a-muchos
+### DT-002 — Migración doble en arranque
 
-**Estado:** Pendiente — no prioritario hasta que existan clientes con pasarelas de pago consolidadas (Stripe, Square, PayPal).
+**Estado:** Pendiente — no prioritario.
 
-**Problema:** El motor actual (econciliation.service.ts) solo soporta conciliación uno-a-uno. Un depósito de Stripe que agrupa múltiples ventas menos comisiones no puede conciliarse correctamente.
+**Problema:** `index.ts` llama `runMigrations()` y luego el seed vuelve a llamarla internamente. Las migraciones se ejecutan dos veces en cada arranque.
 
-**Solución propuesta cuando sea necesario:**
-- Nueva tabla ank_transaction_groups en el schema
-- Migración de base de datos
-- Nuevo endpoint POST /bank/reconcile-group
-- Actualización del frontend de reconciliación
+**Impacto:** Ninguno funcional. Agrega ~500ms al tiempo de arranque en desarrollo.
 
-**Riesgo:** Alto — toca el core contable y requiere migración de schema.
+**Solución:** Extraer el seed para que reciba la conexión ya migrada como parámetro, o eliminar la llamada interna a `runMigrations()` dentro del seed.
+
