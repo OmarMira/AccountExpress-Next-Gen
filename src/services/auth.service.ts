@@ -4,11 +4,12 @@
 // ============================================================
 
 import bcrypt from "bcryptjs";
-import { db } from "../db/connection.ts";
+import { db, sql } from "../db/connection.ts";
+import { env } from "../config/validate.ts";
 import { users } from "../db/schema/index.ts";
 import { eq } from "drizzle-orm";
 
-const BCRYPT_ROUNDS   = parseInt(process.env["BCRYPT_ROUNDS"] ?? "12", 10);
+const BCRYPT_ROUNDS   = env.BCRYPT_ROUNDS;
 const MAX_ATTEMPTS    = 5;
 const LOCKOUT_MINUTES = 30;
 
@@ -31,35 +32,35 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
 
 // ── Record a failed login attempt ────────────────────────────
 export async function recordFailedAttempt(userId: string): Promise<void> {
-  const [user] = await db
-    .select({ failedAttempts: users.failedAttempts })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  await db.transaction(async (tx) => {
+    const [user] = await tx.execute(sql`
+      SELECT failed_attempts FROM users WHERE id = ${userId} FOR UPDATE
+    `) as unknown as Array<{ failed_attempts: number | null }>;
 
-  if (!user) return;
+    if (!user) return;
 
-  const newCount = (user.failedAttempts ?? 0) + 1;
-  const now = new Date();
+    const newCount = (user.failed_attempts ?? 0) + 1;
+    const now = new Date();
 
-  if (newCount >= MAX_ATTEMPTS) {
-    const lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
-    await db.update(users)
-      .set({
-        failedAttempts: newCount,
-        isLocked:       true,
-        lockedUntil,
-        updatedAt:      now,
-      })
-      .where(eq(users.id, userId));
-  } else {
-    await db.update(users)
-      .set({
-        failedAttempts: newCount,
-        updatedAt:      now,
-      })
-      .where(eq(users.id, userId));
-  }
+    if (newCount >= MAX_ATTEMPTS) {
+      const lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
+      await tx.update(users)
+        .set({
+          failedAttempts: newCount,
+          isLocked:       true,
+          lockedUntil,
+          updatedAt:      now,
+        })
+        .where(eq(users.id, userId));
+    } else {
+      await tx.update(users)
+        .set({
+          failedAttempts: newCount,
+          updatedAt:      now,
+        })
+        .where(eq(users.id, userId));
+    }
+  });
 }
 
 // ── Reset failed attempts on successful login ────────────────
@@ -147,7 +148,7 @@ export interface LoginResult {
 export async function login(
   username:  string,
   password:  string,
-  _ip:       string
+  ip:        string
 ): Promise<LoginResult> {
   const [user] = await db
     .select({
@@ -181,6 +182,7 @@ export async function login(
   }
 
   await resetFailedAttempts(user.id);
+  await updateLastLogin(user.id, ip);
   return { success: true, userId: user.id, username: user.username };
 }
 

@@ -4,8 +4,8 @@
 // ============================================================
 
 import { db } from "../db/connection.ts";
-import { sessions } from "../db/schema/index.ts";
-import { eq, and } from "drizzle-orm";
+import { sessions, userCompanyRoles } from "../db/schema/index.ts";
+import { eq, and, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 const SESSION_DURATION_HOURS = 8;
@@ -61,6 +61,25 @@ export async function switchSessionCompany(
   sessionId: string,
   companyId: string
 ): Promise<void> {
+  const [session] = await db
+    .select({ userId: sessions.userId })
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), eq(sessions.isValid, true)))
+    .limit(1);
+
+  if (!session) throw new Error("Session not found or invalid.");
+
+  const membership = await db.query.userCompanyRoles.findFirst({
+    where: and(
+      eq(userCompanyRoles.userId, session.userId),
+      eq(userCompanyRoles.companyId, companyId),
+      eq(userCompanyRoles.isActive, true),
+      isNull(userCompanyRoles.revokedAt)
+    ),
+  });
+
+  if (!membership) throw new Error("User does not belong to the requested company.");
+
   await db.update(sessions)
     .set({ companyId, lastActiveAt: new Date() })
     .where(eq(sessions.id, sessionId));

@@ -8,6 +8,7 @@ import { db }                 from "../db/connection.ts";
 import { users, userCompanyRoles, roles } from "../db/schema/index.ts";
 import { eq, and }    from "drizzle-orm";
 import { hashPassword }        from "./auth.service.ts";
+import { invalidateAllUserSessions } from "./session.service.ts";
 import { randomUUID }         from "crypto";
 
 // ── Tipos ────────────────────────────────────────────────────
@@ -138,6 +139,7 @@ export async function updateUser(input: UpdateUserInput): Promise<{ updated: boo
       updates.passwordHash       = hash;
       updates.passwordSalt       = salt;
       updates.mustChangePassword = true;
+      await invalidateAllUserSessions(input.userId);
     }
 
     // 1. Update basic fields
@@ -177,29 +179,31 @@ export async function updateUser(input: UpdateUserInput): Promise<{ updated: boo
 
 // ── Reasignar rol en tenant ───────────────────────────────────
 export async function assignRole(input: AssignRoleInput): Promise<{ assigned: boolean }> {
-  const now = new Date();
+  return await db.transaction(async (tx) => {
+    const now = new Date();
 
-  // Revoke previous active role in this company
-  await db.update(userCompanyRoles)
-    .set({ isActive: false, revokedAt: now })
-    .where(
-      and(
-        eq(userCompanyRoles.userId, input.userId),
-        eq(userCompanyRoles.companyId, input.companyId),
-        eq(userCompanyRoles.isActive, true)
-      )
-    );
+    // Revoke previous active role in this company
+    await tx.update(userCompanyRoles)
+      .set({ isActive: false, revokedAt: now })
+      .where(
+        and(
+          eq(userCompanyRoles.userId, input.userId),
+          eq(userCompanyRoles.companyId, input.companyId),
+          eq(userCompanyRoles.isActive, true)
+        )
+      );
 
-  // Assign new role
-  await db.insert(userCompanyRoles).values({
-    id:        randomUUID(),
-    userId:    input.userId,
-    companyId: input.companyId,
-    roleId:    input.roleId,
-    isActive:  true,
-    grantedBy: input.grantedBy,
-    grantedAt: now,
+    // Assign new role
+    await tx.insert(userCompanyRoles).values({
+      id:        randomUUID(),
+      userId:    input.userId,
+      companyId: input.companyId,
+      roleId:    input.roleId,
+      isActive:  true,
+      grantedBy: input.grantedBy,
+      grantedAt: now,
+    });
+
+    return { assigned: true };
   });
-
-  return { assigned: true };
 }
