@@ -1,0 +1,4 @@
+[test]
+# Strictly exclude integration tests from default 'bun test' scans.
+# These tests require a dedicated PostgreSQL environment.
+exclude = ["**/integration/**"]

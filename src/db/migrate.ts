@@ -11,6 +11,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { db, sql } from "./connection.ts";
 import { TRIGGERS } from "./triggers.ts";
 import { INDEXES } from "./indexes.ts";
+import { validateEnv } from "../config/validate.ts";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -19,6 +20,9 @@ const __dirname = dirname(__filename);
 
 export async function runMigrations(): Promise<void> {
   console.log("[MIGRATE] Starting PostgreSQL migration runner...");
+  
+  // Ensure env is valid before connecting
+  validateEnv();
 
   const connectionString = process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
   if (!connectionString) {

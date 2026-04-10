@@ -21,7 +21,7 @@
     "test:integration": "bun run tests/run-integration.ts",
     "test:integration:verbose": "bun test tests/integration/ --timeout 15000",
     "prepare": "husky",
-    "test": "vitest run"
+    "test": "bun test tests/unit/"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",

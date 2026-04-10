@@ -9,6 +9,10 @@ import { runMigrations } from "./db/migrate.ts";
 import { runSeed }       from "./db/seed/seed.ts";
 import { initAuditChainCache } from "./services/audit.service.ts";
 import { logger } from "./lib/logger.ts";
+import { validateEnv } from "./config/validate.ts";
+
+// Validate environment before anything else
+validateEnv();
 
 const PORT = parseInt(process.env["PORT"] ?? "3000", 10);
 
