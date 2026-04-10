@@ -16,6 +16,8 @@ const memoryStore = new Map<string, RateLimitInfo>();
  * @param windowMs Time window in milliseconds.
  */
 export const loginRateLimiter = (max: number, windowMs: number) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // REASON: Elysia Context types are complex internal generics not easily narrowed without importing internal types
   return async ({ request, set }: any) => {
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     const now = Date.now();
@@ -64,6 +66,8 @@ const globalStore = new Map<string, RateLimitInfo>();
  * 100 requests per IP per minute.
  */
 export const globalRateLimiter = (max: number, windowMs: number) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // REASON: Elysia Context types are complex internal generics not easily narrowed without importing internal types
   return async ({ request, set }: any) => {
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
     const now = Date.now();

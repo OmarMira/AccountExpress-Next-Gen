@@ -30,7 +30,7 @@ export interface RestoreResult {
 
 export interface ValidationResult {
   valid: boolean;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 const BACKUPS_DIR = 'data/backups';

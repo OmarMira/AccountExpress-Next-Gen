@@ -71,7 +71,7 @@ export async function encryptFile(inputPath: string, password: string, metadata:
   return outputPath;
 }
 
-export async function decryptFile(inputPath: string, password: string): Promise<{data: Buffer, metadata: any}> {
+export async function decryptFile(inputPath: string, password: string): Promise<{data: Buffer, metadata: Record<string, unknown>}> {
   const file = await readFile(inputPath);
   const data = new Uint8Array(file);
   

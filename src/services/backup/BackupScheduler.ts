@@ -5,6 +5,10 @@ import { createAuditEntry } from '../audit.service.ts';
 import { eq, sql } from 'drizzle-orm';
 import { logger } from '../../lib/logger.ts';
 
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export interface LastBackupInfo {
   filename: string | null;
   date: string | null;
@@ -84,7 +88,7 @@ export class BackupScheduler {
         ipAddress: '127.0.0.1'
       });
       
-    } catch (e: any) {
+    } catch (e: unknown) {
       await createAuditEntry({
         companyId: null,
         userId: null,
@@ -94,7 +98,7 @@ export class BackupScheduler {
         entityType: 'backup',
         entityId: null,
         beforeState: null,
-        afterState: { error: e.message },
+        afterState: { error: errMsg(e) },
         ipAddress: '127.0.0.1'
       });
     }
