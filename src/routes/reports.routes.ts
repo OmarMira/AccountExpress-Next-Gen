@@ -4,6 +4,10 @@
 // ============================================================
 
 import { Elysia, t } from "elysia";
+
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 import { getBalanceSheet } from "../services/reports/balance-sheet.service.ts";
 import { getIncomeStatement } from "../services/reports/income-statement.service.ts";
 import { getTrialBalance } from "../services/reports/trial-balance.service.ts";
@@ -64,9 +68,9 @@ export const reportsRoutes = new Elysia()
         try {
           const asOfDate = query.asOfDate ?? new Date().toISOString().split("T")[0];
           return { success: true, data: await getAgingReport(query.companyId, asOfDate) };
-        } catch (err: any) {
+        } catch (err: unknown) {
           set.status = 400;
-          return { success: false, error: err.message };
+          return { success: false, error: errMsg(err) };
         }
       }, {
         query: t.Object({
@@ -115,9 +119,9 @@ export const reportsRoutes = new Elysia()
         try {
           const asOfDate = query.asOfDate ?? new Date().toISOString().split("T")[0];
           return { success: true, data: await getAgingReport(query.companyId, asOfDate) };
-        } catch (err: any) {
+        } catch (err: unknown) {
           set.status = 400;
-          return { success: false, error: err.message };
+          return { success: false, error: errMsg(err) };
         }
       }, {
         query: t.Object({

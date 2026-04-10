@@ -5,6 +5,10 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth } from "../middleware/auth.middleware.ts";
 
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
   .guard({ beforeHandle: requireAuth })
   .get('/', async ({ query }) => {
@@ -27,7 +31,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
   })
 
   .post('/', async ({ body, set }) => {
-    const data = body as { companyId: string, accountName: string, bankName: string, accountNumber?: string, accountType?: string, balance?: number, glAccountId?: string };
+    const data = body;
     try {
       if (data.companyId && data.accountNumber) {
         const existing = await db.query.bankAccounts.findFirst({
@@ -56,9 +60,9 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
 
       await db.insert(bankAccounts).values(newAccount);
       return newAccount;
-    } catch (error: any) {
+    } catch (error: unknown) {
       set.status = 500;
-      return { error: 'Failed to create bank account', details: error.message };
+      return { error: 'Failed to create bank account', details: errMsg(error) };
     }
   }, {
     body: t.Object({
@@ -77,7 +81,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
 
   .put('/:id', async ({ params, body, set }) => {
     const { id } = params;
-    const data = body as { accountName?: string, bankName?: string, accountNumber?: string, accountType?: string, balance?: number, glAccountId?: string, isActive?: boolean };
+    const data = body;
     try {
       const now = new Date();
       
@@ -113,9 +117,9 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       }
 
       return updated[0];
-    } catch (error: any) {
+    } catch (error: unknown) {
       set.status = 500;
-      return { error: 'Failed to update bank account', details: error.message };
+      return { error: 'Failed to update bank account', details: errMsg(error) };
     }
   }, {
     body: t.Object({
@@ -123,6 +127,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       bankName: t.Optional(t.String()),
       accountNumber: t.Optional(t.String()),
       accountType: t.Optional(t.String()),
+      balance: t.Optional(t.Number()),
       glAccountId: t.Optional(t.String()),
       isActive: t.Optional(t.Boolean())
     })
@@ -143,9 +148,9 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       }
 
       return { success: true, message: 'Bank account deactivated successfully' };
-    } catch (error: any) {
+    } catch (error: unknown) {
       set.status = 500;
-      return { error: 'Failed to deactivate bank account', details: error.message };
+      return { error: 'Failed to deactivate bank account', details: errMsg(error) };
     }
   });
 

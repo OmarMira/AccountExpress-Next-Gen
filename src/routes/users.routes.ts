@@ -6,6 +6,10 @@
 
 import { Elysia, t } from "elysia";
 
+function errMsg(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 import {
@@ -53,8 +57,8 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       });
       set.status = 201;
       return { success: true, data: result };
-    } catch (err: any) {
-      if (err?.message?.includes("UNIQUE")) {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.includes("UNIQUE")) {
         set.status = 409;
         return { success: false, error: "Username or email already exists" };
       }
