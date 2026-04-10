@@ -91,7 +91,7 @@ export async function createAuditEntry(input: AuditEntryInput): Promise<string> 
     input.action,
     afterStateJson ?? "",
     prevHash,
-    createdAt.toISOString(),
+    createdAt.getTime().toString(),
   ].join("|");
 
   const entryHash = hmacSha256(hashInput);
@@ -216,7 +216,7 @@ export async function verifyAuditChain(
     // 2. Recompute hash
     // IMPORTANT: Use exact same string construction as createAuditEntry
     // Use new Date().toISOString() to force UTC and exactly 3 decimal-ms precision
-    const rowDateStr = new Date(row.createdAt).toISOString();
+    const rowDateStr = new Date(row.createdAt).getTime().toString();
 
     const hashInput = [
       row.id,
