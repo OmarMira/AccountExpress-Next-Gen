@@ -31,9 +31,10 @@ export function normalizeDate(raw: string): string {
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
 
   // MM/DD/YYYY or MM-DD-YYYY
-  const parts = s.split(/[\/\-]/);
+  const parts = s.split(/[/-]/);
   if (parts.length === 3) {
-    let [a, b, c] = parts;
+    const [a, b] = parts;
+    let c = parts[2];
     if (c.length === 2) c = "20" + c; // 2-digit year
     if (c.length === 4) {
       // MM/DD/YYYY
@@ -60,8 +61,8 @@ function isWellsFargoFormat(lines: string[]): boolean {
   if (lines.length < 2) return false;
   const first = splitCsvLine(lines[0]);
   if (first.length < 5) return false;
-  const dateOk = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(first[0].trim());
-  const amtOk  = !isNaN(parseFloat(first[1].replace(/[^0-9.\-]/g, "")));
+  const dateOk = /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(first[0].trim());
+  const amtOk  = !isNaN(parseFloat(first[1].replace(/[^0-9.-]/g, "")));
   return dateOk && amtOk;
 }
 
@@ -95,19 +96,19 @@ export function parseBankCsv(csvText: string): ParseResult {
       let tx: ParsedTransaction | null = null;
 
       if (format === "chase" && row.length >= 4) {
-        const amt = parseFloat(row[3].replace(/[^0-9.\-]/g, "") || "0");
+        const amt = parseFloat(row[3].replace(/[^0-9.-]/g, "") || "0");
         if (isNaN(amt)) { failedRows++; continue; }
         tx = { date: normalizeDate(row[1]), description: row[2] || "Unknown", amount: amt, reference: row[6] ?? null };
       } else if (format === "bofa" && row.length >= 3) {
-        const amt = parseFloat(row[2].replace(/[^0-9.\-]/g, "") || "0");
+        const amt = parseFloat(row[2].replace(/[^0-9.-]/g, "") || "0");
         if (isNaN(amt)) { failedRows++; continue; }
         tx = { date: normalizeDate(row[0]), description: row[1] || "Unknown", amount: amt, reference: null };
       } else if (format === "wellsfargo" && row.length >= 5) {
-        const amt = parseFloat(row[1].replace(/[^0-9.\-]/g, "") || "0");
+        const amt = parseFloat(row[1].replace(/[^0-9.-]/g, "") || "0");
         if (isNaN(amt)) { failedRows++; continue; }
         tx = { date: normalizeDate(row[0]), description: row[4] || "Unknown", amount: amt, reference: null };
       } else if (row.length >= 3) {
-        const amt = parseFloat(row[2].replace(/[^0-9.\-]/g, "") || "0");
+        const amt = parseFloat(row[2].replace(/[^0-9.-]/g, "") || "0");
         if (isNaN(amt)) { failedRows++; continue; }
         tx = { date: normalizeDate(row[0]), description: row[1] || "Unknown", amount: amt, reference: null };
       } else {

@@ -36,7 +36,7 @@ function normalizeDate(rawDate: string): string {
     }
     
     // MM/DD/YYYY or MM-DD-YYYY or M/D/YY
-    const parts = rawDate.split(/[\/\-]/);
+    const parts = rawDate.split(/[/-]/);
     if (parts.length === 3) {
         const m = parts[0].padStart(2, '0');
         const d = parts[1].padStart(2, '0');
