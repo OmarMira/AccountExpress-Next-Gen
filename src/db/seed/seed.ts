@@ -149,7 +149,7 @@ async function runSeed(): Promise<void> {
   console.log("  Account Express Bookkeeping Core — SEED");
   console.log("═══════════════════════════════════════════════\n");
 
-  await runMigrationsIfMain();
+
   await seedSystemConfig();
   await seedRoles();
   await seedPermissions();
@@ -161,6 +161,7 @@ async function runSeed(): Promise<void> {
 
 // ── DIRECT RUN ───────────────────────────────────────────────
 if (import.meta.main) {
+  await runMigrations();
   runSeed().then(() => process.exit(0)).catch((err) => {
     console.error("[SEED] ❌ Fatal error:", err);
     process.exit(1);

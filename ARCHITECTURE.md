@@ -95,11 +95,7 @@ Este protocolo es de cumplimiento estricto para Antigravity en cada interacción
 
 ### DT-002 — Migración doble en arranque
 
-**Estado:** Pendiente — no prioritario.
+**Estado:** Resuelto — 2026-04-10.
 
-**Problema:** `index.ts` llama `runMigrations()` y luego el seed vuelve a llamarla internamente. Las migraciones se ejecutan dos veces en cada arranque.
-
-**Impacto:** Ninguno funcional. Agrega ~500ms al tiempo de arranque en desarrollo.
-
-**Solución:** Extraer el seed para que reciba la conexión ya migrada como parámetro, o eliminar la llamada interna a `runMigrations()` dentro del seed.
+**Solución aplicada:** Se eliminó la llamada a `runMigrations()` dentro de `runSeed()`. Cuando `seed.ts` se ejecuta directamente (`import.meta.main`), las migraciones se corren antes de invocar `runSeed()`. Cuando se importa desde `index.ts`, `index.ts` ya corrió `runMigrations()` previamente.
 
