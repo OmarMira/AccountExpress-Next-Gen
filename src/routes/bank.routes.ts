@@ -32,17 +32,13 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         return { error: 'PDF_REQUIRES_CLIENT_PARSE', message: 'Los PDFs se procesan en el navegador antes de enviarse.' };
       }
 
-      try {
-        const result = await statementImportService.processFile(
-          body.companyId,
-          body.bankAccountId ?? "",
-          buffer,
-          file.name
-        );
-        return { success: true, ...result };
-      } catch (err) {
-        throw err;
-      }
+      const result = await statementImportService.processFile(
+        body.companyId,
+        body.bankAccountId ?? "",
+        buffer,
+        file.name
+      );
+      return { success: true, ...result };
     },
     {
       body: t.Object({
@@ -59,19 +55,15 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .post(
     "/import-parsed",
     async ({ body, set }) => {
-      try {
-        const result = await statementImportService.processParsedBatch(
-          body.companyId,
-          body.bankAccountId ?? undefined,
-          body.transactions,
-          body.bankName ?? undefined,
-          body.accountNumber ?? undefined,
-          body.importBatchId
-        );
-        return { success: true, ...result };
-      } catch (err) {
-        throw err;
-      }
+      const result = await statementImportService.processParsedBatch(
+        body.companyId,
+        body.bankAccountId ?? undefined,
+        body.transactions,
+        body.bankName ?? undefined,
+        body.accountNumber ?? undefined,
+        body.importBatchId
+      );
+      return { success: true, ...result };
     },
     {
       body: t.Object({
