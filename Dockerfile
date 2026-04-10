@@ -1,12 +1,8 @@
 FROM oven/bun:1.3.11
-
 WORKDIR /app
 
 # Copy dependency files
 COPY package.json bun.lock ./
-
-# Install build tools for native dependencies (better-sqlite3)
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 RUN bun install --frozen-lockfile
