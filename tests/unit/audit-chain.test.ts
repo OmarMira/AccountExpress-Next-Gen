@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sha256, computeEntryHash } from "../../src/services/journal-hash.service.ts";
+import { hmacSha256 as sha256, computeEntryHash } from "../../src/services/journal-hash.service.ts";
 
 describe("audit chain — pure functions", () => {
 

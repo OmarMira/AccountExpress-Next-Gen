@@ -28,6 +28,10 @@ const envSchema = z.object({
     .refine(v => v !== "change-me-for-production", {
       message: "AUDIT_HMAC_SECRET must be changed from the default value before starting the server",
     }),
+  JOURNAL_HMAC_SECRET:  z.string().min(32, "JOURNAL_HMAC_SECRET must be at least 32 characters")
+    .refine(v => v !== "change-me-for-production", {
+      message: "JOURNAL_HMAC_SECRET must be changed from the default value before starting the server",
+    }),
   APP_NAME:             z.string().min(1, "APP_NAME is required for UI display"),
 
   // Initial Seed Data (Super Admin)

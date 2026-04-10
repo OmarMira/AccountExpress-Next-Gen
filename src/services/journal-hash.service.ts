@@ -4,14 +4,16 @@
 // IMPORTANT: nextEntryNumber and getJournalChainTip are async.
 // ============================================================
 
-import { createHash }      from "crypto";
+import { createHmac }      from "crypto";
+import { env }             from "../config/validate.ts";
 import { db, sql }         from "../db/connection.ts";
 import { journalEntries }  from "../db/schema/index.ts";
 import { eq, desc }        from "drizzle-orm";
 import type { JournalEntryInput, JournalLineInput } from "../lib/journal-types.ts";
 
-export function sha256(data: string): string {
-  return createHash("sha256").update(data, "utf8").digest("hex");
+// ── HMAC-SHA256 helper ───────────────────────────────────────
+export function hmacSha256(data: string): string {
+  return createHmac("sha256", env.JOURNAL_HMAC_SECRET).update(data, "utf8").digest("hex");
 }
 
 // ── Generate next sequential entry number ───────────────────
@@ -61,5 +63,5 @@ export function computeEntryHash(
     prevHash,
   ].join("|");
 
-  return sha256(data);
+  return hmacSha256(data);
 }
