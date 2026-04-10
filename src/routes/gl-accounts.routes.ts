@@ -53,8 +53,8 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
         companyId:     body.companyId,
         code:          body.code,
         name:          body.name,
-        accountType:   body.accountType as "asset" | "liability" | "equity" | "revenue" | "expense",
-        normalBalance: body.normalBalance as "debit" | "credit",
+        accountType:   body.accountType,
+        normalBalance: body.normalBalance,
         parentCode:    body.parentCode ?? null,
         taxCategory:   null,
         description:   body.description ?? null,
@@ -70,8 +70,10 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
       companyId:     t.String(),
       code:          t.String(),
       name:          t.String(),
-      accountType:   t.String(),
-      normalBalance: t.String(),
+      accountType:   t.Union([t.Literal('asset'), t.Literal('liability'), 
+                               t.Literal('equity'), t.Literal('revenue'), 
+                               t.Literal('expense')]),
+      normalBalance: t.Union([t.Literal('debit'), t.Literal('credit')]),
       description:   t.Optional(t.String()),
       parentCode:    t.Optional(t.String())
     })
