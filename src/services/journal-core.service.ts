@@ -24,6 +24,7 @@ export async function createDraft(
   tx?: Tx
 ): Promise<string> {
   if (lines.length === 0) throw AppError.validation("Al menos una línea es requerida.");
+  validateDoubleEntry(lines);
 
   const runner = tx ?? db;
 
@@ -104,6 +105,17 @@ export async function post(
 
   if (!entry) throw AppError.validation(`Journal entry ${entryId} not found`);
   if (entry.status !== "draft") throw AppError.validation(`Entry is ${entry.status} — only drafts can be posted`);
+
+  // ── Re-verify fiscal period is still open at post time ───────
+  const [period] = await runner
+    .select({ status: fiscalPeriods.status })
+    .from(fiscalPeriods)
+    .where(eq(fiscalPeriods.id, entry.periodId))
+    .limit(1);
+
+  if (!period) throw AppError.validation("Periodo fiscal no encontrado.");
+  if (period.status === "closed" || period.status === "locked")
+    throw AppError.validation("El periodo contable se cerró después de crear el borrador. No se puede postear.");
 
   const lines = await runner
     .select({
@@ -187,7 +199,7 @@ export async function listEntries(
 
   const rows = await db.execute(sql`
     SELECT e.*,
-           COALESCE(SUM(l.debit_amount), 0) as total_amount,
+           (COALESCE(SUM(l.debit_amount), 0) + COALESCE(SUM(l.credit_amount), 0)) / 2 as total_amount,
            COALESCE(SUM(l.debit_amount), 0) as total_debits,
            COALESCE(SUM(l.credit_amount), 0) as total_credits
     FROM journal_entries e
