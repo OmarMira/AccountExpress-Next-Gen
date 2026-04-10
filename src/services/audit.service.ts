@@ -11,12 +11,12 @@ import { v4 as uuidv4 } from "uuid";
 
 const SENSITIVE_FIELDS = new Set(["passwordHash", "passwordSalt", "password", "token", "secret"]);
 
-// NOTE: shallow sanitization only — does not recurse into nested objects
 function sanitizeState(state: unknown): unknown {
   if (!state || typeof state !== "object") return state;
+  if (Array.isArray(state)) return state.map(sanitizeState);
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(state as Record<string, unknown>)) {
-    result[key] = SENSITIVE_FIELDS.has(key) ? "[REDACTED]" : value;
+    result[key] = SENSITIVE_FIELDS.has(key) ? "[REDACTED]" : sanitizeState(value);
   }
   return result;
 }

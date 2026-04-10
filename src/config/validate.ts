@@ -16,7 +16,7 @@ const envSchema = z.object({
   BCRYPT_ROUNDS:        z.string().default("12").transform(Number).pipe(z.number().int().min(4).max(18)),
 
   // Security and Branding
-  SESSION_SECRET:       z.string().min(16, "SESSION_SECRET must be at least 16 characters")
+  SESSION_SECRET:       z.string().min(32, "SESSION_SECRET must be at least 32 characters for HMAC security")
     .refine(v => v !== "change-this-to-a-long-random-string-in-production", {
       message: "SESSION_SECRET must be changed from the default value before starting the server",
     }),
