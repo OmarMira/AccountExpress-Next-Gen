@@ -3,9 +3,10 @@
 // Immutable SHA-256 chained audit log.
 // ============================================================
 
-import { createHash } from "crypto";
+import { createHmac } from "crypto";
 import { db } from "../db/connection.ts";
 import { auditLogs, companies } from "../db/schema/index.ts";
+import { env } from "../config/validate.ts";
 import { eq, isNull, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
@@ -50,9 +51,9 @@ interface AuditLogRow {
   createdAt:   Date;
 }
 
-// ── SHA-256 helper ───────────────────────────────────────────
-function sha256(data: string): string {
-  return createHash("sha256").update(data, "utf8").digest("hex");
+// ── HMAC-SHA256 helper ───────────────────────────────────────
+function hmacSha256(data: string): string {
+  return createHmac("sha256", env.AUDIT_HMAC_SECRET).update(data, "utf8").digest("hex");
 }
 
 // ── Get current chain tip (synchronous via cached query) ──────
@@ -93,7 +94,7 @@ export async function createAuditEntry(input: AuditEntryInput): Promise<string> 
     createdAt.toISOString(),
   ].join("|");
 
-  const entryHash = sha256(hashInput);
+  const entryHash = hmacSha256(hashInput);
 
   await db.insert(auditLogs).values({
     id,
@@ -225,7 +226,7 @@ export async function verifyAuditChain(
       row.prevHash,
       rowDateStr,
     ].join("|");
-    const expectedHash = sha256(hashInput);
+    const expectedHash = hmacSha256(hashInput);
 
     if (row.entryHash !== expectedHash) {
       return {

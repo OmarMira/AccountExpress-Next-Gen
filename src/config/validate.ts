@@ -24,6 +24,10 @@ const envSchema = z.object({
     .refine(v => v !== "change-me-for-production", {
       message: "AUTO_BACKUP_SECRET must be changed from the default value before starting the server",
     }),
+  AUDIT_HMAC_SECRET:    z.string().min(32, "AUDIT_HMAC_SECRET must be at least 32 characters")
+    .refine(v => v !== "change-me-for-production", {
+      message: "AUDIT_HMAC_SECRET must be changed from the default value before starting the server",
+    }),
   APP_NAME:             z.string().min(1, "APP_NAME is required for UI display"),
 
   // Initial Seed Data (Super Admin)
@@ -57,3 +61,6 @@ export function validateEnv() {
 
 // Execute immediately on import
 validateEnv();
+
+// Parsed and validated environment — import this instead of process.env directly
+export const env = envSchema.parse(process.env);
