@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { validateDoubleEntry } from "../../src/services/journal-math.service.ts";
-import { ValidationError } from "../../src/services/journal.service.ts";
+import { ValidationError } from "../../src/lib/errors.ts";
 
 describe("validateDoubleEntry", () => {
   // ── SHOULD PASS ──────────────────────────────────────────────
