@@ -6,7 +6,7 @@
 
 import { db, sql } from "../db/connection.ts";
 import { fiscalPeriods, bankTransactions, journalEntries } from "../db/schema/index.ts";
-import { eq, and, ne, lte, gte, count } from "drizzle-orm";
+import { eq, and, lte, gte, count } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 export type PeriodStatus = "open" | "closed" | "locked";
@@ -70,65 +70,75 @@ export async function openPeriod(opts: {
 
 // ── Close a period ───────────────────────────────────────────
 export async function closePeriod(periodId: string, closedByUserId: string): Promise<void> {
-  const period = await getPeriod(periodId);
-  if (!period) throw new Error(`Fiscal period ${periodId} not found`);
-  if (period.status === "locked") throw new Error("Cannot close a locked period");
-  if (period.status === "closed") throw new Error("Period is already closed");
+  await db.transaction(async (tx) => {
+    // Lock the row for the duration of the transaction — eliminates TOCTOU race
+    const [period] = await tx.execute(sql`
+      SELECT * FROM fiscal_periods WHERE id = ${periodId} FOR UPDATE
+    `) as unknown as PeriodRow[];
 
-  // Check no pending bank transactions in the period date range
-  const [pendingTxResult] = await db
-    .select({ c: count() })
-    .from(bankTransactions)
-    .where(
-      and(
-        eq(bankTransactions.companyId, period.companyId),
-        eq(bankTransactions.status, "pending"),
-        gte(bankTransactions.transactionDate, period.startDate),
-        lte(bankTransactions.transactionDate, period.endDate)
-      )
-    );
+    if (!period) throw new Error(`Fiscal period ${periodId} not found`);
+    if (period.status === "locked") throw new Error("Cannot close a locked period");
+    if (period.status === "closed") throw new Error("Period is already closed");
 
-  const pendingTxCount = pendingTxResult?.c ?? 0;
-  if (pendingTxCount > 0) {
-    throw new Error(
-      `Cannot close period: ${pendingTxCount} bank transaction(s) still pending reconciliation`
-    );
-  }
+    // Check no pending bank transactions in the period date range
+    const [pendingTxResult] = await tx
+      .select({ c: count() })
+      .from(bankTransactions)
+      .where(
+        and(
+          eq(bankTransactions.companyId, period.companyId),
+          eq(bankTransactions.status, "pending"),
+          gte(bankTransactions.transactionDate, period.startDate),
+          lte(bankTransactions.transactionDate, period.endDate)
+        )
+      );
 
-  // Check no draft journal entries remain in this period
-  const [pendingDraftsResult] = await db
-    .select({ c: count() })
-    .from(journalEntries)
-    .where(
-      and(
-        eq(journalEntries.periodId, periodId),
-        eq(journalEntries.status, "draft")
-      )
-    );
+    if ((pendingTxResult?.c ?? 0) > 0) {
+      throw new Error(
+        `Cannot close period: ${pendingTxResult.c} bank transaction(s) still pending reconciliation`
+      );
+    }
 
-  const pendingDraftCount = pendingDraftsResult?.c ?? 0;
-  if (pendingDraftCount > 0) {
-    throw new Error(
-      `Cannot close period: ${pendingDraftCount} journal entry/entries ` +
-      `still in draft status. Post or delete them before closing.`
-    );
-  }
+    // Check no draft journal entries remain in this period
+    const [pendingDraftsResult] = await tx
+      .select({ c: count() })
+      .from(journalEntries)
+      .where(
+        and(
+          eq(journalEntries.periodId, periodId),
+          eq(journalEntries.status, "draft")
+        )
+      );
 
-  await db.update(fiscalPeriods)
-    .set({ status: "closed", closedBy: closedByUserId, closedAt: new Date() })
-    .where(eq(fiscalPeriods.id, periodId));
+    if ((pendingDraftsResult?.c ?? 0) > 0) {
+      throw new Error(
+        `Cannot close period: ${pendingDraftsResult.c} journal entry/entries ` +
+        `still in draft status. Post or delete them before closing.`
+      );
+    }
+
+    await tx.update(fiscalPeriods)
+      .set({ status: "closed", closedBy: closedByUserId, closedAt: new Date() })
+      .where(eq(fiscalPeriods.id, periodId));
+  });
 }
 
 // ── Lock a period (terminal — cannot be undone) ──────────────
 export async function lockPeriod(periodId: string): Promise<void> {
-  const period = await getPeriod(periodId);
-  if (!period) throw new Error(`Fiscal period ${periodId} not found`);
-  if (period.status === "locked") throw new Error("Period is already locked");
-  if (period.status === "open")   throw new Error("Period must be closed before locking");
+  await db.transaction(async (tx) => {
+    // Lock the row for the duration of the transaction — eliminates TOCTOU race
+    const [period] = await tx.execute(sql`
+      SELECT * FROM fiscal_periods WHERE id = ${periodId} FOR UPDATE
+    `) as unknown as PeriodRow[];
 
-  await db.update(fiscalPeriods)
-    .set({ status: "locked" })
-    .where(eq(fiscalPeriods.id, periodId));
+    if (!period) throw new Error(`Fiscal period ${periodId} not found`);
+    if (period.status === "locked") throw new Error("Period is already locked");
+    if (period.status === "open")   throw new Error("Period must be closed before locking");
+
+    await tx.update(fiscalPeriods)
+      .set({ status: "locked" })
+      .where(eq(fiscalPeriods.id, periodId));
+  });
 }
 
 // ── Get a period by ID ────────────────────────────────────────
