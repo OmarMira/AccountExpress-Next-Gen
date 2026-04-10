@@ -19,9 +19,6 @@ export async function voidEntry(
   sessionId: string,
   ipAddress: string
 ): Promise<void> {
-  // auditData is captured inside the transaction and used after commit
-  let auditData: { companyId: string; status: string; entryNumber: string; revId: string; now: Date };
-
   await db.transaction(async (tx) => {
     // Lock entry row — prevents concurrent void of the same entry
     const [entry] = await tx.execute(sql`
@@ -111,21 +108,17 @@ export async function voidEntry(
       });
     }
 
-    // Capture for audit entry after commit
-    auditData = { companyId: entry.company_id, status: entry.status, entryNumber: entry.entry_number, revId, now };
-  });
-
-  // TODO(V-3): move inside TX once createAuditEntry accepts a tx parameter (Opción A pendiente)
-  await createAuditEntry({
-    companyId:   auditData!.companyId,
-    userId:      voidedBy,
-    sessionId,
-    action:      "journal:void",
-    module:      "journal",
-    entityType:  "journal_entry",
-    entityId:    entryId,
-    beforeState: { status: auditData!.status },
-    afterState:  { status: "voided", voidedAt: auditData!.now.toISOString(), reversalEntryId: auditData!.revId },
-    ipAddress,
+    await createAuditEntry({
+      companyId:   entry.company_id,
+      userId:      voidedBy,
+      sessionId,
+      action:      "journal:void",
+      module:      "journal",
+      entityType:  "journal_entry",
+      entityId:    entryId,
+      beforeState: { status: entry.status },
+      afterState:  { status: "voided", voidedAt: now.toISOString(), reversalEntryId: revId },
+      ipAddress,
+    }, tx);
   });
 }

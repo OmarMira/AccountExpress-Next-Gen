@@ -4,7 +4,7 @@
 // ============================================================
 
 import { createHmac } from "crypto";
-import { db } from "../db/connection.ts";
+import { db, type DbTransaction } from "../db/connection.ts";
 import { auditLogs, companies } from "../db/schema/index.ts";
 import { env } from "../config/validate.ts";
 import { eq, isNull, desc } from "drizzle-orm";
@@ -75,7 +75,7 @@ function updateChainCache(companyId: string | null, tip: ChainTip): void {
 
 // ── Create a new audit entry ─────────────────────────────────
 // NOTE: Returns Promise<string> now — callers must await.
-export async function createAuditEntry(input: AuditEntryInput): Promise<string> {
+export async function createAuditEntry(input: AuditEntryInput, tx?: DbTransaction): Promise<string> {
   const id        = uuidv4();
   const createdAt = new Date();
   const tip       = getChainTipCached(input.companyId);
@@ -96,7 +96,7 @@ export async function createAuditEntry(input: AuditEntryInput): Promise<string> 
 
   const entryHash = hmacSha256(hashInput);
 
-  await db.insert(auditLogs).values({
+  await (tx ?? db).insert(auditLogs).values({
     id,
     companyId:    input.companyId,
     userId:       input.userId,

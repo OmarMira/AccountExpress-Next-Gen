@@ -153,7 +153,7 @@ export async function post(
     beforeState: { status: "draft" },
     afterState:  { status: "posted", postedAt: now.toISOString() },
     ipAddress,
-  });
+  }, tx);
 }
 
 // ── Get entry with its lines ──────────────────────────────────

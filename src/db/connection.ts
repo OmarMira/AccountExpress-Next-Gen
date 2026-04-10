@@ -23,5 +23,6 @@ export const db = drizzle(client, { schema });
 
 // Re-export sql tag for raw SQL fragments when needed in complex queries
 export { sql } from "drizzle-orm";
+export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 logger.info("db", "Connected to PostgreSQL");
