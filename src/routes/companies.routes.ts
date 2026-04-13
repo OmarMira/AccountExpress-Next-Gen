@@ -11,6 +11,7 @@ import {
   createCompany, 
   updateCompany, 
   archiveCompany, 
+  deleteCompany,
   listCompanies,
   addUserToCompany,
   revokeUserFromCompany,
@@ -140,15 +141,49 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       }
 
       await archiveCompany(params.id);
+      
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
         companyId: params.id, userId: uid, sessionId,
-        action: "companies:delete", module: "companies",
+        action: "companies:archive", module: "companies",
         entityType: "company", entityId: params.id,
-        beforeState: null, afterState: { is_active: 0 }, ipAddress: ip,
+        beforeState: { isActive: true }, afterState: { isActive: false }, ipAddress: ip,
       });
 
       return { message: "Company archived" };
+    },
+    {
+      params: t.Object({
+        id: t.String()
+      })
+    }
+  )
+
+  // ── DELETE /companies/:id/purge ─────────────────────────────
+  .delete(
+    "/:id/purge",
+    async ({ params, user, sessionId, request, set }) => {
+      const uid = user!;
+      const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
+      if (!dbUser || !dbUser.isSuperAdmin) {
+        set.status = 403; return { error: "Super Admin privileges required" };
+      }
+
+      try {
+        await deleteCompany(params.id);
+        const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+        await createAuditEntry({
+          companyId: params.id, userId: uid, sessionId,
+          action: "companies:purge", module: "companies",
+          entityType: "company", entityId: params.id,
+          beforeState: { purged: false }, afterState: { purged: true }, ipAddress: ip,
+        });
+
+        return { message: "Company permanently deleted" };
+      } catch (err: any) {
+        set.status = 400;
+        return { error: err.message || "Failed to delete company" };
+      }
     },
     {
       params: t.Object({

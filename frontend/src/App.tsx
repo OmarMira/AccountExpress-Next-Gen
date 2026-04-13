@@ -13,6 +13,11 @@ import { Settings } from './pages/Settings';
 import { Banks } from './pages/Banks';
 import { Users } from './pages/Users';
 import { Onboarding } from './pages/Onboarding';
+import { SuperAdminGuard } from './components/SuperAdminGuard';
+import { Companies } from './pages/admin/Companies';
+import { CompanyDetail } from './pages/admin/CompanyDetail';
+import { AdminUsers } from './pages/admin/Users';
+import { AdminShell } from './components/admin/AdminShell';
 
 export default function App() {
   return (
@@ -47,6 +52,15 @@ export default function App() {
           <Route path="/export" element={<CpaExport />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/users" element={<Users />} />
+        </Route>
+
+        {/* Super Admin Routes */}
+        <Route element={<SuperAdminGuard />}>
+          <Route element={<AdminShell />}>
+            <Route path="/admin/companies" element={<Companies />} />
+            <Route path="/admin/companies/:id" element={<CompanyDetail />} />
+            <Route path="/admin/users" element={<AdminUsers />} />
+          </Route>
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

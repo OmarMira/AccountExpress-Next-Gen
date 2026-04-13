@@ -5,8 +5,8 @@
 // ============================================================
 
 import { db }                 from "../db/connection.ts";
-import { users, userCompanyRoles, roles } from "../db/schema/index.ts";
-import { eq, and }    from "drizzle-orm";
+import { users, userCompanyRoles, roles, journalEntries, auditLogs, sessions } from "../db/schema/index.ts";
+import { eq, and, or, count }    from "drizzle-orm";
 import { hashPassword }        from "./auth.service.ts";
 import { invalidateAllUserSessions } from "./session.service.ts";
 import { randomUUID }         from "crypto";
@@ -84,6 +84,24 @@ export async function listRoles() {
     .from(roles)
     .where(and(eq(roles.isActive, true), eq(roles.isSystem, false)))
     .orderBy(roles.displayName);
+}
+
+// ── Listar todos los usuarios del sistema (super admin only) ──
+export async function listAllUsers() {
+  return db
+    .select({
+      id:           users.id,
+      username:     users.username,
+      email:        users.email,
+      firstName:    users.firstName,
+      lastName:     users.lastName,
+      isActive:     users.isActive,
+      isSuperAdmin: users.isSuperAdmin,
+      lastLoginAt:  users.lastLoginAt,
+      createdAt:    users.createdAt,
+    })
+    .from(users)
+    .orderBy(users.createdAt);
 }
 
 // ── Crear usuario + asignar rol en tenant ────────────────────
@@ -205,5 +223,29 @@ export async function assignRole(input: AssignRoleInput): Promise<{ assigned: bo
     });
 
     return { assigned: true };
+  });
+}
+// ── Eliminar usuario (Hard Delete si no tiene actividad) ────
+export async function deleteUser(userId: string): Promise<void> {
+  const [existing] = await db.select({ id: users.id, isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!existing) throw new Error("User not found");
+  if (existing.isSuperAdmin) throw new Error("Cannot delete a super admin user");
+
+  // Check activity
+  const [journalCount] = await db.select({ c: count() }).from(journalEntries).where(eq(journalEntries.createdBy, userId));
+  if (journalCount && journalCount.c > 0) {
+    throw new Error("Cannot delete user because they have created journal entries. Deactivate instead.");
+  }
+
+  const [logCount] = await db.select({ c: count() }).from(auditLogs).where(eq(auditLogs.userId, userId));
+  if (logCount && logCount.c > 0) {
+    throw new Error("Cannot delete user because they have audit logs associated. Deactivate instead.");
+  }
+
+  // If safe, delete relations
+  await db.transaction(async (tx) => {
+    await tx.delete(sessions).where(eq(sessions.userId, userId));
+    await tx.delete(userCompanyRoles).where(eq(userCompanyRoles.userId, userId));
+    await tx.delete(users).where(eq(users.id, userId));
   });
 }

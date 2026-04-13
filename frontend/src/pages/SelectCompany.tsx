@@ -91,7 +91,15 @@ export function SelectCompany() {
         </div>
       )}
 
-      <div className="mt-8 pt-6 border-t border-gray-700">
+      <div className="mt-8 pt-6 border-t border-gray-700 space-y-3">
+        {user?.isSuperAdmin && (
+          <button
+            onClick={() => navigate('/admin/companies')}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none transition-colors"
+          >
+            Administración del Sistema
+          </button>
+        )}
         <button
           onClick={handleLogout}
           className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-transparent hover:bg-gray-700 focus:outline-none transition-colors"

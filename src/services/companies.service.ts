@@ -5,8 +5,13 @@
 // ============================================================
 
 import { db } from "../db/connection.ts";
-import { companies, users, userCompanyRoles, roles } from "../db/schema/index.ts";
-import { eq, and, isNull } from "drizzle-orm";
+import { 
+  companies, users, userCompanyRoles, roles, 
+  journalEntries, chartOfAccounts, fiscalPeriods, 
+  auditLogs, bankAccounts, sessions,
+  bankTransactions, bankTransactionGroups, bankTransactionGroupItems
+} from "../db/schema/index.ts";
+import { eq, and, isNull, count, ne } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { seedGaapForCompany } from "./accounts.service.ts";
 
@@ -105,6 +110,108 @@ export async function archiveCompany(id: string): Promise<void> {
   await db.update(companies)
     .set({ isActive: false, updatedAt: new Date() })
     .where(eq(companies.id, id));
+}
+
+// ── Delete Company (Hard Delete with Cascading User Cleanup) ───
+export async function deleteCompany(id: string): Promise<void> {
+  console.log(`[DELETE_COMPANY] Starting purge for company ID: ${id}`);
+  
+  const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.id, id)).limit(1);
+  if (!existing) {
+    console.error(`[DELETE_COMPANY] Company ${id} not found`);
+    throw new Error("Company not found");
+  }
+
+  // 1. Strict check for accounting transactions
+  const [txCount] = await db.select({ c: count() }).from(journalEntries).where(eq(journalEntries.companyId, id));
+  if (txCount && txCount.c > 0) {
+    console.warn(`[DELETE_COMPANY] Aborting: Company ${id} has ${txCount.c} transactions.`);
+    throw new Error("Cannot delete company with existing transactions. Archive it instead.");
+  }
+
+  // 2. Identify users that should be cleaned up
+  const companyUsers = await db.select({ 
+    userId: userCompanyRoles.userId 
+  }).from(userCompanyRoles).where(eq(userCompanyRoles.companyId, id));
+
+  console.log(`[DELETE_COMPANY] Found ${companyUsers.length} users associated with company.`);
+
+  const usersToDelete: string[] = [];
+
+  for (const item of companyUsers) {
+    const uid = item.userId;
+    const [uData] = await db.select({ isSuperAdmin: users.isSuperAdmin, username: users.username }).from(users).where(eq(users.id, uid)).limit(1);
+    
+    if (uData?.isSuperAdmin) {
+      console.log(`[DELETE_COMPANY] Skipping user ${uData.username} (Super Admin)`);
+      continue;
+    }
+
+    const [otherCompanies] = await db.select({ c: count() })
+      .from(userCompanyRoles)
+      .where(and(eq(userCompanyRoles.userId, uid), ne(userCompanyRoles.companyId, id)));
+    if (otherCompanies && otherCompanies.c > 0) {
+      console.log(`[DELETE_COMPANY] Preserving user ${uData?.username} (Belongs to ${otherCompanies.c} other companies)`);
+      continue;
+    }
+
+    const [globalLogs] = await db.select({ c: count() })
+      .from(auditLogs)
+      .where(and(eq(auditLogs.userId, uid), ne(auditLogs.companyId, id)));
+    if (globalLogs && globalLogs.c > 0) {
+      console.log(`[DELETE_COMPANY] Preserving user ${uData?.username} (Has ${globalLogs.c} global audit logs)`);
+      continue;
+    }
+
+    const [globalEntries] = await db.select({ c: count() })
+      .from(journalEntries)
+      .where(eq(journalEntries.createdBy, uid));
+    if (globalEntries && globalEntries.c > 0) {
+      console.log(`[DELETE_COMPANY] Preserving user ${uData?.username} (Created ${globalEntries.c} entries elsewhere)`);
+      continue;
+    }
+
+    console.log(`[DELETE_COMPANY] User ${uData?.username} marked for automatic deletion.`);
+    usersToDelete.push(uid);
+  }
+
+  // 3. Execute full cleanup in transaction
+  console.log(`[DELETE_COMPANY] Executing transaction for company ${id} and ${usersToDelete.length} associated users.`);
+  
+  await db.transaction(async (tx) => {
+    // A. Clean Banking
+    const groupIds = (await tx.select({ id: bankTransactionGroups.id }).from(bankTransactionGroups).where(eq(bankTransactionGroups.companyId, id))).map(g => g.id);
+    if (groupIds.length > 0) {
+      console.log(`[DELETE_COMPANY] Deleting ${groupIds.length} bank transaction groups...`);
+      for (const gid of groupIds) {
+        await tx.delete(bankTransactionGroupItems).where(eq(bankTransactionGroupItems.groupId, gid));
+      }
+      await tx.delete(bankTransactionGroups).where(eq(bankTransactionGroups.companyId, id));
+    }
+    await tx.delete(bankTransactions).where(eq(bankTransactions.companyId, id));
+    await tx.delete(bankAccounts).where(eq(bankAccounts.companyId, id));
+
+    // B. Clean Audit & System
+    await tx.delete(auditLogs).where(eq(auditLogs.companyId, id));
+    await tx.delete(fiscalPeriods).where(eq(fiscalPeriods.companyId, id));
+    await tx.delete(userCompanyRoles).where(eq(userCompanyRoles.companyId, id));
+    
+    // C. Clean Chart of Accounts
+    await tx.delete(chartOfAccounts).where(eq(chartOfAccounts.companyId, id));
+
+    // D. Cleanup "Disposable" Users
+    if (usersToDelete.length > 0) {
+      console.log(`[DELETE_COMPANY] Purging ${usersToDelete.length} exclusive users...`);
+      for (const uid of usersToDelete) {
+        await tx.delete(sessions).where(eq(sessions.userId, uid));
+        await tx.delete(users).where(eq(users.id, uid));
+      }
+    }
+
+    // E. Delete the company itself
+    await tx.delete(companies).where(eq(companies.id, id));
+    console.log(`[DELETE_COMPANY] Success. Company ${id} purged.`);
+  });
 }
 
 // ── List Company Users ───────────────────────────────────────

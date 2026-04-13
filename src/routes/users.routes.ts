@@ -15,9 +15,11 @@ import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 import {
   listUsers,
   listRoles,
+  listAllUsers,
   createUser,
   updateUser,
   assignRole,
+  deleteUser,
 } from "../services/users.service.ts";
 import { hashPassword } from "../services/auth.service.ts";
 import { db } from "../db/connection.ts";
@@ -41,6 +43,17 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   // ── GET /users/roles ──────────────────────────────────────
   .get("/roles", async () => {
     return { success: true, data: await listRoles() };
+  })
+
+  // ── GET /users/all (super admin only) ────────────────────
+  .get("/all", async ({ user, set }) => {
+    const uid = user!;
+    const [dbUser] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, uid)).limit(1);
+    if (!dbUser?.isSuperAdmin) {
+      set.status = 403;
+      return { success: false, error: "Super Admin privileges required" };
+    }
+    return { success: true, data: await listAllUsers() };
   })
 
   // ── POST /users ───────────────────────────────────────────
@@ -214,4 +227,30 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     body: t.Object({
       newPassword: t.String({ minLength: 8 }),
     }),
+  })
+  // ── DELETE /users/:userId ────────────────────────────────
+  .delete("/:userId", async ({ params, set, user }) => {
+    const uid = user!;
+    const [callerUser] = await db
+      .select({ isSuperAdmin: users.isSuperAdmin })
+      .from(users)
+      .where(eq(users.id, uid))
+      .limit(1);
+
+    if (!callerUser?.isSuperAdmin) {
+      set.status = 403;
+      return { success: false, error: "Forbidden: super_admin only" };
+    }
+
+    try {
+      await deleteUser(params.userId);
+      return { success: true, message: "User permanently deleted" };
+    } catch (err: any) {
+      set.status = 400;
+      return { success: false, error: err.message || "Failed to delete user" };
+    }
+  }, {
+    params: t.Object({
+      userId: t.String()
+    })
   });
