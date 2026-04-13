@@ -8,6 +8,7 @@ import { promisify } from 'util';
 import { pipeline } from 'stream';
 import { createReadStream, createWriteStream } from 'fs';
 import { logger } from '../../lib/logger.ts';
+import { env } from '../../config/validate.ts';
 
 const pipelineAsync = promisify(pipeline);
 
@@ -74,8 +75,7 @@ export class BackupService {
     const tempSqlPath = join(BACKUPS_DIR, `temp-${dateStr}.sql`);
     const tempGzPath  = join(BACKUPS_DIR, `temp-${dateStr}.sql.gz`);
 
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) throw new Error("DATABASE_URL no está configurada.");
+    const dbUrl = env.DATABASE_URL;
 
     // 1. Ejecutar pg_dump y guardar en archivo temporal
     await new Promise<void>((resolve, reject) => {
@@ -156,8 +156,7 @@ export class BackupService {
    */
   async restoreBackup(filename: string, password: string): Promise<RestoreResult> {
     const fullPath = join(BACKUPS_DIR, filename);
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) throw new Error("DATABASE_URL no está configurada.");
+    const dbUrl = env.DATABASE_URL;
     
     // 1. Decriptar y obtener datos + metadatos
     const { data, metadata } = await decryptFile(fullPath, password);

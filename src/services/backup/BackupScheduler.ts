@@ -4,6 +4,7 @@ import { systemConfig, auditLogs } from '../../db/schema/index.ts';
 import { createAuditEntry } from '../audit.service.ts';
 import { eq, sql } from 'drizzle-orm';
 import { logger } from '../../lib/logger.ts';
+import { env } from '../../config/validate.ts';
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -64,11 +65,7 @@ export class BackupScheduler {
   }
 
   private async runScheduledBackup() {
-    const tempPassword = process.env.AUTO_BACKUP_SECRET;
-    if (!tempPassword) {
-      logger.error("BackupScheduler", "AUTO_BACKUP_SECRET not set — scheduled backup aborted");
-      return;
-    }
+    const tempPassword = env.AUTO_BACKUP_SECRET;
     let filename = "";
     try {
       const result = await this.backupService.createBackup(tempPassword);
