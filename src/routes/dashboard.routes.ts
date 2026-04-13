@@ -38,7 +38,7 @@ export const dashboardRoutes = new Elysia({ prefix: "/dashboard" })
       .limit(1);
 
     // Ensure chain integrity
-    const chainValidObj = await verifyAuditChain();
+    const chainValidObj = await verifyAuditChain(companyId);
     const chainValid = chainValidObj.valid;
 
     // Active Period
