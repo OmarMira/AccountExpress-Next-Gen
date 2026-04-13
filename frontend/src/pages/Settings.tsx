@@ -181,6 +181,37 @@ export function Settings() {
     onError: (err: Error) => alert(`Error al cerrar periodo: ${err.message}`)
   });
 
+  const lockPeriodMutation = useMutation({
+    mutationFn: async (periodId: string) => fetchApi(`/fiscal-periods/${periodId}/lock`, {
+      method: 'POST'
+    }),
+    onSuccess: () => {
+      alert("Periodo bloqueado permanentemente.");
+      queryClient.invalidateQueries({ queryKey: ['fiscal-periods'] });
+    },
+    onError: (err: Error) => alert(`Error al bloquear periodo: ${err.message}`)
+  });
+
+  const [showNewPeriod, setShowNewPeriod] = useState(false);
+  const [newPeriod, setNewPeriod] = useState({
+    name: '', periodType: 'monthly' as 'monthly' | 'quarterly' | 'annual',
+    startDate: '', endDate: ''
+  });
+  const openPeriodMutation = useMutation({
+    mutationFn: async () => fetchApi('/fiscal-periods', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId: activeCompany!.id, ...newPeriod })
+    }),
+    onSuccess: () => {
+      alert("Nuevo periodo abierto exitosamente.");
+      setShowNewPeriod(false);
+      setNewPeriod({ name: '', periodType: 'monthly', startDate: '', endDate: '' });
+      queryClient.invalidateQueries({ queryKey: ['fiscal-periods'] });
+    },
+    onError: (err: Error) => alert(`Error al crear periodo: ${err.message}`)
+  });
+
   // (Backup Hooks have been migrated to BackupPanel component)
 
   return (
@@ -512,7 +543,67 @@ export function Settings() {
             <div className="space-y-6">
               <div className="flex justify-between items-end border-b border-gray-800 pb-3">
                 <h2 className="text-xl font-bold text-white">Periodos Fiscales (Cierres Contables)</h2>
+                <button
+                  onClick={() => setShowNewPeriod(!showNewPeriod)}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <Calendar className="w-4 h-4" /> {showNewPeriod ? 'Cancelar' : 'Nuevo Per\u00edodo'}
+                </button>
               </div>
+              {showNewPeriod && (
+                <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-5 space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-300">Crear Nuevo Per\u00edodo Fiscal</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Nombre</label>
+                      <input
+                        type="text"
+                        value={newPeriod.name}
+                        onChange={e => setNewPeriod(p => ({ ...p, name: e.target.value }))}
+                        placeholder="Ej: Enero 2025"
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Tipo</label>
+                      <select
+                        value={newPeriod.periodType}
+                        onChange={e => setNewPeriod(p => ({ ...p, periodType: e.target.value as 'monthly' | 'quarterly' | 'annual' }))}
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="monthly">Mensual</option>
+                        <option value="quarterly">Trimestral</option>
+                        <option value="annual">Anual</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Fecha de Inicio</label>
+                      <input
+                        type="date"
+                        value={newPeriod.startDate}
+                        onChange={e => setNewPeriod(p => ({ ...p, startDate: e.target.value }))}
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Fecha de Fin</label>
+                      <input
+                        type="date"
+                        value={newPeriod.endDate}
+                        onChange={e => setNewPeriod(p => ({ ...p, endDate: e.target.value }))}
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => openPeriodMutation.mutate()}
+                    disabled={openPeriodMutation.isPending || !newPeriod.name || !newPeriod.startDate || !newPeriod.endDate}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    {openPeriodMutation.isPending ? 'Creando...' : 'Crear Per\u00edodo'}
+                  </button>
+                </div>
+              )}
               <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-lg flex items-start gap-3">
                 <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-sm text-amber-400 leading-relaxed">
@@ -549,6 +640,19 @@ export function Settings() {
                         className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
                         <CheckCircle className="w-4 h-4" /> Ejecutar Cierre Contable
+                      </button>
+                    )}
+                    {p.status === 'closed' && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`\u00bfEst\u00e1 seguro de BLOQUEAR PERMANENTEMENTE el periodo ${p.name}? Esta acci\u00f3n es irreversible y no puede deshacerse.`)) {
+                            lockPeriodMutation.mutate(p.id);
+                          }
+                        }}
+                        disabled={lockPeriodMutation.isPending}
+                        className="w-full py-2 bg-rose-700 hover:bg-rose-800 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Shield className="w-4 h-4" /> Bloquear Permanentemente
                       </button>
                     )}
                   </div>
