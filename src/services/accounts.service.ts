@@ -3,14 +3,15 @@
 // CRUD for the account tree. is_system=true accounts read-only.
 // ============================================================
 
-import { db } from "../db/connection.ts";
+import { db, type DbTransaction } from "../db/connection.ts";
 import { chartOfAccounts, journalLines, journalEntries } from "../db/schema/index.ts";
 import { eq, and, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { GAAP_ACCOUNTS } from "../db/seed/chart-of-accounts.seed.ts";
 
 // ── Seed GAAP accounts for a company ─────────────────────────
-export async function seedGaapForCompany(companyId: string): Promise<void> {
+export async function seedGaapForCompany(companyId: string, tx?: DbTransaction): Promise<void> {
+  const client = tx ?? db;
   const codeToId = new Map<string, string>();
 
   const accountsWithIds = GAAP_ACCOUNTS.map((a) => ({
@@ -27,7 +28,7 @@ export async function seedGaapForCompany(companyId: string): Promise<void> {
   // Insert all accounts, ignoring conflicts (idempotent)
   for (const a of accountsWithIds) {
     const parentId = a.parentCode ? (codeToId.get(a.parentCode) ?? null) : null;
-    await db.insert(chartOfAccounts)
+    await client.insert(chartOfAccounts)
       .values({
         id:            a.id,
         companyId,

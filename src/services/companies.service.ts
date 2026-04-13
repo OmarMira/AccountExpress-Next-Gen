@@ -59,25 +59,26 @@ export async function createCompany(input: CompanyInput): Promise<string> {
   const id  = uuidv4();
   const now = new Date();
 
-  await db.insert(companies).values({
-    id,
-    legalName:       input.legalName,
-    tradeName:       input.tradeName ?? null,
-    ein:             input.ein ?? null,
-    address:         input.address ?? null,
-    city:            input.city ?? null,
-    state:           input.state ?? null,
-    zipCode:         input.zipCode ?? null,
-    phone:           input.phone ?? null,
-    email:           input.email ?? null,
-    fiscalYearStart: input.fiscalYearStart,
-    currency:        input.currency,
-    isActive:        true,
-    createdAt:       now,
-    updatedAt:       now,
+  await db.transaction(async (tx) => {
+    await tx.insert(companies).values({
+      id,
+      legalName:       input.legalName,
+      tradeName:       input.tradeName ?? null,
+      ein:             input.ein ?? null,
+      address:         input.address ?? null,
+      city:            input.city ?? null,
+      state:           input.state ?? null,
+      zipCode:         input.zipCode ?? null,
+      phone:           input.phone ?? null,
+      email:           input.email ?? null,
+      fiscalYearStart: input.fiscalYearStart,
+      currency:        input.currency,
+      isActive:        true,
+      createdAt:       now,
+      updatedAt:       now,
+    });
+    await seedGaapForCompany(id, tx);
   });
-
-  await seedGaapForCompany(id);
   return id;
 }
 

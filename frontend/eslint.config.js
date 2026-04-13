@@ -19,5 +19,13 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{
+          group: ['**/services/**', '../../services/**', '../services/**'],
+          message: 'El frontend no debe importar servicios del backend directamente. Usa fetchApi() contra los endpoints HTTP.',
+        }],
+      }],
+    },
   },
 ])
