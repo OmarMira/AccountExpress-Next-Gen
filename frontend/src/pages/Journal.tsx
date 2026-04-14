@@ -66,7 +66,7 @@ export function Journal() {
 
   const { data: accounts = [], isLoading: loadingAccounts } = useQuery<Account[]>({
     queryKey: ['accounts', activeCompany?.id],
-    queryFn: () => fetchApi(`/gl-accounts?companyId=${activeCompany?.id}`),
+    queryFn: () => fetchApi(`/gl-accounts`),
     enabled: !!activeCompany
   });
 

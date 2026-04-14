@@ -50,9 +50,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
 
   const { data: glAccountsData } = useQuery({
     queryKey: ['gl-accounts', activeCompany?.id],
-    queryFn: () => fetchApi(
-      `/gl-accounts?companyId=${activeCompany?.id}`
-    ),
+    queryFn: () => fetchApi(`/gl-accounts`),
     enabled: !!activeCompany?.id,
   });
 

@@ -34,14 +34,14 @@ export function Accounts() {
     queryKey: ['accounts', activeCompany?.id],
     queryFn: async () => {
       if (!activeCompany) return [];
-      return fetchApi(`/gl-accounts?companyId=${activeCompany.id}`);
+      return fetchApi(`/gl-accounts`);
     },
     enabled: !!activeCompany
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) =>
-      fetchApi('/gl-accounts', { method: 'POST', body: JSON.stringify({ ...data, companyId: activeCompany?.id }) }),
+      fetchApi('/gl-accounts', { method: 'POST', body: JSON.stringify({ ...data }) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts', activeCompany?.id] });
       setShowModal(false);
@@ -55,7 +55,7 @@ export function Accounts() {
     mutationFn: async (data: { id: string; name: string; code: string; description: string }) =>
       fetchApi(`/gl-accounts/${data.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ companyId: activeCompany?.id, name: data.name, code: data.code, description: data.description })
+        body: JSON.stringify({ name: data.name, code: data.code, description: data.description })
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts', activeCompany?.id] });
@@ -67,7 +67,7 @@ export function Accounts() {
 
   const deleteMutation = useMutation({
     mutationFn: async (accountId: string) =>
-      fetchApi(`/gl-accounts/${accountId}?companyId=${activeCompany?.id}`, { method: 'DELETE' }),
+      fetchApi(`/gl-accounts/${accountId}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts', activeCompany?.id] }),
     onError: (err: any) => alert(`Error al desactivar: ${err.message}`),
   });
