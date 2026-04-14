@@ -3,17 +3,25 @@ import { db } from '../db/connection';
 import { bankAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { requireAuth } from "../middleware/auth.middleware.ts";
+// ⚠️ FIX: Import authMiddleware to get session context (user, companyId) server-side.
+import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
 export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
+  .use(authMiddleware)
   .guard({ beforeHandle: requireAuth })
-  .get('/', async ({ query }) => {
-    const { companyId } = query as { companyId?: string };
-    if (!companyId) return [];
+
+  // ⚠️ FIX: companyId is now read from the authenticated session (ctx.companyId),
+  // NOT from the query string. This prevents a tenant-escalation attack where an
+  // authenticated user sends another company's companyId to read foreign data.
+  .get('/', async ({ companyId, set }) => {
+    if (!companyId) {
+      set.status = 403;
+      return { error: 'No active company in session. Select a company first.' };
+    }
 
     const accounts = await db.query.bankAccounts.findMany({
       where: and(
@@ -26,18 +34,21 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       ...a,
       balance: (a.balance || 0) / 100
     }));
-  }, {
-    query: t.Object({ companyId: t.String() })
   })
 
-  .post('/', async ({ body, set }) => {
-    const data = body;
+  .post('/', async ({ body, companyId, set }) => {
+    // ⚠️ FIX: companyId comes exclusively from the session, not from the request body.
+    if (!companyId) {
+      set.status = 403;
+      return { error: 'No active company in session.' };
+    }
+
     try {
-      if (data.companyId && data.accountNumber) {
+      if (body.accountNumber) {
         const existing = await db.query.bankAccounts.findFirst({
           where: and(
-            eq(bankAccounts.companyId, data.companyId),
-            eq(bankAccounts.accountNumber, data.accountNumber)
+            eq(bankAccounts.companyId, companyId),
+            eq(bankAccounts.accountNumber, body.accountNumber)
           )
         });
         if (existing) return existing;
@@ -46,13 +57,13 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       const now = new Date();
       const newAccount = {
         id: uuidv4(),
-        companyId: data.companyId,
-        accountName: data.accountName,
-        bankName: data.bankName,
-        accountNumber: data.accountNumber || null,
-        accountType: data.accountType || 'checking',
-        balance: Math.round((data.balance || 0) * 100),
-        glAccountId: data.glAccountId || null,
+        companyId,                                          // from session
+        accountName: body.accountName,
+        bankName: body.bankName,
+        accountNumber: body.accountNumber || null,
+        accountType: body.accountType || 'checking',
+        balance: Math.round((body.balance || 0) * 100),
+        glAccountId: body.glAccountId || null,
         isActive: true,
         createdAt: now,
         updatedAt: now
@@ -65,8 +76,8 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       return { error: 'Failed to create bank account', details: errMsg(error) };
     }
   }, {
+    // ⚠️ FIX: companyId removed from body schema — it is no longer accepted from the client.
     body: t.Object({
-      companyId: t.String(),
       accountName: t.String(),
       bankName: t.String(),
       accountNumber: t.Optional(t.String()),
@@ -79,10 +90,28 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
     })
   })
 
-  .put('/:id', async ({ params, body, set }) => {
+  .put('/:id', async ({ params, body, companyId, set }) => {
     const { id } = params;
-    const data = body;
+
+    // ⚠️ FIX: Verify the target record belongs to the session's company before updating.
+    if (!companyId) {
+      set.status = 403;
+      return { error: 'No active company in session.' };
+    }
+
     try {
+      const existing = await db.query.bankAccounts.findFirst({
+        where: and(
+          eq(bankAccounts.id, id),
+          eq(bankAccounts.companyId, companyId)   // tenant ownership check
+        )
+      });
+
+      if (!existing) {
+        set.status = 404;
+        return { error: 'Bank account not found' };
+      }
+
       const now = new Date();
       
       const updateData: {
@@ -98,17 +127,17 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
         updatedAt: now
       };
       
-      if (data.accountName !== undefined) updateData.accountName = data.accountName;
-      if (data.bankName !== undefined) updateData.bankName = data.bankName;
-      if (data.accountNumber !== undefined) updateData.accountNumber = data.accountNumber;
-      if (data.accountType !== undefined) updateData.accountType = data.accountType;
-      if (data.balance !== undefined) updateData.balance = Math.round(data.balance * 100);
-      if (data.glAccountId !== undefined) updateData.glAccountId = data.glAccountId;
-      if (data.isActive !== undefined) updateData.isActive = data.isActive ? true : false;
+      if (body.accountName !== undefined) updateData.accountName = body.accountName;
+      if (body.bankName !== undefined) updateData.bankName = body.bankName;
+      if (body.accountNumber !== undefined) updateData.accountNumber = body.accountNumber;
+      if (body.accountType !== undefined) updateData.accountType = body.accountType;
+      if (body.balance !== undefined) updateData.balance = Math.round(body.balance * 100);
+      if (body.glAccountId !== undefined) updateData.glAccountId = body.glAccountId;
+      if (body.isActive !== undefined) updateData.isActive = body.isActive ? true : false;
 
       const updated = await db.update(bankAccounts)
         .set(updateData)
-        .where(eq(bankAccounts.id, id))
+        .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)))
         .returning();
 
       if (updated.length === 0) {
@@ -133,13 +162,20 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
     })
   })
 
-  .delete('/:id', async ({ params, set }) => {
+  .delete('/:id', async ({ params, companyId, set }) => {
     const { id } = params;
+
+    // ⚠️ FIX: Verify tenant ownership before soft-deleting.
+    if (!companyId) {
+      set.status = 403;
+      return { error: 'No active company in session.' };
+    }
+
     try {
       const now = new Date();
       const updated = await db.update(bankAccounts)
         .set({ isActive: false, updatedAt: now })
-        .where(eq(bankAccounts.id, id))
+        .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)))
         .returning();
 
       if (updated.length === 0) {
@@ -153,4 +189,3 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       return { error: 'Failed to deactivate bank account', details: errMsg(error) };
     }
   });
-

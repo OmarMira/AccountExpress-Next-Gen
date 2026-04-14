@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Shield, Upload, Download, FolderOpen, Loader2, AlertTriangle, CheckCircle, Clock, Database, RotateCcw, X } from 'lucide-react';
+import { Shield, Upload, Download, FolderOpen, Loader2, AlertTriangle, CheckCircle, Clock, Database, RotateCcw, X, KeyRound } from 'lucide-react';
 import { fetchApi } from '../lib/api';
 
 export const BackupPanel: React.FC = () => {
@@ -13,6 +13,15 @@ export const BackupPanel: React.FC = () => {
     const [showRestoreModal, setShowRestoreModal] = useState(false);
     const [selectedBackupForRestore, setSelectedBackupForRestore] = useState('');
     const [restorePassword, setRestorePassword] = useState('');
+
+    // ⚠️ FIX: Replaced window.prompt() with a controlled modal.
+    // window.prompt() sends the password as plaintext in a browser-native dialog
+    // with no styling controls, and is blocked in many secure contexts.
+    // This modal uses a proper <input type="password"> and controlled React state.
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [createPassword, setCreatePassword] = useState('');
+    const [createPasswordConfirm, setCreatePasswordConfirm] = useState('');
+    const [createPasswordError, setCreatePasswordError] = useState('');
 
     // Queries
     const { data: backupListResponse = [] } = useQuery({
@@ -44,8 +53,13 @@ export const BackupPanel: React.FC = () => {
             showSuccess(`✅ Respaldo creado exitosamente: ${data.filename}`);
             queryClient.invalidateQueries({ queryKey: ['backups-list'] });
             queryClient.invalidateQueries({ queryKey: ['backup-status'] });
+            setShowCreateModal(false);
+            setCreatePassword('');
+            setCreatePasswordConfirm('');
         },
-        onError: (err: any) => setError(`Error al generar respaldo: ${err.message}`)
+        onError: (err: any) => {
+            setError(`Error al generar respaldo: ${err.message}`);
+        }
     });
 
     const scheduleBackupMutation = useMutation({
@@ -74,14 +88,28 @@ export const BackupPanel: React.FC = () => {
     });
 
     // Handlers
-    const handleCreateBackup = () => {
+    const handleOpenCreateModal = () => {
         setError('');
         setStatus('');
         setSuccessToast('');
-        const pwd = window.prompt("Ingresa una contraseña fuerte para cifrar este respaldo (AES-256-GCM):");
-        if (!pwd) return;
+        setCreatePassword('');
+        setCreatePasswordConfirm('');
+        setCreatePasswordError('');
+        setShowCreateModal(true);
+    };
+
+    const handleConfirmCreate = () => {
+        if (createPassword.length < 8) {
+            setCreatePasswordError('La contraseña debe tener al menos 8 caracteres.');
+            return;
+        }
+        if (createPassword !== createPasswordConfirm) {
+            setCreatePasswordError('Las contraseñas no coinciden.');
+            return;
+        }
+        setCreatePasswordError('');
         setStatus('Iniciando protocolo de cifrado...');
-        createBackupMutation.mutate(pwd);
+        createBackupMutation.mutate(createPassword);
     };
 
     const handleRestoreFromTable = (filename: string) => {
@@ -143,128 +171,80 @@ export const BackupPanel: React.FC = () => {
                     <div>
                         <form onSubmit={handleScheduleSubmit} className="flex gap-3">
                             <select 
-                                name="hourUTC" 
-                                defaultValue={backupStatusResponse?.info?.scheduledHourUTC ?? 0}
-                                className="bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                                name="hourUTC"
+                                defaultValue={backupStatusResponse?.scheduledHourUTC ?? 2}
+                                className="bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:border-emerald-500 outline-none"
                             >
-                                {Array.from({ length: 24 }).map((_, i) => (
-                                    <option key={i} value={i}>{`${i.toString().padStart(2, '0')}:00 UTC`}</option>
+                                {Array.from({ length: 24 }, (_, i) => (
+                                    <option key={i} value={i}>{String(i).padStart(2, '0')}:00 UTC</option>
                                 ))}
                             </select>
-                            <button 
+                            <button
                                 type="submit"
                                 disabled={scheduleBackupMutation.isPending}
-                                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg disabled:opacity-50"
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
                             >
-                                Guardar horario
+                                {scheduleBackupMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar'}
                             </button>
                         </form>
                     </div>
                 </div>
-                <div className="pt-2 border-t border-slate-800/50">
-                    <p className="text-xs text-slate-500 italic">
-                        Nota: el servidor debe estar encendido a esa hora para que el backup se ejecute.
-                    </p>
-                </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Card Crear Respaldo */}
-                <div className="bg-slate-900 rounded-3xl p-8 border border-slate-800 hover:border-slate-700 transition-all relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/10 blur-[50px] -mr-10 -mt-10 pointer-events-none"></div>
-
-                    <div className="relative z-10">
-                        <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-white group-hover:scale-110 transition-transform">
-                            <Download className="w-6 h-6" />
-                        </div>
-
-                        <h3 className="text-xl font-black tracking-tight text-white mb-2">Crear Respaldo</h3>
-                        <p className="text-sm text-slate-400 mb-6 min-h-[40px]">
-                            Genera una copia maestra cifrada y descargable de toda la base de datos y su cadena de auditoría forense.
-                        </p>
-
-                        <button
-                            onClick={handleCreateBackup}
-                            disabled={isLoading}
-                            className="w-full py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-violet-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {createBackupMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderOpen className="w-5 h-5" />}
-                            {createBackupMutation.isPending ? 'Creando respaldo...' : 'Crear Respaldo Ahora'}
-                        </button>
-                    </div>
+            {/* Status / Error / Success Toast */}
+            {error && (
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-rose-300">{error}</p>
                 </div>
-
-                {/* Card Importar / File Picker */}
-                <div className="bg-slate-900 rounded-3xl p-8 border border-slate-800 hover:border-slate-700 transition-all relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-[50px] -mr-10 -mt-10 pointer-events-none"></div>
-
-                    <div className="relative z-10">
-                        <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center mb-6 text-white group-hover:scale-110 transition-transform">
-                            <Upload className="w-6 h-6" />
-                        </div>
-
-                        <h3 className="text-xl font-black tracking-tight text-white mb-2">Restaurar Copia</h3>
-                        <p className="text-sm text-slate-400 mb-6 min-h-[40px]">
-                            Restaura el sistema seleccionando un backup de la bóveda. Requiere la contraseña original para descifrar.
-                        </p>
-
-                        <button
-                            onClick={() => {
-                                setSelectedBackupForRestore('');
-                                setRestorePassword('');
-                                setShowRestoreModal(true);
-                            }}
-                            disabled={isLoading}
-                            className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl font-bold transition-all border border-slate-700 hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {restoreBackupMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                            {restoreBackupMutation.isPending ? 'Restaurando...' : 'Restaurar desde archivo'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Success Toast / Error Status Area */}
+            )}
             {successToast && (
-                <div className="fixed top-8 right-8 z-50 animate-in fade-in slide-in-from-top-4 bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 p-4 rounded-xl flex items-center gap-3 backdrop-blur-md shadow-2xl">
-                    <CheckCircle className="w-6 h-6 shrink-0" />
-                    <p className="font-medium text-sm pr-4">{successToast}</p>
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <p className="text-sm text-emerald-300">{successToast}</p>
                 </div>
             )}
-            
-            {(status || error) && !successToast && (
-                <div className={`p-4 rounded-xl border flex items-start gap-3 ${error ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'}`}>
-                    {error ? <AlertTriangle className="w-5 h-5 shrink-0" /> : <Loader2 className="w-5 h-5 shrink-0 animate-spin" />}
-                    <div>
-                        <p className="font-bold text-sm">{error ? 'Error en la Operación' : 'Procesando...'}</p>
-                        <p className="text-xs opacity-80 mt-1">{error || status}</p>
-                    </div>
+            {status && !error && !successToast && (
+                <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
+                    <p className="text-sm text-indigo-300">{status}</p>
                 </div>
             )}
 
-            {/* Tabla de Historial */}
-            <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-6 mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                    <Database className="w-5 h-5 text-indigo-400" />
-                    <h3 className="text-white font-bold uppercase text-sm tracking-wider">Historial de Respaldos</h3>
+            {/* Create Backup Button */}
+            <div className="flex justify-end">
+                <button
+                    onClick={handleOpenCreateModal}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-bold rounded-xl transition-colors shadow-lg shadow-violet-900/20 disabled:opacity-50"
+                >
+                    {createBackupMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                    Crear Respaldo Ahora
+                </button>
+            </div>
+
+            {/* Backup History Table */}
+            <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
+                <div className="p-5 border-b border-slate-800 flex items-center gap-2">
+                    <FolderOpen className="w-5 h-5 text-slate-400" />
+                    <h3 className="font-bold text-white">Historial de Respaldos</h3>
                 </div>
-                
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
-                        <thead className="text-slate-500 border-b border-slate-800 text-xs uppercase">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-800/50 text-slate-400">
                             <tr>
-                                <th className="py-3 px-4 font-bold">Fecha y Hora</th>
-                                <th className="py-3 px-4 font-bold">Nombre del Archivo</th>
-                                <th className="py-3 px-4 font-bold">Carpeta</th>
-                                <th className="py-3 px-4 font-bold">Tamaño</th>
-                                <th className="py-3 px-4 font-bold">Hash SHA-256</th>
-                                <th className="py-3 px-4 font-bold text-right">Acciones</th>
+                                <th className="py-3 px-4 font-semibold">Fecha</th>
+                                <th className="py-3 px-4 font-semibold">Archivo</th>
+                                <th className="py-3 px-4 font-semibold">Ruta</th>
+                                <th className="py-3 px-4 font-semibold">Tamaño</th>
+                                <th className="py-3 px-4 font-semibold">Hash Auditoría</th>
+                                <th className="py-3 px-4 font-semibold text-right">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/50">
+                        <tbody className="divide-y divide-slate-800">
                             {backups.map((b: any) => (
-                                <tr key={b.filename} className="hover:bg-slate-800/30 transition-colors">
-                                    <td className="py-3 px-4 text-slate-200">
+                                <tr key={b.filename} className="hover:bg-slate-800/20 transition-colors">
+                                    <td className="py-3 px-4 text-slate-300 text-sm">
                                         {b.createdAt ? new Date(b.createdAt).toLocaleString('es-ES', { 
                                             day: '2-digit', month: '2-digit', year: 'numeric', 
                                             hour: '2-digit', minute: '2-digit' 
@@ -317,6 +297,78 @@ export const BackupPanel: React.FC = () => {
                     AES-256-GCM / PBKDF2 HARDENED VAULT
                 </p>
             </div>
+
+            {/* ⚠️ FIX: Create Backup Modal — replaces window.prompt() */}
+            {showCreateModal && (
+                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+                        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <KeyRound className="w-5 h-5 text-violet-400" />
+                                Cifrar Nuevo Respaldo
+                            </h3>
+                            <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-slate-400">
+                                Ingresa una contraseña fuerte para cifrar este respaldo con AES-256-GCM. Guárdala en un lugar seguro — sin ella no podrás restaurar el archivo.
+                            </p>
+                            
+                            <div className="space-y-2">
+                                <label className="block text-sm font-bold text-slate-300">Contraseña de Cifrado</label>
+                                <input 
+                                    type="password"
+                                    value={createPassword}
+                                    onChange={(e) => setCreatePassword(e.target.value)}
+                                    placeholder="Mínimo 8 caracteres"
+                                    autoComplete="new-password"
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-violet-500 outline-none"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="block text-sm font-bold text-slate-300">Confirmar Contraseña</label>
+                                <input 
+                                    type="password"
+                                    value={createPasswordConfirm}
+                                    onChange={(e) => setCreatePasswordConfirm(e.target.value)}
+                                    placeholder="Repite la contraseña"
+                                    autoComplete="new-password"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleConfirmCreate()}
+                                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-violet-500 outline-none"
+                                />
+                            </div>
+
+                            {createPasswordError && (
+                                <p className="text-sm text-rose-400 flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                                    {createPasswordError}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="p-5 border-t border-slate-800 bg-slate-800/30 flex justify-end gap-3">
+                            <button 
+                                onClick={() => setShowCreateModal(false)}
+                                className="px-5 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={handleConfirmCreate}
+                                disabled={!createPassword || !createPasswordConfirm || createBackupMutation.isPending}
+                                className="px-5 py-2.5 rounded-lg text-sm font-medium bg-violet-600 hover:bg-violet-500 text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors shadow-lg shadow-violet-900/20"
+                            >
+                                {createBackupMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                                Crear y Cifrar Respaldo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Restore Modal */}
             {showRestoreModal && (

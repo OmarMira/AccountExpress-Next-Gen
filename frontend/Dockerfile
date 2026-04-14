@@ -1,4 +1,7 @@
-FROM oven/bun:latest
+# ⚠️ FIX: Pinned to a specific stable version instead of 'latest'
+# to prevent supply-chain attacks via non-deterministic base images.
+# Update this tag intentionally after reviewing release notes.
+FROM oven/bun:1.2.10
 
 WORKDIR /app
 

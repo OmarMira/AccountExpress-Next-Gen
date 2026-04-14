@@ -21,6 +21,10 @@ interface CpaSummary {
   taxes: { taxCategory: string, totalBalance: number }[];
 }
 
+// ⚠️ FIX: Use the environment variable so this works in production.
+// In development, VITE_API_URL should be set to http://localhost:3000/api in your .env file.
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
+
 export function CpaExport() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const [periodId, setPeriodId] = useState('');
@@ -57,7 +61,8 @@ export function CpaExport() {
 
   const handleDownload = () => {
     if (!activeCompany?.id || !periodId) return;
-    const url = `http://localhost:3000/api/export/cpa-summary/download?companyId=${activeCompany.id}&periodId=${periodId}`;
+    // ⚠️ FIX: Uses API_BASE constant derived from VITE_API_URL instead of hardcoded localhost.
+    const url = `${API_BASE}/export/cpa-summary/download?companyId=${activeCompany.id}&periodId=${periodId}`;
     window.open(url, "_blank");
   };
 

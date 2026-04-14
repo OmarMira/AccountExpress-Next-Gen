@@ -20,25 +20,33 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   .use(authMiddleware)
   .guard({ beforeHandle: requireAuth })
 
-  .get("/summary", async ({ query }) => {
-    return await getDashboardSummary(query.companyId);
-  }, {
-    query: t.Object({
-      companyId: t.String()
-    })
+  // ⚠️ FIX: All routes now read companyId from the session context (ctx.companyId),
+  // NOT from query strings or request bodies. This prevents a tenant-escalation
+  // attack where an authenticated user accesses or writes data from a different company.
+
+  .get("/summary", async ({ companyId, set }) => {
+    if (!companyId) {
+      set.status = 403;
+      return { error: 'No active company in session. Select a company first.' };
+    }
+    return await getDashboardSummary(companyId);
   })
   
-  // GET /journal?companyId=&status=&periodId=
-  .get("/", async ({ query }) => {
-    return await listEntries(query.companyId, {
+  // GET /journal?status=&periodId=
+  .get("/", async ({ query, companyId, set }) => {
+    if (!companyId) {
+      set.status = 403;
+      return { error: 'No active company in session.' };
+    }
+    return await listEntries(companyId, {
       status:   query.status,
       periodId: query.periodId,
       limit:    query.limit  ? parseInt(query.limit)  : 100,
       offset:   query.offset ? parseInt(query.offset) : 0,
     });
   }, {
+    // ⚠️ FIX: companyId removed from query schema — no longer accepted from the client.
     query: t.Object({
-      companyId: t.String(),
       status:    t.Optional(t.String()),
       periodId:  t.Optional(t.String()),
       limit:     t.Optional(t.String()),
@@ -59,12 +67,19 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   .use(requirePermission("journal", "create"))
   .post(
     "/",
-    async ({ body, set, user }) => {
+    async ({ body, set, user, companyId }) => {
       const uid = user!;
+
+      // ⚠️ FIX: companyId comes from the session, not from the request body.
+      if (!companyId) {
+        set.status = 403;
+        return { error: 'No active company in session.' };
+      }
+
       try {
         const id = await createDraft(
           {
-            companyId:   body.companyId,
+            companyId,            // from session — NOT body.companyId
             entryDate:   body.entryDate,
             description: body.description,
             reference:   body.reference ?? null,
@@ -91,8 +106,8 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
       }
     },
     {
+      // ⚠️ FIX: companyId removed from body schema — it is no longer accepted from the client.
       body: t.Object({
-        companyId:   t.String(),
         entryDate:   t.String(),
         description: t.String({ minLength: 1 }),
         reference:   t.Optional(t.String()),
