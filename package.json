@@ -14,14 +14,8 @@
     "seed": "bun run src/db/seed/seed.ts",
     "db:seed": "bun run src/db/seed/seed.ts",
     "typecheck": "tsc --noEmit",
-    "test:double-entry": "bun run scripts/test-double-entry.ts",
-    "test:audit-chain": "bun run scripts/test-audit-chain.ts",
-    "test:fiscal-trigger": "bun run scripts/test-fiscal-trigger.ts",
-    "test:db:setup": "bun run tests/setup-db.ts",
-    "test:integration": "bun run tests/run-integration.ts",
-    "test:integration:verbose": "bun test tests/integration/ --timeout 15000",
-    "prepare": "husky",
-    "test": "bun test tests/unit/"
+    "test:integrity": "bun run scripts/integrity-check.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.1",

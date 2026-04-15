@@ -85,13 +85,15 @@ export async function createAuditEntry(input: AuditEntryInput, tx?: DbTransactio
   const afterStateJson  = input.afterState  ? JSON.stringify(sanitizeState(input.afterState))  : null;
   const beforeStateJson = input.beforeState ? JSON.stringify(sanitizeState(input.beforeState)) : null;
 
+  const timeToken = createdAt.getTime().toString();
+
   const hashInput = [
     id,
     input.userId   ?? "system",
     input.action,
     afterStateJson ?? "",
     prevHash,
-    createdAt.getTime().toString(),
+    timeToken,
   ].join("|");
 
   const entryHash = hmacSha256(hashInput);
@@ -111,6 +113,7 @@ export async function createAuditEntry(input: AuditEntryInput, tx?: DbTransactio
     entryHash,
     prevHash,
     chainIndex,
+    timestampToken: timeToken,
     createdAt,
   });
 
@@ -188,6 +191,7 @@ export async function verifyAuditChain(
       entryHash:   auditLogs.entryHash,
       prevHash:    auditLogs.prevHash,
       chainIndex:  auditLogs.chainIndex,
+      timestampToken: auditLogs.timestampToken,
       createdAt:   auditLogs.createdAt,
     })
     .from(auditLogs)
@@ -213,10 +217,8 @@ export async function verifyAuditChain(
       };
     }
 
-    // 2. Recompute hash
-    // IMPORTANT: Use exact same string construction as createAuditEntry
-    // Use new Date().toISOString() to force UTC and exactly 3 decimal-ms precision
-    const rowDateStr = new Date(row.createdAt).getTime().toString();
+    // Fallback if token is missing (legacy records)
+    const rowDateStr = row.timestampToken || new Date(row.createdAt).getTime().toString();
 
     const hashInput = [
       row.id,
