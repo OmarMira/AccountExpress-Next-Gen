@@ -11,14 +11,14 @@ export function Onboarding() {
   const [formData, setFormData] = useState({
     legalName: '',
     tradeName: '',
-    ein: '',
+    ein: '00-0000000-0',
     currency: 'USD',
     fiscalYearStart: '01-01',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    country: '',
+    email: 'admin@empresa.com',
+    phone: '+1 809-000-0000',
+    address: 'Calle Principal #1, Zona Industrial',
+    city: 'Santo Domingo',
+    country: 'República Dominicana',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -34,7 +34,7 @@ export function Onboarding() {
     try {
       // In a real scenario, we might need a specific endpoint to create and assign
       // but here we use the standard POST /companies assuming superadmin auth
-      await fetchApi('/companies', {
+      const companyResponse = await fetchApi('/companies', {
         method: 'POST',
         body: JSON.stringify({
           legalName: formData.legalName,
@@ -46,10 +46,15 @@ export function Onboarding() {
           phone: formData.phone || undefined,
           address: formData.address || undefined,
           city: formData.city || undefined,
-          // country is not in the DB schema, so we skip it or could merge it into address
-          // address: `${formData.address}${formData.city ? ', ' + formData.city : ''}${formData.country ? ', ' + formData.country : ''}`
         }),
       });
+
+      // Refrescar la lista de empresas disponibles en el store
+      const { useAuthStore } = await import('../store/authStore');
+      const { data: companiesList } = await fetchApi('/companies');
+      if (Array.isArray(companiesList)) {
+        useAuthStore.getState().setAvailableCompanies(companiesList);
+      }
 
       // Redirect to dashboard (App.tsx will handle company selection if needed)
       navigate('/');

@@ -99,16 +99,25 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
         }
       }
 
-      await updateCompany(params.id, body);
-      const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-      await createAuditEntry({
-        companyId: params.id, userId: uid, sessionId,
-        action: "companies:update", module: "companies",
-        entityType: "company", entityId: params.id,
-        beforeState: null, afterState: body, ipAddress: ip,
-      });
+      try {
+        await updateCompany(params.id, body);
+        const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+        await createAuditEntry({
+          companyId: params.id, userId: uid, sessionId,
+          action: "companies:update", module: "companies",
+          entityType: "company", entityId: params.id,
+          beforeState: null, afterState: body, ipAddress: ip,
+        });
 
-      return { message: "Company updated" };
+        return { message: "Empresa actualizada correctamente" };
+      } catch (err: any) {
+        console.error("[COMPANIES_UPDATE_ERROR]", err);
+        set.status = 400;
+        if (err.message?.includes("unique constraint") || err.code === "23505") {
+          return { error: "El EIN ya pertenece a otra empresa activa." };
+        }
+        return { error: err.message || "Error al actualizar los datos." };
+      }
     },
     {
       params: t.Object({

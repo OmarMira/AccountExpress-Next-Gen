@@ -1,110 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
 import { PermissionGate } from '../components/PermissionGate';
-import { Plus, Search, Trash2, FolderTree, AlertCircle, X, Pencil, ChevronDown } from 'lucide-react';
+import { Plus, Search, Trash2, FolderTree, AlertCircle, Pencil } from 'lucide-react';
 
-interface Account {
-  id: string;
-  code: string;
-  name: string;
-  accountType: string;
-  normalBalance: string;
-  parentId: string | null;
-  level: number;
-  isSystem: number;
-  isActive: number;
-  taxCategory?: string;
-  description?: string;
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  asset: 'Activo', liability: 'Pasivo', equity: 'Capital',
-  revenue: 'Ingreso', expense: 'Gasto',
-};
-const BALANCE_LABELS: Record<string, string> = { debit: 'Débito', credit: 'Crédito' };
-
-const FIELD_CLS = 'w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors';
-const LABEL_CLS = 'block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
-
-// ── Parent Account Selector ──────────────────────────────────────────────────
-function ParentSelector({
-  accounts, value, onChange, currentId,
-}: {
-  accounts: Account[];
-  value: string;
-  onChange: (v: string) => void;
-  currentId?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const options = useMemo(() => {
-    const q = search.toLowerCase();
-    return accounts
-      .filter(a => a.id !== currentId)
-      .filter(a => !q || a.code.includes(q) || a.name.toLowerCase().includes(q))
-      .slice(0, 60);
-  }, [accounts, search, currentId]);
-
-  const selected = accounts.find(a => a.code === value);
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className={`${FIELD_CLS} flex items-center justify-between text-left`}
-      >
-        <span className={selected ? 'text-white' : 'text-gray-500'}>
-          {selected ? `${selected.code} — ${selected.name}` : 'Sin cuenta padre (cuenta raíz)'}
-        </span>
-        <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div className="absolute z-50 mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-2xl overflow-hidden">
-          <div className="p-2 border-b border-gray-700">
-            <input
-              autoFocus
-              type="text"
-              placeholder="Buscar por código o nombre..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-          <div className="max-h-52 overflow-y-auto">
-            {/* None option */}
-            <button
-              type="button"
-              onClick={() => { onChange(''); setOpen(false); setSearch(''); }}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors ${!value ? 'text-indigo-400 font-medium' : 'text-gray-400'}`}
-            >
-              — Sin cuenta padre (cuenta raíz)
-            </button>
-            {options.map(a => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => { onChange(a.code); setOpen(false); setSearch(''); }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700 transition-colors flex items-center gap-2 ${value === a.code ? 'bg-indigo-600/20 text-indigo-300' : 'text-white'}`}
-                style={{ paddingLeft: `${8 + (a.level - 1) * 16}px` }}
-              >
-                <span className="font-mono text-xs text-gray-400 w-12 flex-shrink-0">{a.code}</span>
-                <span className="truncate">{a.name}</span>
-              </button>
-            ))}
-            {options.length === 0 && (
-              <p className="px-3 py-4 text-sm text-gray-500 text-center">Sin resultados</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+import type { Account } from '../components/accounts/types';
+import { BALANCE_LABELS } from '../components/accounts/constants';
+import { ConfirmDialog } from '../components/accounts/ConfirmDialog';
+import { CreateAccountModal } from '../components/accounts/CreateAccountModal';
+import { EditAccountModal } from '../components/accounts/EditAccountModal';
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export function Accounts() {
@@ -115,6 +20,7 @@ export function Accounts() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [editParentCode, setEditParentCode] = useState('');
   const [formError, setFormError] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, isDangerous?: boolean} | null>(null);
   const [formData, setFormData] = useState({
     code: '', name: '', accountType: 'asset', normalBalance: 'debit',
     parentCode: '', description: '',
@@ -174,7 +80,16 @@ export function Accounts() {
   });
 
   const handleDelete = (id: string, name: string) => {
-    if (confirm(`¿Desactivar la cuenta "${name}"?`)) deleteMutation.mutate(id);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Desactivar Cuenta',
+      message: `¿Estás seguro de que deseas desactivar la cuenta "${name}"?`,
+      isDangerous: true,
+      onConfirm: () => {
+        setConfirmDialog(null);
+        deleteMutation.mutate(id);
+      }
+    });
   };
 
   const handleEditOpen = (acc: Account) => {
@@ -187,6 +102,78 @@ export function Accounts() {
     const type = e.target.value;
     setFormData({ ...formData, accountType: type, normalBalance: ['asset', 'expense'].includes(type) ? 'debit' : 'credit' });
   };
+
+  const handleCloseCreate = () => {
+    const hasChanges = formData.code !== '' || formData.name !== '' || formData.description !== '' || formData.parentCode !== '';
+    const doClose = () => {
+      setShowModal(false);
+      setFormData({ code: '', name: '', accountType: 'asset', normalBalance: 'debit', parentCode: '', description: '' });
+      setFormError('');
+    };
+
+    if (hasChanges) {
+      setConfirmDialog({
+        isOpen: true,
+        title: 'Descartar cambios',
+        message: 'Tienes cambios sin guardar. ¿Estás seguro de que deseas cerrar y perder estos datos?',
+        isDangerous: true,
+        onConfirm: () => {
+          setConfirmDialog(null);
+          doClose();
+        }
+      });
+      return;
+    }
+    doClose();
+  };
+
+  const handleCloseEdit = () => {
+    if (!editingAccount) return;
+    const original = accounts.find(a => a.id === editingAccount.id);
+    const originalParentCode = getParentCode(original?.parentId || null);
+    
+    const hasChanges = 
+      original?.code !== editingAccount.code ||
+      original?.name !== editingAccount.name ||
+      (original?.description ?? '') !== (editingAccount.description ?? '') ||
+      originalParentCode !== editParentCode;
+
+    const doClose = () => {
+      setEditingAccount(null);
+      setFormError('');
+    };
+
+    if (hasChanges) {
+      setConfirmDialog({
+        isOpen: true,
+        title: 'Descartar cambios',
+        message: 'Tienes cambios sin guardar. ¿Estás seguro de que deseas cerrar y perder estos datos?',
+        isDangerous: true,
+        onConfirm: () => {
+          setConfirmDialog(null);
+          doClose();
+        }
+      });
+      return;
+    }
+    doClose();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (confirmDialog?.isOpen) {
+          setConfirmDialog(null);
+        } else if (showModal) {
+          handleCloseCreate();
+        } else if (editingAccount) {
+          handleCloseEdit();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showModal, editingAccount, confirmDialog, formData, editParentCode, accounts]);
 
   // ── Group & filter accounts ──────────────────────────────────────────────
   const groupedAccounts = useMemo(() => {
@@ -223,7 +210,11 @@ export function Accounts() {
             </thead>
             <tbody className="divide-y divide-gray-700/50">
               {filtered.map(acc => (
-                <tr key={acc.id} className="hover:bg-gray-700/30 transition-colors group">
+                <tr 
+                  key={acc.id} 
+                  onDoubleClick={() => handleEditOpen(acc)}
+                  className="hover:bg-gray-700/30 transition-colors group cursor-pointer select-none"
+                >
                   <td className="px-4 py-2.5 text-gray-300 font-mono text-xs">{acc.code}</td>
                   <td className="px-4 py-2.5 text-white">
                     <div className="flex items-center gap-2" style={{ paddingLeft: `${(acc.level - 1) * 20}px` }}>
@@ -320,250 +311,50 @@ export function Accounts() {
       )}
 
       {/* ── MODAL CREAR ─────────────────────────────────────────── */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-800">
-              <h3 className="text-lg font-bold text-white">Crear Nueva Cuenta</h3>
-              <button onClick={() => { setShowModal(false); setFormError(''); }} className="text-gray-400 hover:text-white transition-colors p-1 rounded">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-5">
-              {formError && (
-                <div className="bg-rose-500/10 border border-rose-500/40 rounded-lg p-3 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-rose-400">{formError}</p>
-                </div>
-              )}
-
-              <form
-                id="createAccountForm"
-                onSubmit={e => { e.preventDefault(); createMutation.mutate(formData); }}
-                className="space-y-5"
-              >
-                {/* Código y Cuenta Padre */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={LABEL_CLS}>Código *</label>
-                    <input
-                      type="text" required maxLength={6}
-                      value={formData.code}
-                      onChange={e => setFormData({ ...formData, code: e.target.value })}
-                      className={FIELD_CLS} placeholder="Ej: 1910"
-                    />
-                  </div>
-                  <div>
-                    <label className={LABEL_CLS}>Tipo *</label>
-                    <select value={formData.accountType} onChange={handleTypeChange} className={`${FIELD_CLS} appearance-none`}>
-                      <option value="asset">Activo</option>
-                      <option value="liability">Pasivo</option>
-                      <option value="equity">Capital</option>
-                      <option value="revenue">Ingreso</option>
-                      <option value="expense">Gasto</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Nombre */}
-                <div>
-                  <label className={LABEL_CLS}>Nombre de Cuenta *</label>
-                  <input
-                    type="text" required
-                    value={formData.name}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    className={FIELD_CLS} placeholder="Ej: Security Deposits"
-                  />
-                </div>
-
-                {/* Cuenta Padre — dropdown */}
-                <div>
-                  <label className={LABEL_CLS}>Cuenta Padre (Opcional)</label>
-                  <ParentSelector
-                    accounts={accounts}
-                    value={formData.parentCode}
-                    onChange={v => setFormData({ ...formData, parentCode: v })}
-                  />
-                  {formData.parentCode && (
-                    <p className="text-xs text-indigo-400 mt-1">
-                      Esta cuenta será subcuenta de <strong>{formData.parentCode}</strong>
-                    </p>
-                  )}
-                </div>
-
-                {/* Naturaleza */}
-                <div>
-                  <label className={LABEL_CLS}>Naturaleza (Balance Normal)</label>
-                  <select
-                    value={formData.normalBalance}
-                    onChange={e => setFormData({ ...formData, normalBalance: e.target.value })}
-                    className={`${FIELD_CLS} appearance-none`}
-                  >
-                    <option value="debit">Débito (Activos, Gastos)</option>
-                    <option value="credit">Crédito (Pasivos, Capital, Ingresos)</option>
-                  </select>
-                </div>
-
-                {/* Descripción */}
-                <div>
-                  <label className={LABEL_CLS}>Descripción (Opcional)</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={e => setFormData({ ...formData, description: e.target.value })}
-                    className={`${FIELD_CLS} resize-none h-20`}
-                    placeholder="Notas adicionales..."
-                  />
-                </div>
-              </form>
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-800 bg-gray-900/50 flex justify-end gap-3 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => { setShowModal(false); setFormError(''); }}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
-                disabled={createMutation.isPending}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit" form="createAccountForm"
-                disabled={createMutation.isPending}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-50"
-              >
-                {createMutation.isPending ? 'Guardando...' : 'Guardar Cuenta'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CreateAccountModal
+        isOpen={showModal}
+        onClose={handleCloseCreate}
+        formData={formData}
+        setFormData={setFormData}
+        handleTypeChange={handleTypeChange}
+        accounts={accounts}
+        error={formError}
+        isPending={createMutation.isPending}
+        onSubmit={e => { e.preventDefault(); createMutation.mutate(formData); }}
+      />
 
       {/* ── MODAL EDITAR ─────────────────────────────────────────── */}
-      {editingAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-800">
-              <div>
-                <h3 className="text-lg font-bold text-white">Editar Cuenta</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {TYPE_LABELS[editingAccount.accountType] ?? editingAccount.accountType}
-                  {editingAccount.isSystem ? ' · Sistema (protegida)' : ''}
-                </p>
-              </div>
-              <button onClick={() => { setEditingAccount(null); setFormError(''); }} className="text-gray-400 hover:text-white transition-colors p-1 rounded">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <EditAccountModal
+        editingAccount={editingAccount}
+        onClose={handleCloseEdit}
+        editParentCode={editParentCode}
+        setEditParentCode={setEditParentCode}
+        setEditingAccount={(acc) => setEditingAccount(acc)}
+        accounts={accounts}
+        error={formError}
+        isPending={editMutation.isPending}
+        onSubmit={e => {
+          e.preventDefault();
+          if (!editingAccount) return;
+          editMutation.mutate({
+            id: editingAccount.id,
+            name: editingAccount.name,
+            code: editingAccount.code,
+            description: editingAccount.description ?? '',
+            parentCode: editParentCode || null,
+          });
+        }}
+      />
 
-            <div className="p-6 overflow-y-auto space-y-5">
-              {formError && (
-                <div className="bg-rose-500/10 border border-rose-500/40 rounded-lg p-3 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-rose-400">{formError}</p>
-                </div>
-              )}
-
-              <form
-                id="editAccountForm"
-                onSubmit={e => {
-                  e.preventDefault();
-                  editMutation.mutate({
-                    id: editingAccount.id,
-                    name: editingAccount.name,
-                    code: editingAccount.code,
-                    description: editingAccount.description ?? '',
-                    parentCode: editParentCode || null,
-                  });
-                }}
-                className="space-y-5"
-              >
-                {/* Código */}
-                <div>
-                  <label className={LABEL_CLS}>Código</label>
-                  <input
-                    type="text" required maxLength={6}
-                    value={editingAccount.code}
-                    onChange={e => setEditingAccount({ ...editingAccount, code: e.target.value })}
-                    className={FIELD_CLS}
-                  />
-                </div>
-
-                {/* Nombre */}
-                <div>
-                  <label className={LABEL_CLS}>Nombre de Cuenta</label>
-                  <input
-                    type="text" required
-                    value={editingAccount.name}
-                    onChange={e => setEditingAccount({ ...editingAccount, name: e.target.value })}
-                    className={FIELD_CLS}
-                  />
-                </div>
-
-                {/* Cuenta Padre — dropdown */}
-                <div>
-                  <label className={LABEL_CLS}>Cuenta Padre</label>
-                  <ParentSelector
-                    accounts={accounts}
-                    value={editParentCode}
-                    onChange={setEditParentCode}
-                    currentId={editingAccount.id}
-                  />
-                  {editParentCode ? (
-                    <p className="text-xs text-indigo-400 mt-1">
-                      Subcuenta de <strong>{editParentCode}</strong> · Nivel {(accounts.find(a => a.code === editParentCode)?.level ?? 0) + 1}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-500 mt-1">Cuenta raíz (nivel 1)</p>
-                  )}
-                </div>
-
-                {/* Descripción */}
-                <div>
-                  <label className={LABEL_CLS}>Descripción</label>
-                  <textarea
-                    value={editingAccount.description ?? ''}
-                    onChange={e => setEditingAccount({ ...editingAccount, description: e.target.value })}
-                    className={`${FIELD_CLS} resize-none h-20`}
-                  />
-                </div>
-
-                {/* Info: tipo e isSystem */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-gray-800/60 rounded-lg px-3 py-2.5">
-                    <p className="text-xs text-gray-500 mb-0.5">Tipo</p>
-                    <p className="text-sm text-white font-medium">{TYPE_LABELS[editingAccount.accountType] ?? editingAccount.accountType}</p>
-                  </div>
-                  <div className="bg-gray-800/60 rounded-lg px-3 py-2.5">
-                    <p className="text-xs text-gray-500 mb-0.5">Balance Normal</p>
-                    <p className={`text-sm font-medium ${editingAccount.normalBalance === 'debit' ? 'text-blue-400' : 'text-emerald-400'}`}>
-                      {BALANCE_LABELS[editingAccount.normalBalance] ?? editingAccount.normalBalance}
-                    </p>
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-800 bg-gray-900/50 flex justify-end gap-3 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => { setEditingAccount(null); setFormError(''); }}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
-                disabled={editMutation.isPending}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit" form="editAccountForm"
-                disabled={editMutation.isPending}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-50"
-              >
-                {editMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── MODAL DE CONFIRMACIÓN ─────────────────────────────────────────── */}
+      <ConfirmDialog
+        isOpen={confirmDialog?.isOpen || false}
+        title={confirmDialog?.title || ''}
+        message={confirmDialog?.message || ''}
+        isDangerous={confirmDialog?.isDangerous}
+        onConfirm={confirmDialog?.onConfirm || (() => {})}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

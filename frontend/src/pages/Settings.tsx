@@ -26,6 +26,8 @@ export function Settings() {
     phone: activeCompany?.phone || ''
   });
 
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
   const updateCompanyMutation = useMutation({
     mutationFn: async (data: typeof companyForm) => fetchApi(`/companies/${activeCompany?.id}`, {
       method: 'PUT',
@@ -34,13 +36,36 @@ export function Settings() {
     onSuccess: () => {
       setNotification({ title: 'Éxito', message: 'Datos de la empresa actualizados correctamente', type: 'success' });
       setActiveCompany({ ...activeCompany, ...companyForm } as any);
+      
+      // Sincronizar la lista maestra de empresas para el selector
+      const currentList = useAuthStore.getState().availableCompanies;
+      const newList = currentList.map(c => 
+        c.id === activeCompany?.id ? { ...c, ...companyForm } : c
+      );
+      useAuthStore.getState().setAvailableCompanies(newList);
+      
+      setFormErrors({});
     },
-    onError: (err: Error) => setNotification({ title: 'Error', message: `No se pudo actualizar la empresa: ${err.message}`, type: 'error' })
+    onError: (err: Error) => setNotification({ title: 'Error de Sistema', message: err.message, type: 'error' })
   });
+
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    if (!companyForm.legalName.trim()) errors.legalName = 'El nombre legal es obligatorio.';
+    if (!companyForm.ein.trim()) errors.ein = 'El EIN / Identificación es requerido para fines legales.';
+    if (!companyForm.email.trim()) errors.email = 'Debe proporcionar un correo electrónico oficial.';
+    if (!companyForm.phone.trim()) errors.phone = 'El teléfono de contacto es necesario.';
+    if (!companyForm.address.trim()) errors.address = 'La dirección física no puede estar vacía.';
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleCompanySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateCompanyMutation.mutate(companyForm);
+    if (validateForm()) {
+      updateCompanyMutation.mutate(companyForm);
+    }
   };
 
   // --- Users State ---
@@ -92,9 +117,31 @@ export function Settings() {
         companyId: activeCompany?.id,
       }),
     }),
-    onSuccess: () => {
+    onSuccess: async (_, variables) => {
       setShowEditModal(false);
       refetchUsers();
+
+      try {
+        // Refrescar los datos del usuario logueado directamente desde el servidor
+        const meResponse = await fetchApi('/auth/me');
+        if (meResponse && meResponse.user) {
+          useAuthStore.getState().setUser(meResponse.user);
+        }
+      } catch (e) {
+        // Si no existe el endpoint /me, intentamos la sincronización manual robusta
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser && String(variables.id) === String(currentUser.id)) {
+          useAuthStore.getState().setUser({
+            ...currentUser,
+            firstName: variables.firstName,
+            lastName: variables.lastName,
+            email: variables.email,
+            username: variables.username
+          });
+        }
+      }
+      
+      setNotification({ title: 'Éxito', message: 'Usuario actualizado correctamente', type: 'success' });
     },
     onError: (err: Error) => alert(`Error al actualizar usuario: ${err.message}`),
   });
@@ -323,25 +370,55 @@ export function Settings() {
               <form onSubmit={handleCompanySubmit} className="space-y-4 max-w-2xl">
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1">Nombre Legal Completo</label>
-                  <input type="text" value={companyForm.legalName} onChange={e => setCompanyForm({...companyForm, legalName: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" required />
+                  <input 
+                    type="text" 
+                    value={companyForm.legalName} 
+                    onChange={e => setCompanyForm({...companyForm, legalName: e.target.value})} 
+                    className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.legalName ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                  />
+                  {formErrors.legalName && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.legalName}</p>}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-1">EIN / Identificación Tributaria</label>
-                    <input type="text" value={companyForm.ein} onChange={e => setCompanyForm({...companyForm, ein: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" />
+                    <input 
+                      type="text" 
+                      value={companyForm.ein} 
+                      onChange={e => setCompanyForm({...companyForm, ein: e.target.value})} 
+                      className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.ein ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                    />
+                    {formErrors.ein && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.ein}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-400 mb-1">Teléfono Fijo / Móvil</label>
-                    <input type="text" value={companyForm.phone} onChange={e => setCompanyForm({...companyForm, phone: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" />
+                    <input 
+                      type="text" 
+                      value={companyForm.phone} 
+                      onChange={e => setCompanyForm({...companyForm, phone: e.target.value})} 
+                      className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.phone ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                    />
+                    {formErrors.phone && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.phone}</p>}
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1">Correo Electrónico Oficial</label>
-                  <input type="email" value={companyForm.email} onChange={e => setCompanyForm({...companyForm, email: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" />
+                  <input 
+                    type="email" 
+                    value={companyForm.email} 
+                    onChange={e => setCompanyForm({...companyForm, email: e.target.value})} 
+                    className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.email ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                  />
+                  {formErrors.email && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.email}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1">Dirección Registrada</label>
-                  <input type="text" value={companyForm.address} onChange={e => setCompanyForm({...companyForm, address: e.target.value})} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500" />
+                  <input 
+                    type="text" 
+                    value={companyForm.address} 
+                    onChange={e => setCompanyForm({...companyForm, address: e.target.value})} 
+                    className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.address ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                  />
+                  {formErrors.address && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.address}</p>}
                 </div>
                 <div className="pt-4">
                   <button type="submit" disabled={updateCompanyMutation.isPending} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-lg disabled:opacity-50">
@@ -508,7 +585,12 @@ export function Settings() {
                       <tr><td colSpan={5} className="py-6 text-center text-gray-500 text-sm">No hay usuarios. Creá el primero con el botón de arriba.</td></tr>
                     )}
                     {users.map((u: any) => (
-                      <tr key={u.id} className="hover:bg-gray-800/30">
+                      <tr 
+                        key={u.id} 
+                        onDoubleClick={() => openEditModal(u)}
+                        className="hover:bg-gray-800/50 cursor-pointer transition-colors group"
+                        title="Doble clic para editar"
+                      >
                         <td className="py-3 px-4">
                           <div className="font-medium text-gray-200">{u.firstName} {u.lastName}</div>
                           <div className="text-xs text-gray-500">{u.username}</div>

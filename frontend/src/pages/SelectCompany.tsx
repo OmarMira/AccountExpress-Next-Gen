@@ -82,7 +82,7 @@ export function SelectCompany() {
                 </div>
                 <div>
                   <h4 className="font-semibold text-white">{company.legalName}</h4>
-                  <p className="text-xs text-gray-400">Company ID: {company.id.split('-')[0]}...</p>
+
                 </div>
               </div>
               <ChevronRight className={`w-5 h-5 text-gray-500 group-hover:text-white transition-colors ${loadingId === company.id ? 'animate-pulse text-indigo-400' : ''}`} />
