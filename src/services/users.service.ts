@@ -5,7 +5,7 @@
 // ============================================================
 
 import { db }                 from "../db/connection.ts";
-import { users, userCompanyRoles, roles, journalEntries, auditLogs, sessions } from "../db/schema/index.ts";
+import { users, userCompanyRoles, roles, journalEntries, auditLogs, sessions, bankTransactions, fiscalPeriods } from "../db/schema/index.ts";
 import { eq, and, or, count }    from "drizzle-orm";
 import { hashPassword }        from "./auth.service.ts";
 import { invalidateAllUserSessions } from "./session.service.ts";
@@ -165,30 +165,23 @@ export async function updateUser(input: UpdateUserInput): Promise<{ updated: boo
       await tx.update(users).set(updates).where(eq(users.id, input.userId));
     }
 
-    // 2. Handle role update if provided
+    // 2. Handle role update if provided — UPDATE in place (no INSERT to avoid uq_ucr_user_company violation)
     if (input.roleId && input.companyId && input.grantedBy) {
       const now = new Date();
-      // Revoke previous
       await tx.update(userCompanyRoles)
-        .set({ isActive: false, revokedAt: now })
+        .set({
+          roleId:    input.roleId,
+          isActive:  true,
+          grantedBy: input.grantedBy,
+          grantedAt: now,
+          revokedAt: null,
+        })
         .where(
           and(
-            eq(userCompanyRoles.userId, input.userId),
-            eq(userCompanyRoles.companyId, input.companyId),
-            eq(userCompanyRoles.isActive, true)
+            eq(userCompanyRoles.userId,    input.userId),
+            eq(userCompanyRoles.companyId, input.companyId)
           )
         );
-      
-      // Assign new
-      await tx.insert(userCompanyRoles).values({
-        id:        randomUUID(),
-        userId:    input.userId,
-        companyId: input.companyId,
-        roleId:    input.roleId,
-        isActive:  true,
-        grantedBy: input.grantedBy,
-        grantedAt: now,
-      });
     }
 
     return { updated: true };
@@ -211,16 +204,21 @@ export async function assignRole(input: AssignRoleInput): Promise<{ assigned: bo
         )
       );
 
-    // Assign new role
-    await tx.insert(userCompanyRoles).values({
-      id:        randomUUID(),
-      userId:    input.userId,
-      companyId: input.companyId,
-      roleId:    input.roleId,
-      isActive:  true,
-      grantedBy: input.grantedBy,
-      grantedAt: now,
-    });
+    // Assign new role — UPDATE in place to respect uq_ucr_user_company unique constraint
+    await tx.update(userCompanyRoles)
+      .set({
+        roleId:    input.roleId,
+        isActive:  true,
+        grantedBy: input.grantedBy,
+        grantedAt: now,
+        revokedAt: null,
+      })
+      .where(
+        and(
+          eq(userCompanyRoles.userId,    input.userId),
+          eq(userCompanyRoles.companyId, input.companyId)
+        )
+      );
 
     return { assigned: true };
   });
@@ -228,24 +226,50 @@ export async function assignRole(input: AssignRoleInput): Promise<{ assigned: bo
 // ── Eliminar usuario (Hard Delete si no tiene actividad) ────
 export async function deleteUser(userId: string): Promise<void> {
   const [existing] = await db.select({ id: users.id, isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, userId)).limit(1);
-  if (!existing) throw new Error("User not found");
-  if (existing.isSuperAdmin) throw new Error("Cannot delete a super admin user");
+  if (!existing) throw new Error("Usuario no encontrado.");
+  
+  if (existing.isSuperAdmin) {
+    const [superAdminCount] = await db.select({ c: count() }).from(users).where(eq(users.isSuperAdmin, true));
+    if (superAdminCount && superAdminCount.c <= 1) {
+      throw new Error("No se puede eliminar a este usuario porque es el único Súper Administrador restante. El sistema requiere al menos un súper usuario.");
+    }
+  }
 
   // Check activity
   const [journalCount] = await db.select({ c: count() }).from(journalEntries).where(eq(journalEntries.createdBy, userId));
   if (journalCount && journalCount.c > 0) {
-    throw new Error("Cannot delete user because they have created journal entries. Deactivate instead.");
+    throw new Error("No se puede eliminar el usuario permanentemente porque tiene datos financieros asociados (asientos contables). Por seguridad, presione 'Desactivar' en su lugar.");
   }
 
-  const [logCount] = await db.select({ c: count() }).from(auditLogs).where(eq(auditLogs.userId, userId));
-  if (logCount && logCount.c > 0) {
-    throw new Error("Cannot delete user because they have audit logs associated. Deactivate instead.");
+  const [bankMatchCount] = await db.select({ c: count() }).from(bankTransactions).where(eq(bankTransactions.matchedBy, userId));
+  if (bankMatchCount && bankMatchCount.c > 0) {
+    throw new Error("No se puede eliminar el usuario permanentemente porque tiene conciliaciones bancarias asociadas. Por seguridad, presione 'Desactivar' en su lugar.");
   }
 
-  // If safe, delete relations
-  await db.transaction(async (tx) => {
-    await tx.delete(sessions).where(eq(sessions.userId, userId));
-    await tx.delete(userCompanyRoles).where(eq(userCompanyRoles.userId, userId));
-    await tx.delete(users).where(eq(users.id, userId));
-  });
+  const [fiscalCount] = await db.select({ c: count() }).from(fiscalPeriods).where(eq(fiscalPeriods.closedBy, userId));
+  if (fiscalCount && fiscalCount.c > 0) {
+    throw new Error("No se puede eliminar el usuario permanentemente porque ha realizado cierres de periodos fiscales. Por seguridad, presione 'Desactivar' en su lugar.");
+  }
+
+  // Careful deletion order to respect FK constraints:
+  try {
+    await db.transaction(async (tx) => {
+      // 1. Invalidate sessions (don't delete — audit_logs.session_id references them and is immutable)
+      await tx.update(sessions).set({ isValid: false }).where(eq(sessions.userId, userId));
+      // 2. Remove role assignments
+      await tx.delete(userCompanyRoles).where(eq(userCompanyRoles.userId, userId));
+      // 3. Delete the user (nullable FKs in audit_logs will be handled by Postgres)
+      await tx.delete(users).where(eq(users.id, userId));
+    });
+  } catch (err: any) {
+    const errorString = String(err) + " " + String(err.cause) + " " + (err.cause?.message || "");
+    if (errorString.includes("foreign key constraint") || errorString.includes("violates foreign key")) {
+      if (errorString.includes("audit_logs")) {
+        throw new Error("El usuario no puede ser eliminado permanentemente debido a que existen registros inmutables de seguridad en la bitácora de auditoría asociados a su historial. Por regulaciones financieras, su identidad no puede ser destruida. Por favor, utilice la opción 'Desactivar' en su lugar.");
+      }
+      throw new Error("No se puede eliminar permanentemente a este usuario debido a que otros registros de seguridad y roles en el sistema dependen estrictamente de su identificador. Por favor, presione 'Desactivar' en su lugar para revocar su acceso seguro.");
+    }
+    throw err;
+  }
 }
+

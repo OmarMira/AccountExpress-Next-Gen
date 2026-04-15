@@ -20,6 +20,9 @@ export function AdminUsers() {
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
 
+  const [deleteDialog, setDeleteDialog] = useState<AdminUser | null>(null);
+  const [notification, setNotification] = useState<{title: string, message: string, type: 'error' | 'success'} | null>(null);
+
   const loadUsers = useCallback(async () => {
     try {
       const res = await fetchApi('/users/all');
@@ -44,24 +47,34 @@ export function AdminUsers() {
       });
       await loadUsers();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error al actualizar usuario');
+      setNotification({
+        title: 'Error de Actualización',
+        message: err instanceof Error ? err.message : 'Error al actualizar usuario',
+        type: 'error'
+      });
     } finally {
       setToggling(null);
     }
   };
 
-
-  const handleDeleteUser = async (user: AdminUser) => {
-    if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente al usuario ${user.firstName} (@${user.username})? Esta acción no se puede deshacer y fallará si el usuario tiene actividad registrada.`)) {
-      return;
-    }
-
+  const executeDelete = async () => {
+    if (!deleteDialog) return;
     try {
-      await fetchApi(`/users/${user.id}`, { method: 'DELETE' });
-      alert('Usuario eliminado correctamente');
-      loadUsers();
+      await fetchApi(`/users/${deleteDialog.id}`, { method: 'DELETE' });
+      setNotification({
+        title: 'Operación Exitosa',
+        message: 'Usuario eliminado correctamente de la base de datos.',
+        type: 'success'
+      });
+      await loadUsers();
     } catch (err: any) {
-      alert(`Error al eliminar: ${err.message}`);
+      setNotification({
+        title: 'No se Pudo Eliminar',
+        message: err.message || 'Ocurrió un error inesperado al intentar borrar el usuario.',
+        type: 'error'
+      });
+    } finally {
+      setDeleteDialog(null);
     }
   };
 
@@ -129,8 +142,7 @@ export function AdminUsers() {
                         }
                       </td>
                       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        {!user.isSuperAdmin && (
-                          <div className="flex justify-end gap-3">
+                        <div className="flex justify-end gap-3">
                             <button
                               onClick={() => handleToggleActive(user)}
                               disabled={toggling === user.id}
@@ -141,7 +153,7 @@ export function AdminUsers() {
                               <span className="hidden sm:inline">{user.isActive ? 'Desactivar' : 'Activar'}</span>
                             </button>
                             <button
-                              onClick={() => handleDeleteUser(user)}
+                              onClick={() => setDeleteDialog(user)}
                               disabled={toggling === user.id}
                               title="Eliminar permanentemente"
                               className="flex items-center gap-1 text-gray-400 hover:text-red-400 transition-colors disabled:opacity-50"
@@ -150,7 +162,6 @@ export function AdminUsers() {
                               <span className="hidden sm:inline">Eliminar</span>
                             </button>
                           </div>
-                        )}
                       </td>
                     </tr>
                   ))}
@@ -167,6 +178,55 @@ export function AdminUsers() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 sm:p-0 backdrop-blur-sm">
+          <div className="relative w-full max-w-md transform rounded-xl bg-slate-800 p-6 text-left shadow-2xl transition-all border border-slate-700">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-red-500/10 rounded-full">
+                <Trash2 className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-white">Cuidado: Eliminación Permanente</h3>
+            </div>
+            <p className="text-sm text-slate-300 mb-6">
+              ¿Estás seguro de que deseas eliminar permanentemente al usuario <span className="font-bold text-white">{deleteDialog.firstName} (@{deleteDialog.username})</span>? Esta acción no se puede deshacer y fallará por motivos de auditoría si el usuario ya tiene asientos contables creados.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteDialog(null)}
+                className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={executeDelete}
+                className="px-4 py-2 bg-red-600 rounded-lg text-white font-medium hover:bg-red-500 shadow-lg shadow-red-900/20 transition"
+              >
+                Sí, Eliminar Usuario
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Toast/Modal */}
+      {notification && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-transparent pointer-events-none p-4">
+          <div className={`mt-auto mb-10 mx-auto max-w-md w-full pointer-events-auto p-4 rounded-xl border shadow-xl flex items-start gap-4 animate-in slide-in-from-bottom-5 ${
+            notification.type === 'error' ? 'bg-red-950/90 border-red-900/50' : 'bg-emerald-950/90 border-emerald-900/50'
+          }`}>
+            <div className="flex-1">
+              <h4 className={`text-sm font-bold ${notification.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+                {notification.title}
+              </h4>
+              <p className="text-sm text-slate-300 mt-1">{notification.message}</p>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white">✕</button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

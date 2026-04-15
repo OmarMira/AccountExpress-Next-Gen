@@ -69,16 +69,26 @@ export async function switchSessionCompany(
 
   if (!session) throw new Error("Session not found or invalid.");
 
-  const membership = await db.query.userCompanyRoles.findFirst({
-    where: and(
-      eq(userCompanyRoles.userId, session.userId),
-      eq(userCompanyRoles.companyId, companyId),
-      eq(userCompanyRoles.isActive, true),
-      isNull(userCompanyRoles.revokedAt)
-    ),
-  });
+  // Check if user is super admin first
+  const { users } = await import("../db/schema/index.ts");
+  const [dbUser] = await db
+    .select({ isSuperAdmin: users.isSuperAdmin })
+    .from(users)
+    .where(eq(users.id, session.userId))
+    .limit(1);
 
-  if (!membership) throw new Error("User does not belong to the requested company.");
+  if (!dbUser?.isSuperAdmin) {
+    const membership = await db.query.userCompanyRoles.findFirst({
+      where: and(
+        eq(userCompanyRoles.userId, session.userId),
+        eq(userCompanyRoles.companyId, companyId),
+        eq(userCompanyRoles.isActive, true),
+        isNull(userCompanyRoles.revokedAt)
+      ),
+    });
+
+    if (!membership) throw new Error("User does not belong to the requested company.");
+  }
 
   await db.update(sessions)
     .set({ companyId, lastActiveAt: new Date() })

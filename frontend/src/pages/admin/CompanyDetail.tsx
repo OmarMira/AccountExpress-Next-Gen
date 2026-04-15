@@ -129,18 +129,16 @@ export function CompanyDetail() {
     try {
       const [rolesData, allUsersData] = await Promise.all([
         fetchApi('/users/roles'),
-        fetchApi('/companies'),
+        fetchApi('/users/all'),
       ]);
 
       const roles: Role[] = rolesData?.data ?? [];
-      // We list all companies then get all distinct users from our global users list.
-      // Since there's no GET /users (global), we pull from the company users that already exist
-      // and also allow entering a userId manually by showing a text input.
-      // We'll show roles for selection and a userId text field — see note below.
+      const usersList: AllUser[] = allUsersData?.data ?? [];
+      
       setModal(prev => ({
         ...prev,
         roles,
-        allUsers: allUsersData ?? [],
+        allUsers: usersList,
         loading: false,
       }));
     } catch (err: unknown) {
@@ -334,11 +332,15 @@ export function CompanyDetail() {
 
       {/* Assign User Modal */}
       {modal.open && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:p-0">
-            <div className="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" onClick={() => setModal(prev => ({ ...prev, open: false }))} />
-            <div className="inline-block transform rounded-lg bg-gray-800 px-4 pt-5 pb-4 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:p-6 sm:align-middle border border-gray-700">
-              <h3 className="text-lg font-medium text-white mb-4">Asignar Usuario a Empresa</h3>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 sm:p-0 backdrop-blur-sm">
+          <div className="relative w-full max-w-md transform rounded-xl bg-slate-800 p-6 text-left shadow-2xl transition-all border border-slate-700">
+            <button 
+              onClick={() => setModal(prev => ({ ...prev, open: false }))} 
+              className="absolute right-4 top-4 text-slate-400 hover:text-white"
+            >
+              ✕
+            </button>
+            <h3 className="text-xl font-bold text-white mb-6">Asignar Usuario a Empresa</h3>
 
               {modal.error && (
                 <div className="mb-4 p-3 bg-red-400/10 border border-red-400/20 rounded-md">
@@ -349,15 +351,24 @@ export function CompanyDetail() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">
-                    ID del Usuario
+                    Usuario
                   </label>
-                  <input
-                    type="text"
-                    value={modal.userId}
-                    onChange={(e) => setModal(prev => ({ ...prev, userId: e.target.value }))}
-                    placeholder="UUID del usuario a asignar"
-                    className="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 outline-none"
-                  />
+                  {modal.loading ? (
+                    <div className="text-sm text-gray-400">Cargando usuarios...</div>
+                  ) : (
+                    <select
+                      value={modal.userId}
+                      onChange={(e) => setModal(prev => ({ ...prev, userId: e.target.value }))}
+                      className="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 outline-none"
+                    >
+                      <option value="">Seleccionar un usuario</option>
+                      {modal.allUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.firstName} {user.lastName} (@{user.username})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -398,7 +409,6 @@ export function CompanyDetail() {
               </div>
             </div>
           </div>
-        </div>
       )}
     </div>
   );

@@ -61,22 +61,27 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     const uid = user!;
     const { username, email, password, firstName, lastName, companyId, roleId } = body;
 
+    let actualRoleId = roleId;
+    if (actualRoleId === 'admin') actualRoleId = 'role-company-admin-00-000000000002';
+    if (actualRoleId === 'viewer') actualRoleId = 'role-auditor-000000-000000000004';
+
     try {
       const result = await createUser({
         username, email, password,
         firstName, lastName,
-        companyId, roleId,
+        companyId, roleId: actualRoleId,
         grantedBy: uid,
       });
       set.status = 201;
       return { success: true, data: result };
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes("UNIQUE")) {
+    } catch (err: any) {
+      const isUnique = err?.code === '23505' || String(err).includes('23505') || String(err).includes('unique constraint');
+      if (isUnique) {
         set.status = 409;
-        return { success: false, error: "Username or email already exists" };
+        return { success: false, error: "El nombre de usuario o correo electrónico ya está en uso." };
       }
       set.status = 500;
-      return { success: false, error: "Internal error" };
+      return { success: false, error: "Error interno del servidor al crear usuario." };
     }
   }, {
     body: t.Object({
@@ -119,13 +124,33 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     }
 
     const payload = body;
-    const result = await updateUser({
-      userId: params.userId,
-      ...payload,
-      grantedBy: uid,
-    });
+    if (payload.roleId === 'admin') payload.roleId = 'role-company-admin-00-000000000002';
+    if (payload.roleId === 'viewer') payload.roleId = 'role-auditor-000000-000000000004';
 
-    return { success: true, data: result };
+    try {
+      const result = await updateUser({
+        userId: params.userId,
+        ...payload,
+        grantedBy: uid,
+      });
+      return { success: true, data: result };
+    } catch (err: any) {
+      require("fs").writeFileSync("crash_log.json", JSON.stringify({
+        message: err?.message,
+        code: err?.code,
+        cause: err?.cause ? String(err.cause) : null,
+        stack: err?.stack,
+        payload: payload,
+      }, null, 2));
+      
+      const isUnique = err?.code === '23505' || String(err).includes('23505') || String(err).includes('unique constraint');
+      if (isUnique) {
+        set.status = 409;
+        return { success: false, error: "El nombre de usuario o correo electrónico ya está en uso." };
+      }
+      set.status = 500;
+      return { success: false, error: "Error interno del servidor al actualizar perfil." };
+    }
   }, {
     params: t.Object({
       userId: t.String()
@@ -140,6 +165,36 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       companyId: t.Optional(t.String()),
       roleId:    t.Optional(t.String()),
     }),
+  })
+
+  // ── DELETE /users/:userId ─────────────────────────────────
+  .delete("/:userId", async ({ params, set, user }) => {
+    const callerId = user!;
+    
+    // 1. Solo un Super Admin puede borrar físicamente.
+    const [caller] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, callerId)).limit(1);
+    if (!caller?.isSuperAdmin) {
+      set.status = 403;
+      return { success: false, error: "Privilegios de Súper Administrador requeridos para el borrado físico." };
+    }
+
+    // 2. Un Super Admin no se puede borrar a sí mismo.
+    if (params.userId === callerId) {
+      set.status = 400;
+      return { success: false, error: "No puedes eliminar tu propia cuenta." };
+    }
+
+    try {
+      await deleteUser(params.userId);
+      return { success: true, message: "Usuario eliminado permanentemente." };
+    } catch (err) {
+      set.status = 400;
+      return { success: false, error: errMsg(err) };
+    }
+  }, {
+    params: t.Object({
+      userId: t.String()
+    })
   })
 
   // ── PUT /users/:userId/role ───────────────────────────────
@@ -173,10 +228,14 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       return { success: false, error: "companyId and roleId required" };
     }
 
+    let actualRoleId = roleId;
+    if (actualRoleId === 'admin') actualRoleId = 'role-company-admin-00-000000000002';
+    if (actualRoleId === 'viewer') actualRoleId = 'role-auditor-000000-000000000004';
+
     const result = await assignRole({
       userId: params.userId,
       companyId,
-      roleId,
+      roleId: actualRoleId,
       grantedBy: uid,
     });
 

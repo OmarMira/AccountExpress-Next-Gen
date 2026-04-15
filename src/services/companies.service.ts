@@ -130,6 +130,13 @@ export async function deleteCompany(id: string): Promise<void> {
     throw new Error("Cannot delete company with existing transactions. Archive it instead.");
   }
 
+  // 1.5 Strict check for bank transactions
+  const [btCount] = await db.select({ c: count() }).from(bankTransactions).where(eq(bankTransactions.companyId, id));
+  if (btCount && btCount.c > 0) {
+    console.warn(`[DELETE_COMPANY] Aborting: Company ${id} has ${btCount.c} bank transactions.`);
+    throw new Error("Cannot delete company with existing bank transactions. Archive it instead.");
+  }
+
   // 2. Identify users that should be cleaned up
   const companyUsers = await db.select({ 
     userId: userCompanyRoles.userId 
@@ -294,7 +301,23 @@ export async function revokeUserFromCompany(
 
   if (!existing) throw new Error("No active role found for this user in this company");
 
-  await db.update(userCompanyRoles)
-    .set({ isActive: false, revokedAt: new Date() })
-    .where(eq(userCompanyRoles.id, existing.id));
+  // Check activity inside this specific company
+  const [jeCount] = await db.select({ c: count() })
+    .from(journalEntries)
+    .where(and(eq(journalEntries.createdBy, targetUserId), eq(journalEntries.companyId, companyId)));
+    
+  const [btCount] = await db.select({ c: count() })
+    .from(bankTransactions)
+    .where(and(eq(bankTransactions.matchedBy, targetUserId), eq(bankTransactions.companyId, companyId)));
+
+  if ((jeCount && jeCount.c > 0) || (btCount && btCount.c > 0)) {
+    // Has activity -> Soft delete (Revoke) to preserve audit trail
+    await db.update(userCompanyRoles)
+      .set({ isActive: false, revokedAt: new Date() })
+      .where(eq(userCompanyRoles.id, existing.id));
+  } else {
+    // No activity -> Hard delete (Disappear completely)
+    await db.delete(userCompanyRoles)
+      .where(eq(userCompanyRoles.id, existing.id));
+  }
 }

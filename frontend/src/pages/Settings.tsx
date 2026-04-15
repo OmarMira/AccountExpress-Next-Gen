@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Settings as SettingsIcon, Building, Users, Calendar, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff } from 'lucide-react';
+import { Settings as SettingsIcon, Building, Users, Calendar, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff, Trash2, FileText, Clock, Search, Filter } from 'lucide-react';
 import { BackupPanel } from '../components/BackupPanel';
 
 export function Settings() {
@@ -11,7 +11,11 @@ export function Settings() {
   const setActiveCompany = useAuthStore((state) => state.setActiveCompany);
   const queryClient = useQueryClient();
   
-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups' | 'audit'>('company');
+
+  // --- Modals State ---
+  const [notification, setNotification] = useState<{title: string, message: string, type: 'success' | 'error'} | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{title: string, message: string, onConfirm: () => void} | null>(null);
 
   // --- Company Form State ---
   const [companyForm, setCompanyForm] = useState({
@@ -28,10 +32,10 @@ export function Settings() {
       body: JSON.stringify(data)
     }),
     onSuccess: () => {
-      alert("Datos de la empresa actualizados");
+      setNotification({ title: 'Éxito', message: 'Datos de la empresa actualizados correctamente', type: 'success' });
       setActiveCompany({ ...activeCompany, ...companyForm } as any);
     },
-    onError: (err: Error) => alert(`Error: ${err.message}`)
+    onError: (err: Error) => setNotification({ title: 'Error', message: `No se pudo actualizar la empresa: ${err.message}`, type: 'error' })
   });
 
   const handleCompanySubmit = (e: React.FormEvent) => {
@@ -43,7 +47,7 @@ export function Settings() {
   const { data: usersData, refetch: refetchUsers } = useQuery({
     queryKey: ['users', activeCompany?.id],
     queryFn: () => fetchApi(`/users?companyId=${activeCompany?.id}`),
-    enabled: activeTab === 'users' && !!activeCompany,
+    enabled: (activeTab === 'users' || activeTab === 'audit') && !!activeCompany,
     select: (res: { data: any[] }) => res.data ?? [],
   });
   const users: any[] = usersData ?? [];
@@ -56,7 +60,7 @@ export function Settings() {
     email: '',
     password: '',
     confirmPassword: '',
-    roleId: 'admin',
+    roleId: 'role-company-admin-00-000000000002',
   });
   const [createError, setCreateError] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -113,7 +117,7 @@ export function Settings() {
       email: u.email,
       password: '',
       confirmPassword: '',
-      roleId: u.roleId || 'viewer',
+      roleId: u.roleId || 'role-auditor-000000-000000000004',
     });
     setShowEditModal(true);
   };
@@ -128,7 +132,7 @@ export function Settings() {
     }),
     onSuccess: () => {
       setShowCreateForm(false);
-      setCreateForm({ firstName: '', lastName: '', username: '', email: '', password: '', confirmPassword: '', roleId: 'admin' });
+      setCreateForm({ firstName: '', lastName: '', username: '', email: '', password: '', confirmPassword: '', roleId: 'role-company-admin-00-000000000002' });
       setCreateError('');
       refetchUsers();
     },
@@ -149,8 +153,20 @@ export function Settings() {
     mutationFn: async (userId: string) => fetchApi(`/users/${userId}`, { method: 'PATCH',
       body: JSON.stringify({ isActive: false }),
     }),
-    onSuccess: () => refetchUsers(),
-    onError: (err: Error) => alert(`Error: ${err.message}`),
+    onSuccess: () => {
+      refetchUsers();
+      setNotification({ title: 'Usuario Desactivado', message: 'El usuario ha sido desactivado exitosamente.', type: 'success' });
+    },
+    onError: (err: Error) => setNotification({ title: 'Error', message: err.message, type: 'error' }),
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => fetchApi(`/users/${userId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      refetchUsers();
+      setNotification({ title: 'Usuario Eliminado', message: 'El usuario ha sido eliminado permanentemente.', type: 'success' });
+    },
+    onError: (err: Error) => setNotification({ title: 'No se pudo eliminar', message: err.message, type: 'error' }),
   });
 
   const assignRoleMutation = useMutation({
@@ -159,8 +175,11 @@ export function Settings() {
         method: 'PUT',
         body: JSON.stringify({ companyId: activeCompany?.id, roleId }),
       }),
-    onSuccess: () => refetchUsers(),
-    onError: (err: Error) => alert(`Error al cambiar rol: ${err.message}`),
+    onSuccess: () => {
+      refetchUsers();
+      setNotification({ title: 'Rol Actualizado', message: 'El rol del usuario ha sido cambiado.', type: 'success' });
+    },
+    onError: (err: Error) => setNotification({ title: 'Error al cambiar rol', message: err.message, type: 'error' }),
   });
 
   // --- Fiscal Periods State ---
@@ -213,6 +232,53 @@ export function Settings() {
   });
 
   // (Backup Hooks have been migrated to BackupPanel component)
+  const [tempAuditFilters, setTempAuditFilters] = useState({
+    userId: '',
+    date: '', // Permite ver todo si está vacío
+    startTime: '00:00',
+    endTime: '23:59'
+  });
+  const [appliedAuditFilters, setAppliedAuditFilters] = useState(tempAuditFilters);
+
+  const { data: auditLogsData, isLoading: isLoadingAudit, refetch: refetchAudit } = useQuery({
+    queryKey: ['audit-logs', activeCompany?.id, appliedAuditFilters],
+    queryFn: async () => {
+      const q = new URLSearchParams();
+      if (activeCompany) q.append('companyId', activeCompany.id);
+      if (appliedAuditFilters.userId) q.append('userId', appliedAuditFilters.userId);
+      if (appliedAuditFilters.date) q.append('date', appliedAuditFilters.date);
+      if (appliedAuditFilters.startTime) q.append('startTime', appliedAuditFilters.startTime);
+      if (appliedAuditFilters.endTime) q.append('endTime', appliedAuditFilters.endTime);
+      const res = await fetchApi(`/audit?${q.toString()}`);
+      return res.data || [];
+    },
+    enabled: activeTab === 'audit' && !!activeCompany
+  });
+  const auditLogsList: any[] = auditLogsData || [];
+
+  const [selectedLog, setSelectedLog] = useState<any>(null);
+
+  const getHumanReadableAction = (action: string, module: string) => {
+    const map: Record<string, string> = {
+      'session:select_company': 'Cambio de empresa activa',
+      'user:login': 'Inicio de sesión',
+      'user:logout': 'Cierre de sesión',
+      'user:create': 'Creación de usuario',
+      'user:update': 'Actualización de usuario',
+      'user:delete': 'Eliminación de usuario',
+      'journal:create': 'Nuevo asiento contable',
+      'journal:update': 'Modificación de asiento',
+      'journal:delete': 'Anulación de asiento',
+      'gl_account:create': 'Creación de cuenta contable',
+      'gl_account:update': 'Edición de cuenta contable',
+      'bank_account:create': 'Vincular cuenta bancaria',
+      'fiscal_period:close': 'Cierre de período fiscal',
+      'fiscal_period:lock': 'Bloqueo de período fiscal',
+      'reconciliation:perform': 'Conciliación bancaria',
+      'backup:perform': 'Generación de respaldo',
+    };
+    return map[action] || action.replace(/:/g, ' ').replace(/_/g, ' ');
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -241,6 +307,9 @@ export function Settings() {
           </button>
           <button onClick={() => setActiveTab('backups')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'backups' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
             <Database className="w-5 h-5" /> Respaldos del Sistema
+          </button>
+          <button onClick={() => setActiveTab('audit')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'audit' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
+            <FileText className="w-5 h-5" /> Bitácora de Auditoría
           </button>
         </div>
 
@@ -399,8 +468,8 @@ export function Settings() {
                         onChange={e => setCreateForm({ ...createForm, roleId: e.target.value })}
                         className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm focus:border-emerald-500 outline-none"
                       >
-                        <option value="admin">Administrador</option>
-                        <option value="viewer">Solo Lectura</option>
+                        <option value="role-company-admin-00-000000000002">Administrador</option>
+                        <option value="role-auditor-000000-000000000004">Solo Lectura</option>
                       </select>
                     </div>
                   </div>
@@ -447,13 +516,13 @@ export function Settings() {
                         <td className="py-3 px-4 text-gray-400">{u.email}</td>
                         <td className="py-3 px-4">
                           <select
-                            value={u.roleId ?? 'viewer'}
+                            value={u.roleId ?? 'role-auditor-000000-000000000004'}
                             onChange={e => assignRoleMutation.mutate({ userId: u.id, roleId: e.target.value })}
                             disabled={u.isSuperAdmin || assignRoleMutation.isPending}
                             className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-xs font-medium focus:border-indigo-500 outline-none disabled:opacity-40 cursor-pointer"
                           >
-                            <option value="admin">Administrador</option>
-                            <option value="viewer">Solo Lectura</option>
+                            <option value="role-company-admin-00-000000000002">Administrador</option>
+                            <option value="role-auditor-000000-000000000004">Solo Lectura</option>
                           </select>
                         </td>
                         <td className="py-3 px-4">
@@ -472,12 +541,30 @@ export function Settings() {
                               <SettingsIcon className="w-4 h-4" /> Editar
                             </button>
                             <button
-                              onClick={() => confirm('\u00bfDesactivar este usuario?') && revokeUserMutation.mutate(u.id)}
+                              onClick={() => setConfirmDialog({
+                                title: '¿Desactivar usuario?',
+                                message: 'El usuario ya no podrá acceder al sistema, pero sus datos y auditoría se preservarán.',
+                                onConfirm: () => revokeUserMutation.mutate(u.id)
+                              })}
                               disabled={user?.id === u.id || u.isSuperAdmin}
                               className="text-rose-400 hover:text-rose-300 disabled:opacity-30 transition-colors flex items-center gap-1"
                             >
                               <XCircle className="w-4 h-4" /> Desactivar
                             </button>
+                            
+                            {(user as any)?.isSuperAdmin && (
+                              <button
+                                onClick={() => setConfirmDialog({
+                                  title: '¿Eliminar permanentemente?',
+                                  message: 'Esta acción es irreversible y solo funcionará si el usuario no tiene actividad operativa (asientos, conciliaciones, etc).',
+                                  onConfirm: () => deleteUserMutation.mutate(u.id)
+                                })}
+                                disabled={user?.id === u.id}
+                                className="text-red-500 hover:text-red-400 disabled:opacity-30 transition-colors flex items-center gap-1"
+                              >
+                                <Trash2 className="w-4 h-4" /> Eliminar
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -664,6 +751,132 @@ export function Settings() {
           {/* TAB: BACKUPS */}
           {activeTab === 'backups' && <BackupPanel />}
 
+          {/* TAB: AUDIT */}
+          {activeTab === 'audit' && (
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Bitácora de Auditoría</h2>
+                  <p className="text-sm text-gray-400">Registro inmutable de todas las acciones realizadas en el sistema.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      setTempAuditFilters({ userId: '', date: '', startTime: '00:00', endTime: '23:59' });
+                      setAppliedAuditFilters({ userId: '', date: '', startTime: '00:00', endTime: '23:59' });
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm font-medium rounded-lg transition-colors border border-gray-700"
+                  >
+                    Limpiar
+                  </button>
+                  <button 
+                    onClick={() => setAppliedAuditFilters(tempAuditFilters)}
+                    className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all shadow-lg shadow-indigo-600/20"
+                  >
+                    <Search className="w-4 h-4" /> Buscar / Actualizar
+                  </button>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5 flex items-center gap-1">
+                    <Users className="w-3 h-3" /> Usuario
+                  </label>
+                  <select 
+                    value={tempAuditFilters.userId}
+                    onChange={e => setTempAuditFilters({...tempAuditFilters, userId: e.target.value})}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                  >
+                    <option value="">Todos los usuarios</option>
+                    {users.map((u: any) => (
+                      <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.username})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Día (Opcional)
+                  </label>
+                  <input 
+                    type="date"
+                    value={tempAuditFilters.date}
+                    onChange={e => setTempAuditFilters({...tempAuditFilters, date: e.target.value})}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Desde
+                  </label>
+                  <input 
+                    type="time"
+                    disabled={!tempAuditFilters.date}
+                    value={tempAuditFilters.startTime}
+                    onChange={e => setTempAuditFilters({...tempAuditFilters, startTime: e.target.value})}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none disabled:opacity-30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> Hasta
+                  </label>
+                  <input 
+                    type="time"
+                    disabled={!tempAuditFilters.date}
+                    value={tempAuditFilters.endTime}
+                    onChange={e => setTempAuditFilters({...tempAuditFilters, endTime: e.target.value})}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none disabled:opacity-30"
+                  />
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto rounded-xl border border-gray-800">
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-gray-800/50 text-gray-400 text-xs uppercase font-bold">
+                    <tr>
+                      <th className="py-3 px-4">Fecha y Hora</th>
+                      <th className="py-3 px-4">Usuario</th>
+                      <th className="py-3 px-4">Módulo</th>
+                      <th className="py-3 px-4">Acción Realizada</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800">
+                    {isLoadingAudit ? (
+                      <tr><td colSpan={4} className="py-12 text-center text-gray-500"><Clock className="w-6 h-6 animate-spin mx-auto mb-2" /> Cargando bitácora...</td></tr>
+                    ) : auditLogsList.length === 0 ? (
+                      <tr><td colSpan={4} className="py-12 text-center text-gray-500">No se encontraron registros para los filtros seleccionados.</td></tr>
+                    ) : (
+                      auditLogsList.map((log: any) => (
+                        <tr 
+                          key={log.id} 
+                          onClick={() => setSelectedLog(log)}
+                          className="hover:bg-indigo-500/5 cursor-pointer transition-colors"
+                        >
+                          <td className="py-3 px-4 font-mono text-xs text-indigo-400">
+                            {new Date(log.createdAt).toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="text-gray-200 font-medium">
+                              {users.find(u => u.id === log.userId)?.username || log.userId || 'Sistema'}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded bg-gray-700 text-gray-300 text-[10px] font-bold uppercase">{log.module}</span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-200 font-medium">
+                            {getHumanReadableAction(log.action, log.module)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -772,8 +985,8 @@ export function Settings() {
                     onChange={e => setEditForm({ ...editForm, roleId: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
                   >
-                    <option value="admin">Administrador</option>
-                    <option value="viewer">Solo Lectura</option>
+                    <option value="role-company-admin-00-000000000002">Administrador</option>
+                    <option value="role-auditor-000000-000000000004">Solo Lectura</option>
                   </select>
                 </div>
               </div>
@@ -798,6 +1011,148 @@ export function Settings() {
           </div>
         </div>
       )}
+
+      {/* --- Notification Modal --- */}
+      {notification && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#111827] rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl border border-gray-800 transform animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${notification.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-500'}`}>
+                {notification.type === 'success' ? <CheckCircle className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">{notification.title}</h3>
+              <p className="text-gray-400 text-sm mb-6 leading-relaxed">{notification.message}</p>
+              <button
+                onClick={() => setNotification(null)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-colors duration-200"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Confirm Dialog Modal --- */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#111827] rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-gray-800 transform animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-amber-500/20 text-amber-500">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">{confirmDialog.title}</h3>
+              <p className="text-gray-400 text-sm mb-8 leading-relaxed">{confirmDialog.message}</p>
+              
+              <div className="flex flex-col sm:flex-row gap-3 w-full">
+                <button
+                  onClick={() => setConfirmDialog(null)}
+                  className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors duration-200 border border-gray-700 border-b-gray-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    confirmDialog.onConfirm();
+                    setConfirmDialog(null);
+                  }}
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 px-6 rounded-xl transition-colors duration-200 shadow-lg shadow-rose-600/20"
+                >
+                  Sí, Proceder
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Audit Log Detail Modal --- */}
+      {selectedLog && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-[#0f172a] rounded-3xl w-full max-w-2xl shadow-2xl border border-gray-800 overflow-hidden transform animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="p-6 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-500/10 rounded-lg">
+                  <FileText className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Detalle de Operación</h3>
+                  <p className="text-xs text-gray-500">Ref: {selectedLog.id.substring(0,8)}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedLog(null)}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-900/40 p-3 rounded-xl border border-gray-800">
+                  <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Usuario</p>
+                  <p className="text-white font-medium">{users.find(u => u.id === selectedLog.userId)?.username || selectedLog.userId || 'Sistema'}</p>
+                </div>
+                <div className="bg-gray-900/40 p-3 rounded-xl border border-gray-800">
+                  <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Fecha y Hora</p>
+                  <p className="text-white font-medium">{new Date(selectedLog.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">Acción</p>
+                <div className="bg-indigo-500/5 border border-indigo-500/20 p-4 rounded-xl">
+                  <p className="text-indigo-100 text-lg font-semibold">{getHumanReadableAction(selectedLog.action, selectedLog.module)}</p>
+                </div>
+              </div>
+
+              {/* Technical Info Area - Made Stacked for more horizontal space */}
+              {(selectedLog.beforeState || selectedLog.afterState) && (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-bold text-gray-500 uppercase border-b border-gray-800 pb-1">Información Técnica (Estados)</p>
+                  <div className="space-y-4">
+                    {selectedLog.beforeState && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-rose-400 font-bold uppercase">● Estado Anterior</p>
+                        <pre className="bg-black/40 p-4 rounded-xl text-[12px] text-gray-400 font-mono overflow-auto max-h-60 border border-gray-800 leading-relaxed">
+                          {JSON.stringify(JSON.parse(selectedLog.beforeState), null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                    {selectedLog.afterState && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-emerald-400 font-bold uppercase">● Estado Resultante</p>
+                        <pre className="bg-black/40 p-4 rounded-xl text-[12px] text-gray-200 font-mono overflow-auto max-h-60 border border-gray-800 leading-relaxed">
+                          {JSON.stringify(JSON.parse(selectedLog.afterState), null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-xl flex gap-3">
+                <Shield className="w-5 h-5 text-amber-500 shrink-0" />
+                <div className="text-[10px] text-amber-400/80 leading-relaxed">
+                  Registro firmado criptográficamente (Hash: {selectedLog.entryHash.substring(0, 16)}...). 
+                  Garantiza la inmutabilidad de la cadena de auditoría.
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-gray-900/50 border-t border-gray-800 flex justify-end">
+              <button 
+                onClick={() => setSelectedLog(null)}
+                className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

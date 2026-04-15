@@ -109,9 +109,9 @@ async function seedRolePermissions(): Promise<void> {
 
 // ── 5. SUPER ADMIN USER ──────────────────────────────────────
 async function seedSuperAdmin(): Promise<void> {
-  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.isSuperAdmin, true)).limit(1);
-  if (existing) {
-    console.log("[SEED] ✓ super_admin user already exists — skipping");
+  const [result] = await db.select({ c: count() }).from(users);
+  if (result && result.c > 0) {
+    console.log("[SEED] ✓ System already has users (manually created or from previous seed) — skipping auto-creation");
     return;
   }
 

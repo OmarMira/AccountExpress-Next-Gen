@@ -29,6 +29,9 @@ export function Companies() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<CompanyData | null>(null);
 
+  const [deleteDialog, setDeleteDialog] = useState<{id: string, name: string} | null>(null);
+  const [notification, setNotification] = useState<{title: string, message: string, type: 'error' | 'success'} | null>(null);
+
   const loadCompanies = useCallback(async () => {
     try {
       setLoading(true);
@@ -41,18 +44,16 @@ export function Companies() {
     }
   }, []);
 
-
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`ELIMINAR EMPRESA PERMANENTEMENTE: ${name}?`)) {
-      return;
-    }
-
+  const executeDelete = async () => {
+    if (!deleteDialog) return;
     try {
-      await fetchApi(`/companies/${id}`, { method: 'DELETE' });
-      alert('Empresa eliminada correctamente');
+      await fetchApi(`/companies/${deleteDialog.id}`, { method: 'DELETE' });
+      setNotification({ title: 'Operación Exitosa', message: 'Empresa eliminada correctamente.', type: 'success' });
       loadCompanies();
     } catch (err: any) {
-      alert(`Error al eliminar: ${err.message}`);
+      setNotification({ title: 'No se Pudo Eliminar', message: err.message, type: 'error' });
+    } finally {
+      setDeleteDialog(null);
     }
   };
 
@@ -120,7 +121,7 @@ export function Companies() {
                             className="text-gray-400 hover:text-white" 
                             title="Editar"
                             onClick={() => {
-                              setEditingCompany(company);
+                              setEditingCompany(company as any);
                               setIsModalOpen(true);
                             }}
                           >
@@ -129,7 +130,7 @@ export function Companies() {
                           <button 
                             className="text-gray-400 hover:text-red-400" 
                             title="Eliminar"
-                            onClick={() => handleDelete(company.id, company.legalName)}
+                            onClick={() => setDeleteDialog({id: company.id, name: company.legalName})}
                           >
                             <Trash2 className="h-5 w-5" />
                           </button>
@@ -161,6 +162,54 @@ export function Companies() {
         company={editingCompany}
         onSuccess={loadCompanies}
       />
+
+      {/* Delete Confirmation Modal */}
+      {deleteDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 sm:p-0 backdrop-blur-sm">
+          <div className="relative w-full max-w-md transform rounded-xl bg-slate-800 p-6 text-left shadow-2xl transition-all border border-slate-700">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-red-500/10 rounded-full">
+                <Trash2 className="w-6 h-6 text-red-500" />
+              </div>
+              <h3 className="text-xl font-bold text-white">Advertencia: Eliminar Empresa</h3>
+            </div>
+            <p className="text-sm text-slate-300 mb-6">
+              ¿Estás seguro de que deseas eliminar permanentemente la empresa <span className="font-bold text-white">{deleteDialog.name}</span>? Esta acción purgará todo el catálogo si es seguro hacerlo, pero no se puede deshacer.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteDialog(null)}
+                className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={executeDelete}
+                className="px-4 py-2 bg-red-600 rounded-lg text-white font-medium hover:bg-red-500 shadow-lg shadow-red-900/20 transition"
+              >
+                Sí, Eliminar Empresa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Toast/Modal */}
+      {notification && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-transparent pointer-events-none p-4">
+          <div className={`mt-auto mb-10 mx-auto max-w-md w-full pointer-events-auto p-4 rounded-xl border shadow-xl flex items-start gap-4 animate-in slide-in-from-bottom-5 ${
+            notification.type === 'error' ? 'bg-red-950/90 border-red-900/50' : 'bg-emerald-950/90 border-emerald-900/50'
+          }`}>
+            <div className="flex-1">
+              <h4 className={`text-sm font-bold ${notification.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+                {notification.title}
+              </h4>
+              <p className="text-sm text-slate-300 mt-1">{notification.message}</p>
+            </div>
+            <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-white">✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

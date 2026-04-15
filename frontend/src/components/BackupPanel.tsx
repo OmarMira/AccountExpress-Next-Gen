@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Shield, Upload, Download, FolderOpen, Loader2, AlertTriangle, CheckCircle, Clock, Database, RotateCcw, X, KeyRound } from 'lucide-react';
+import { Shield, Download, FolderOpen, Loader2, AlertTriangle, CheckCircle, Clock, Database, RotateCcw, X, KeyRound } from 'lucide-react';
 import { fetchApi } from '../lib/api';
 
 export const BackupPanel: React.FC = () => {

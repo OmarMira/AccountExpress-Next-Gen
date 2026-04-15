@@ -171,7 +171,9 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         .limit(1);
 
       if (!session) { set.status = 401; return { error: "Invalid session" }; }
-      if (session.companyId) { set.status = 400; return { error: "Company already selected. Use /switch-company instead." }; }
+      
+      // Permitir re-selección o cambio fluido desde la misma interfaz
+      const isSwitch = !!session.companyId;
 
       const [role] = await db
         .select({ id: userCompanyRoles.id })
@@ -198,9 +200,10 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
         companyId: body.companyId, userId: user, sessionId,
-        action: "session:select_company", module: "auth",
+        action: isSwitch ? "session:switch_company" : "session:select_company", module: "auth",
         entityType: "session", entityId: sessionId,
-        beforeState: null, afterState: { result: "company_selected", companyId: body.companyId }, ipAddress: ip,
+        beforeState: isSwitch ? { previousCompanyId: session.companyId } : null, 
+        afterState: { result: "company_selected", companyId: body.companyId }, ipAddress: ip,
       });
 
       return { message: "Company selected successfully" };
