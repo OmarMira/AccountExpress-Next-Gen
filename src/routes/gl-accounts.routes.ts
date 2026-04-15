@@ -2,9 +2,7 @@ import { Elysia, t } from 'elysia';
 import { db } from '../db/connection';
 import { chartOfAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
-import { US_GAAP_ACCOUNTS } from '../db/seeds/gl-accounts.seed';
-import { v4 as uuidv4 } from 'uuid';
-import { addAccount, deactivateAccount } from '../services/accounts.service';
+import { addAccount, deactivateAccount, seedGaapForCompany } from '../services/accounts.service';
 import { authMiddleware, requireAuth } from '../middleware/auth.middleware';
 import { requirePermission } from '../middleware/rbac.middleware.ts';
 
@@ -12,42 +10,37 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
   .use(authMiddleware)
   .guard({ beforeHandle: requireAuth })
 
-  // GET /gl-accounts — companyId from session
+  // GET /gl-accounts — returns all active accounts for the active company.
+  // If the company has no accounts yet, seeds the full US GAAP chart automatically.
   .get('/', async ({ companyId, set }) => {
     if (!companyId) {
       set.status = 403;
       return { error: 'No active company in session.' };
     }
 
-    const existing = await db.select().from(chartOfAccounts)
-      .where(eq(chartOfAccounts.companyId, companyId)).limit(1);
+    // Check if this company already has accounts seeded
+    const existing = await db
+      .select({ id: chartOfAccounts.id })
+      .from(chartOfAccounts)
+      .where(eq(chartOfAccounts.companyId, companyId))
+      .limit(1);
 
+    // Auto-seed the full US GAAP chart of accounts on first access
     if (existing.length === 0) {
-      const now = new Date();
-      for (const acc of US_GAAP_ACCOUNTS) {
-        await db.insert(chartOfAccounts).values({
-          id: uuidv4(),
-          companyId,
-          code: acc.code,
-          name: acc.name,
-          accountType: acc.type,
-          description: acc.subtype,
-          normalBalance: acc.normalBalance,
-          isSystem: acc.isSystem ? true : false,
-          isActive: true,
-          createdAt: now,
-          updatedAt: now,
-        }).onConflictDoNothing();
-      }
+      await seedGaapForCompany(companyId);
     }
 
-    const accounts = await db.select().from(chartOfAccounts)
+    const accounts = await db
+      .select()
+      .from(chartOfAccounts)
       .where(eq(chartOfAccounts.companyId, companyId));
 
-    return accounts.filter(a => a.isActive).sort((a, b) => a.code.localeCompare(b.code));
+    return accounts
+      .filter(a => a.isActive)
+      .sort((a, b) => a.code.localeCompare(b.code));
   })
 
-  // POST /gl-accounts — companyId from session, requires accounts:create
+  // POST /gl-accounts — create a new custom account
   .use(requirePermission('accounts', 'create'))
   .post('/', async ({ body, companyId, set }) => {
     if (!companyId) {
@@ -75,16 +68,18 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
     body: t.Object({
       code:          t.String(),
       name:          t.String(),
-      accountType:   t.Union([t.Literal('asset'), t.Literal('liability'),
-                               t.Literal('equity'), t.Literal('revenue'),
-                               t.Literal('expense')]),
+      accountType:   t.Union([
+        t.Literal('asset'), t.Literal('liability'),
+        t.Literal('equity'), t.Literal('revenue'),
+        t.Literal('expense'),
+      ]),
       normalBalance: t.Union([t.Literal('debit'), t.Literal('credit')]),
       description:   t.Optional(t.String()),
-      parentCode:    t.Optional(t.String())
+      parentCode:    t.Optional(t.String()),
     })
   })
 
-  // PATCH /gl-accounts/:id — companyId from session, requires accounts:create
+  // PATCH /gl-accounts/:id — edit name, code, or description
   .patch('/:id', async ({ params, body, companyId, set }) => {
     if (!companyId) {
       set.status = 403;
@@ -93,56 +88,60 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
     const { id } = params;
     const { name, description, code } = body;
 
-    const account = await db.select().from(chartOfAccounts)
-      .where(and(eq(chartOfAccounts.id, id), eq(chartOfAccounts.companyId, companyId))).limit(1);
+    const [account] = await db
+      .select()
+      .from(chartOfAccounts)
+      .where(and(eq(chartOfAccounts.id, id), eq(chartOfAccounts.companyId, companyId)))
+      .limit(1);
 
-    if (account.length === 0) {
+    if (!account) {
       set.status = 404;
       return { error: 'Cuenta no encontrada' };
     }
 
     const updates: Partial<typeof chartOfAccounts.$inferInsert> & { updatedAt: Date } = {
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
-    if (name) updates.name = name;
-    if (description !== undefined) updates.description = description;
-    if (code) {
-      const codeExists = await db.select().from(chartOfAccounts)
-        .where(and(eq(chartOfAccounts.companyId, companyId), eq(chartOfAccounts.code, code))).limit(1);
+    if (name)                       updates.name        = name;
+    if (description !== undefined)  updates.description = description;
 
-      if (codeExists.length > 0 && codeExists[0].id !== id) {
+    if (code && code !== account.code) {
+      const [codeExists] = await db
+        .select({ id: chartOfAccounts.id })
+        .from(chartOfAccounts)
+        .where(and(eq(chartOfAccounts.companyId, companyId), eq(chartOfAccounts.code, code)))
+        .limit(1);
+
+      if (codeExists) {
         set.status = 409;
         return { error: `El código ${code} ya está en uso` };
       }
       updates.code = code;
     }
 
-    await db.update(chartOfAccounts).set(updates).where(
-      and(eq(chartOfAccounts.id, id), eq(chartOfAccounts.companyId, companyId))
-    );
+    await db.update(chartOfAccounts)
+      .set(updates)
+      .where(and(eq(chartOfAccounts.id, id), eq(chartOfAccounts.companyId, companyId)));
 
     return { message: 'Cuenta actualizada' };
   }, {
-    params: t.Object({
-      id: t.String()
-    }),
+    params: t.Object({ id: t.String() }),
     body: t.Object({
       name:        t.Optional(t.String()),
       description: t.Optional(t.String()),
-      code:        t.Optional(t.String())
+      code:        t.Optional(t.String()),
     })
   })
 
-  // DELETE /gl-accounts/:id — companyId from session, requires accounts:create
+  // DELETE /gl-accounts/:id — soft-deactivate (system accounts are protected)
   .delete('/:id', async ({ params, companyId, set }) => {
     if (!companyId) {
       set.status = 403;
       return { error: 'No active company in session.' };
     }
-    const { id } = params;
     try {
-      await deactivateAccount(id, companyId);
+      await deactivateAccount(params.id, companyId);
       return { message: 'Cuenta desactivada' };
     } catch (err) {
       set.status = 422;
