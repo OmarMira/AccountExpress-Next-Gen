@@ -65,11 +65,7 @@ cd ..
 
 ### 2 — Configuración de Variables de Entorno
 
-Copiar el archivo de plantilla al entorno local:
-
-```bash
-cp .env.example .env
-```
+Debes crear un archivo `.env` en la raíz del proyecto.
 
 > **NOTA CRÍTICA:** El sistema se negará a enrutar cualquier conexión si falta una variable fundamental. Debes declarar todas las variables obligatorias en `.env`.
 
