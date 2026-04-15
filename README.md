@@ -1,41 +1,56 @@
-# AccountExpress — Core Contable
+# AccountExpress — Core Contable Next-Gen
 
-Sistema de contabilidad de doble entrada y conciliación bancaria diseñado para pequeñas y medianas empresas. Construido con un enfoque de integridad financiera: cada asiento de diario genera una cadena de auditoría criptográfica que garantiza la inmutabilidad del historial contable.
+Sistema de contabilidad de doble entrada y conciliación bancaria diseñado para pequeñas y medianas empresas. Construido con un enfoque estricto en la **integridad financiera y seguridad**: cada asiento de diario genera una cadena de auditoría criptográfica, las transacciones usan bloqueos a nivel de fila (row-level locking) para evitar condiciones de carrera, y la arquitectura sigue un modelo "Fail-Fast".
+
+## Progreso y Bitácora del Sistema (Changelog)
+
+A lo largo del desarrollo, el sistema se ha refactorizado y asegurado sustancialmente. Esta bitácora resume la arquitectura actual y los hitos alcanzados:
+
+- **Remoción de Inteligencia Artificial:** Se eliminó por completo la dependencia de paneles AI y componentes inyectados para mantener un sistema financiero puro, determinista y seguro, minimizando dependencias externas.
+- **Motor Financiero Seguro:** Implementación de validación matemática estricta para la partida doble. Uso de transacciones atómicas de base de datos con `row-level locking` (bloqueo a nivel de fila) para prevenir condiciones de carrera en operaciones de alta concurrencia.
+- **Plan de Cuentas (GL) Estándar:** Corrección profunda en el sembrado (seeding) de la BD para garantizar una estructura estándar US GAAP con esquemas en minúsculas estrictas (`asset`, `liability`, `equity`, `revenue`, `expense`). Sembrado automático garantizado al inicializar empresas.
+- **Seguridad de Variables de Entorno (Fail-Fast):** Eliminación de lecturas directas y vulnerables a `process.env`. Todo el sistema utiliza el esquema de validación exportado de `src/config/validate.ts`, abortando la inicialización si faltan parámetros críticos.
+- **Gestión de Usuarios Robusta:** Lógica de base de datos y backend endurecida para la desactivación y eliminación de usuarios, garantizando que siempre persista un único Super Administrador inmutable (previniendo auto-bloqueos).
+- **Auditoría Integral:** Implementación de un `System Audit Log` para registrar acciones administrativas dentro del sistema, independiente de la validación criptográfica (HMAC SHA-256) exigida para los asientos del libro de diario.
+- **Resolución de Deuda Técnica y Limpieza:** Auditoría profunda de tipado TypeScript para corregir errores silenciosos (type safety). Purga sistemática del directorio de archivos de diagnóstico temporales, módulos "dead code" obsoletos y reglas de `.gitignore` estrictas para preveer la fuga de secretos o logs locales en GitHub.
 
 ## Módulos del sistema
 
-- **Plan de Cuentas (GL)** — Catálogo jerárquico US GAAP con siembra automática
-- **Libro Diario** — Asientos de doble entrada con validación de cuadre en tiempo real
-- **Conciliación Bancaria** — Importación de estados de cuenta PDF, CSV, OFX y QFX
-- **Períodos Fiscales** — Apertura, cierre y bloqueo de períodos con enforcement en BD
-- **Reportes** — Balance General y Estado de Resultados en tiempo real
-- **Auditoría Criptográfica** — Cadena HMAC que detecta cualquier alteración del historial
+- **Plan de Cuentas (GL)** — Catálogo jerárquico contable con validación estricta y siembra automática por tenant (empresa).
+- **Libro Diario y Transacciones** — Asientos de doble entrada atómicos, validación matemática de balance (`debit == credit`) en tiempo real y prevención de concurrencias colisionantes.
+- **Gestión de Usuarios y RBAC** — Control de acceso estricto, gestión de usuarios segura y reglas inmutables de Super Administrador.
+- **Registros de Auditoría** — Integración de logs a nivel infraestructura y aplicación ("System Audit Log").
+- **Conciliación Bancaria** — Estructuras modulares preparadas para ingesta de datos bancarios.
+- **Períodos Fiscales** — Apertura, cierre y bloqueo de períodos mediante enforcement de software para rechazar inserciones pasadas irrevocablemente.
+- **Criptografía Contable** — Cadena HMAC persistente para garantizar total inmutabilidad e inviolabilidad humana del registro contable histórico.
 
-## Stack tecnológico
+## Stack Tecnológico y Arquitectura
 
-### Backend
-
-- **Runtime:** Bun
-- **Framework:** Elysia
+### Backend (API REST)
+- **Runtime:** Bun v1.2+
+- **Framework:** Elysia.js (Tipado estricto end-to-end)
 - **ORM:** Drizzle ORM
-- **Base de datos:** PostgreSQL 16
-- **Seguridad:** bcryptjs, HMAC SHA-256, sesiones HTTP-only
+- **Base de Datos:** PostgreSQL 16
+- **Seguridad:** 
+  - Validaciones de variables Fail-Fast con Zod.
+  - Hashing de credenciales con bcryptjs.
+  - Firma inmutable con HMAC SHA-256.
+  - Autenticación controlada mediante sesiones stateful HTTP-only, previniendo inyecciones y ataques de Account Takeover (ATO).
 
-### Frontend
-
+### Frontend (SPA)
 - **Framework:** React 18 con TypeScript
-- **Estilos:** Tailwind CSS (dark mode)
-- **Estado del servidor:** React Query (@tanstack/query)
-- **Estado global:** Zustand
-- **Build:** Vite
+- **Estilos:** Tailwind CSS (Arquitectura semántica)
+- **Mutaciones HTTP:** React Query (`@tanstack/query`)
+- **Estado Global:** Zustand
+- **Bundler:** Vite
 
 ## Requisitos previos
 
 - Bun v1.2 o superior
-- PostgreSQL 16
-- Node.js 18 o superior (solo para herramientas de desarrollo)
+- PostgreSQL 16 v16+
+- Node.js 18+ (Para tools de depuración satélites ocasionales)
 
-## Instalación
+## Instalación y Despliegue
 
 ### 1 — Clonar e instalar dependencias
 
@@ -48,122 +63,93 @@ bun install
 cd ..
 ```
 
-### 2 — Configurar variables de entorno
+### 2 — Configuración de Variables de Entorno
+
+Copiar el archivo de plantilla al entorno local:
 
 ```bash
 cp .env.example .env
 ```
 
-Edita `.env` y completa los valores obligatorios descritos en la sección de Variables de entorno.
+> **NOTA CRÍTICA:** El sistema se negará a enrutar cualquier conexión si falta una variable fundamental. Debes declarar todas las variables obligatorias en `.env`.
 
-### 3 — Ejecutar migraciones
+Para generar secretos criptográficos seguros para los HMAC y la Sesión HTTP (`SESSION_SECRET`, `AUDIT_HMAC_SECRET`, `JOURNAL_HMAC_SECRET`):
+```bash
+openssl rand -hex 64
+```
+
+### 3 — Inicializar la Base de Datos (Estructura y Seed)
+
+Este paso materializa el esquema SQL Drizzle, define los constrains restrictivos e inyecta al Super Admin originario, los roles base y las cuentas estándar maestras:
 
 ```bash
 bun run db:migrate
-```
-
-### 4 — Crear datos iniciales (seed)
-
-```bash
 bun run db:seed
 ```
 
-Esto crea el super administrador, roles, permisos y una empresa de demostración.
+## Ejecución del Sistema
 
-## Inicio del sistema
+### Modo Desarrollo Múltiple (Recomendado)
 
-### Ambos servidores simultáneamente (recomendado)
+Levanta el servidor Backend (Elysia, Puerto `3000`) y Frontend (Vite, Puerto `5173`) en simultáneo bajo el mismo thread process:
 
 ```bash
 bun run dev:all
 ```
 
-### Por separado
+### Ejecutar Servicios Individualmente
 
-Backend (puerto 3000):
-
+Solo Backend REST (Con hot-reload de Bun):
 ```bash
 bun run dev
 ```
 
-Frontend (puerto 5173):
-
+Solo el UI Frontend:
 ```bash
 bun run dev:frontend
 ```
 
-## Variables de entorno
+## Variables de Entorno Fundamentales
 
-| Variable | Descripción | Obligatoria |
+| Variable | Propósito | Mandatoria |
 |---|---|---|
-| `DATABASE_URL` | Cadena de conexión PostgreSQL para la app | Sí |
-| `DATABASE_ADMIN_URL` | Cadena de conexión con permisos de admin (migraciones) | Sí |
-| `SESSION_SECRET` | Clave secreta para sesiones HTTP-only (mín. 16 chars) | Sí |
-| `AUDIT_HMAC_SECRET` | Clave HMAC para la cadena de auditoría | Sí |
-| `JOURNAL_HMAC_SECRET` | Clave HMAC para el libro diario | Sí |
-| `SUPER_ADMIN_USERNAME` | Usuario del administrador inicial | Sí |
-| `SUPER_ADMIN_EMAIL` | Email del administrador inicial | Sí |
-| `SUPER_ADMIN_PASSWORD` | Contraseña del administrador inicial | Sí |
-| `PORT` | Puerto del servidor backend (default: 3000) | No |
-| `CORS_ORIGIN` | Origen permitido para CORS (default: localhost:5173) | No |
-| `NODE_ENV` | Entorno de ejecución (`development` / `production`) | No |
+| `DATABASE_URL` | Conexión pool para las queries y transacciones del app | Sí |
+| `DATABASE_ADMIN_URL` | Conexión con grants altos para `bun run db:migrate` | Sí |
+| `SESSION_SECRET` | Semilla de encriptación para las cookies seguras de auth | Sí |
+| `AUDIT_HMAC_SECRET` | Llave privativa de firmado digital para trazabilidad de logs | Sí |
+| `JOURNAL_HMAC_SECRET` | Llave privativa de firmado para los registros de libro mayor | Sí |
+| `SUPER_ADMIN_USERNAME` | Identificador del admin de provisión originaria ("root") | Sí |
+| `SUPER_ADMIN_EMAIL` | Email de contacto/login para este admin inicial | Sí |
+| `SUPER_ADMIN_PASSWORD` | Passkey temporal para el perfil root (Se inyecta al seed) | Sí |
+| `PORT` | Exposición de puerto local de la API REST (Defecto: 3000) | No |
+| `CORS_ORIGIN` | Whitelisting origin (Defecto: http://localhost:5173) | No |
 
-Para generar un secreto seguro:
+## Manejo de Credenciales
 
-```bash
-openssl rand -hex 64
-```
+Las credenciales root del Super Administrador se dictan desde las variables `SUPER_ADMIN_*` que son incrustadas de forma encriptada en la BD la primera vez que se lanza `bun run db:seed`.
 
-## Credenciales iniciales
+**Regla Cero de Acceso:** La cuenta sembrada como Super Admin inicial posee una constraint en backend que imposibilita su eliminación manual o accidental desde la interfaz. 
 
-Las credenciales del primer acceso se definen en el archivo `.env`. Por defecto en el ejemplo:
-
-- **Usuario:** `admin`
-- **Contraseña:** `ChangeMe@2026!`
-
-Cambia estas credenciales antes de cualquier despliegue en producción.
-
-## Estructura del proyecto
+## Estructura de Directorios Clave
 
 ```
 Nuevo Sistema/
-├── src/                    # Backend (Bun + Elysia)
-│   ├── db/                 # Esquemas Drizzle, migraciones y seeds
-│   ├── middleware/         # Auth, RBAC, tenant isolation
-│   ├── routes/             # Endpoints de la API REST
-│   ├── services/           # Lógica de negocio y servicios
-│   └── server.ts           # Punto de entrada del servidor
-├── frontend/               # Frontend (React + Vite)
-│   └── src/
-│       ├── components/     # Componentes reutilizables
-│       ├── pages/          # Páginas de la aplicación
-│       ├── store/          # Estado global (Zustand)
-│       └── lib/            # Utilidades y cliente API
-├── drizzle/                # Migraciones generadas por Drizzle Kit
-├── scripts/                # Scripts de prueba y mantenimiento
-├── tests/                  # Pruebas de integración y unitarias
-├── .env.example            # Plantilla de variables de entorno
-└── docker-compose.yml      # Configuración de contenedores
+├── src/                    # Backend Source Code (Bun + Elysia)
+│   ├── config/             # Schemas de validación central (Fail-Fast checks)
+│   ├── db/                 # Archivos Drizzle: tables, constraints, migrators
+│   ├── middleware/         # Security guards, Auth Contexts, HTTP-Only cookies
+│   ├── routes/             # Endpoints (Handlers lógicos del API)
+│   └── services/           # Repositorios funcionales (ACID transaccional, cripto)
+├── frontend/               # Frontend Project Web
+│   ├── src/components/     # Bloques de vista React sin estado puro
+│   ├── src/pages/          # Mapeo de vistas unidas por el react-router
+│   └── src/store/          # Estados reactivos volátiles (Zustand)
+├── drizzle/                # Artefactos SQL nativos producidos en la migración
+└── tests/                  # Estructuras para los tests unitarios e integrales
 ```
 
-## Comandos disponibles
+## Reglas Maestras de Seguridad Arquitectónica A Implementar / Implementadas
 
-| Comando | Descripción |
-|---|---|
-| `bun run dev:all` | Inicia backend y frontend simultáneamente |
-| `bun run dev` | Solo backend con hot-reload |
-| `bun run dev:frontend` | Solo frontend |
-| `bun run db:migrate` | Aplica migraciones pendientes |
-| `bun run db:seed` | Inserta datos iniciales |
-| `bun run typecheck` | Verifica tipos TypeScript sin compilar |
-| `bun run test` | Ejecuta pruebas unitarias |
-| `bun run test:integration` | Ejecuta pruebas de integración |
-
-## Seguridad
-
-- Sesiones almacenadas en cookies HTTP-only sin exposición al cliente
-- `companyId` siempre leído desde el contexto de sesión, nunca desde el cuerpo de la petición
-- Control de acceso basado en roles (RBAC) por módulo y acción
-- Cadena de auditoría criptográfica (HMAC) en asientos de diario
-- Bloqueo de inserts en períodos fiscales cerrados a nivel de base de datos
-- Escaneo de secretos en cada commit con GitLeaks
+1. **Aislamiento Multitenant Inviolable:** El `companyId` dictamina el alcance de visibilidad de cualquier usuario. JAMÁS se acepta o lee desde la petición REST. Proviene intrínsecamente del Token/Sessión interno.
+2. **Atomicidad Exclusiva:** Las consultas complejas (Libro mayor, diarios) están acopladas con transaccionalidad total (`tx`) y `SELECT ... FOR UPDATE` (row locks) impidiendo concurrencias desleales.
+3. **Bloqueo Fiscal Definitivo:** Operaciones solicitadas para ser registradas en un período fiscal con estado `CERRADO` fallarán irrevocablemente sin posibilidad de over-write humano.
