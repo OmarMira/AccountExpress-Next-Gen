@@ -86,7 +86,7 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
       return { error: 'No active company in session.' };
     }
     const { id } = params;
-    const { name, description, code } = body;
+    const { name, description, code, parentCode } = body;
 
     const [account] = await db
       .select()
@@ -120,6 +120,31 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
       updates.code = code;
     }
 
+    // Update parent account (parentCode: null = root, '' = clear parent, code = set new parent)
+    if (parentCode !== undefined) {
+      if (parentCode === null || parentCode === '') {
+        updates.parentId = null;
+        updates.level    = 1;
+      } else {
+        const [parent] = await db
+          .select({ id: chartOfAccounts.id, level: chartOfAccounts.level })
+          .from(chartOfAccounts)
+          .where(and(eq(chartOfAccounts.companyId, companyId), eq(chartOfAccounts.code, parentCode)))
+          .limit(1);
+
+        if (!parent) {
+          set.status = 422;
+          return { error: `Cuenta padre con código ${parentCode} no encontrada` };
+        }
+        if (parent.id === id) {
+          set.status = 422;
+          return { error: 'Una cuenta no puede ser su propio padre' };
+        }
+        updates.parentId = parent.id;
+        updates.level    = (parent.level ?? 1) + 1;
+      }
+    }
+
     await db.update(chartOfAccounts)
       .set(updates)
       .where(and(eq(chartOfAccounts.id, id), eq(chartOfAccounts.companyId, companyId)));
@@ -131,6 +156,7 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
       name:        t.Optional(t.String()),
       description: t.Optional(t.String()),
       code:        t.Optional(t.String()),
+      parentCode:  t.Optional(t.Nullable(t.String())),
     })
   })
 
