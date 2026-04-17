@@ -131,12 +131,18 @@ export function Banks() {
         </div>
         <div className="space-y-2 col-span-2">
           <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo inicial</label>
-          <input
-            type="number"
-            value={form.balance}
-            onChange={e => setForm({ ...form, balance: parseFloat(e.target.value) || 0 })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
-          />
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">
+              {form.currency === 'EUR' ? '€' : '$'}
+            </span>
+            <input
+              type="number"
+              step="0.01"
+              value={form.balance}
+              onChange={e => setForm({ ...form, balance: parseFloat(e.target.value) || 0 })}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors font-mono"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -181,7 +187,11 @@ export function Banks() {
               </thead>
               <tbody className="divide-y divide-gray-700/50">
                 {banks.map((b: any) => (
-                  <tr key={b.id} className="hover:bg-gray-700/30 transition-colors">
+                  <tr 
+                    key={b.id} 
+                    onDoubleClick={() => openEdit(b)}
+                    className="hover:bg-gray-700/30 transition-colors cursor-pointer"
+                  >
                     <td className="px-6 py-4 font-medium text-gray-200">{b.accountName}</td>
                     <td className="px-6 py-4 text-gray-300">{b.bankName}</td>
                     <td className="px-6 py-4 text-gray-400 font-mono">{b.accountNumber}</td>

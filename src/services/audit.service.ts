@@ -41,14 +41,15 @@ interface ChainTip {
 }
 
 interface AuditLogRow {
-  id:          string;
-  userId:      string | null;
-  action:      string;
-  afterState:  string | null;
-  entryHash:   string;
-  prevHash:    string;
-  chainIndex:  number;
-  createdAt:   Date;
+  id:             string;
+  userId:         string | null;
+  action:         string;
+  afterState:     string | null;
+  entryHash:      string;
+  prevHash:       string;
+  chainIndex:     number;
+  timestampToken: string | null;
+  createdAt:      Date;
 }
 
 // ── HMAC-SHA256 helper ───────────────────────────────────────
