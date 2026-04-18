@@ -44,7 +44,7 @@ export async function getBalanceSheet(companyId: string, asOfDate: string): Prom
     LEFT JOIN journal_entries je ON jl.journal_entry_id = je.id
       AND je.company_id = ${companyId}
       AND je.status IN ('posted', 'voided')
-      AND je.entry_date <= ${asOfDate}::date
+      AND je.entry_date <= ${asOfDate}
     WHERE ca.company_id = ${companyId} AND ca.is_active = true
     GROUP BY ca.id
     ORDER BY ca.code ASC

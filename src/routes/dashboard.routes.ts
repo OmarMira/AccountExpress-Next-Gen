@@ -70,7 +70,7 @@ export const dashboardRoutes = new Elysia({ prefix: "/dashboard" })
         and(
           eq(journalEntries.companyId, companyId),
           eq(journalEntries.status, "posted"),
-          lte(journalEntries.entryDate, sql`${today}::date`)
+          lte(journalEntries.entryDate, today)
         )
       )
       .limit(1);

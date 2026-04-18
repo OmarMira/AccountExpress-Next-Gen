@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Settings as SettingsIcon, Building, Users, Calendar, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff, Trash2, FileText, Clock, Search, Filter } from 'lucide-react';
+import { Settings as SettingsIcon, Building, Users, Calendar, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff, Trash2, FileText, Clock, Search, Download } from 'lucide-react';
 import { BackupPanel } from '../components/BackupPanel';
 
 export function Settings() {
@@ -279,6 +279,33 @@ export function Settings() {
   });
 
   // (Backup Hooks have been migrated to BackupPanel component)
+  
+  const handleDownloadIntegrityReport = async () => {
+    try {
+      const data = await fetchApi('/audit/integrity-report');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `integrity-report-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      setNotification({
+        title: 'Reporte Generado',
+        message: 'El reporte de integridad criptográfica se ha descargado exitosamente.',
+        type: 'success'
+      });
+    } catch (err: any) {
+      setNotification({
+        title: 'Error de Auditoría',
+        message: err.message || 'No se pudo generar el reporte de integridad',
+        type: 'error'
+      });
+    }
+  };
+
   const [tempAuditFilters, setTempAuditFilters] = useState({
     userId: '',
     date: '', // Permite ver todo si está vacío
@@ -287,7 +314,7 @@ export function Settings() {
   });
   const [appliedAuditFilters, setAppliedAuditFilters] = useState(tempAuditFilters);
 
-  const { data: auditLogsData, isLoading: isLoadingAudit, refetch: refetchAudit } = useQuery({
+  const { data: auditLogsData, isLoading: isLoadingAudit } = useQuery({
     queryKey: ['audit-logs', activeCompany?.id, appliedAuditFilters],
     queryFn: async () => {
       const q = new URLSearchParams();
@@ -305,7 +332,7 @@ export function Settings() {
 
   const [selectedLog, setSelectedLog] = useState<any>(null);
 
-  const getHumanReadableAction = (action: string, module: string) => {
+  const getHumanReadableAction = (action: string) => {
     const map: Record<string, string> = {
       'session:select_company': 'Cambio de empresa activa',
       'user:login': 'Inicio de sesión',
@@ -794,8 +821,8 @@ export function Settings() {
                       )}
                     </div>
                     <div className="space-y-1 text-sm text-gray-400 mb-6">
-                      <p>Inicio: <span className="text-gray-300">{p.start_date.substring(0,10)}</span></p>
-                      <p>Fin: <span className="text-gray-300">{p.end_date.substring(0,10)}</span></p>
+                      <p>Inicio: <span className="text-gray-300">{(p.startDate || p.start_date || '').substring(0,10)}</span></p>
+                      <p>Fin: <span className="text-gray-300">{(p.endDate || p.end_date || '').substring(0,10)}</span></p>
                     </div>
                     
                     {p.status === 'open' && (
@@ -856,6 +883,12 @@ export function Settings() {
                     className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all shadow-lg shadow-indigo-600/20"
                   >
                     <Search className="w-4 h-4" /> Buscar / Actualizar
+                  </button>
+                  <button 
+                    onClick={handleDownloadIntegrityReport}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition-all shadow-lg shadow-emerald-500/20 ml-2"
+                  >
+                    <Download className="w-4 h-4" /> Reporte de Integridad
                   </button>
                 </div>
               </div>
@@ -949,7 +982,7 @@ export function Settings() {
                             <span className="px-2 py-0.5 rounded bg-gray-700 text-gray-300 text-[10px] font-bold uppercase">{log.module}</span>
                           </td>
                           <td className="py-3 px-4 text-gray-200 font-medium">
-                            {getHumanReadableAction(log.action, log.module)}
+                            {getHumanReadableAction(log.action)}
                           </td>
                         </tr>
                       ))
@@ -1185,7 +1218,7 @@ export function Settings() {
               <div>
                 <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">Acción</p>
                 <div className="bg-indigo-500/5 border border-indigo-500/20 p-4 rounded-xl">
-                  <p className="text-indigo-100 text-lg font-semibold">{getHumanReadableAction(selectedLog.action, selectedLog.module)}</p>
+                  <p className="text-indigo-100 text-lg font-semibold">{getHumanReadableAction(selectedLog.action)}</p>
                 </div>
               </div>
 

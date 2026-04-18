@@ -9,6 +9,7 @@ import { authMiddleware } from "./middleware/auth.middleware.ts";
 import { authRoutes }          from "./routes/auth.routes.ts";
 import { bankAccountsRoutes } from './routes/bank-accounts.routes.ts';
 import { companiesRoutes }     from "./routes/companies.routes.ts";
+import { bankRulesRouter }    from "./routes/bank-rules.routes.ts";
 import { journalRoutes }       from "./routes/journal.routes.ts";
 import { fiscalPeriodsRoutes } from "./routes/fiscal-periods.routes.ts";
 import { auditRoutes }         from "./routes/audit.routes.ts";
@@ -51,6 +52,7 @@ export const app = new Elysia()
     .use(auditRoutes)
     .use(bankRoutes)
     .use(bankAccountsRoutes)
+    .use(bankRulesRouter)
     .use(reportsRoutes)
     .use(glAccountsRoutes)
     .use(dashboardRoutes)

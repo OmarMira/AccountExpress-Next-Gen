@@ -70,7 +70,7 @@ export class BackupScheduler {
     try {
       const result = await this.backupService.createBackup(tempPassword);
       filename = result.filename;
-      await this.backupService.pruneOldBackups(30);
+      await this.backupService.pruneOldBackups();
       
       await createAuditEntry({
         companyId: null,
@@ -103,7 +103,7 @@ export class BackupScheduler {
 
   async runNow(password: string): Promise<void> {
     await this.backupService.createBackup(password);
-    await this.backupService.pruneOldBackups(30);
+    await this.backupService.pruneOldBackups();
   }
 
   async setSchedule(hourUTC: number): Promise<void> {

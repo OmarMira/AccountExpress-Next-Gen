@@ -152,6 +152,7 @@ export const bankTransactions = pgTable("bank_transactions", {
     .references(() => users.id),
   matchedAt: timestamp("matched_at", { withTimezone: true }),
   importBatchId: text("import_batch_id"),
+  appliedRuleId: text("applied_rule_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => ({
   idxBtCompanyStatus: index("idx_bt_company_status").on(table.companyId, table.status),

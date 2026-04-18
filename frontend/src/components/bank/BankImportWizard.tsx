@@ -28,6 +28,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useQuery } from '@tanstack/react-query';
 import { fetchApi } from '../../lib/api';
 import type { ParsedBankStatement } from '../../services/pdf-bank-parser';
+import { AutoMatchButton } from './AutoMatchButton';
 
 // ── Sub-components ────────────────────────────────────────────
 
@@ -111,6 +112,17 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
     enabled: !!activeCompany?.id,
   });
   const glAccounts = glAccountsData || [];
+
+  const { data: openPeriodsData } = useQuery({
+    queryKey: ['open-periods', activeCompany?.id],
+    queryFn: () => fetchApi(`/fiscal-periods?companyId=${activeCompany?.id}&status=open`),
+    enabled: !!activeCompany?.id,
+  });
+  const activePeriodId: string | null = Array.isArray(openPeriodsData)
+    ? (openPeriodsData[0]?.id ?? null)
+    : null;
+
+  const [importedBankAccountId, setImportedBankAccountId] = useState<string | null>(null);
 
   const [step, setStep] = useState<Step>('upload');
   const [files, setFiles] = useState<File[]>([]);
@@ -323,6 +335,11 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
         bankName: csvBankName,
         accountNumber: csvAccountNumber,
       });
+
+      const firstTx = allCsvTxns[0] as any;
+      if (firstTx?.bankAccount || firstTx?.bank_account) {
+        setImportedBankAccountId(firstTx.bankAccount ?? firstTx.bank_account ?? null);
+      }
     }
 
     setLoading(false);
@@ -338,25 +355,38 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
 
     try {
       // 1. Create bank account
-      const bankAccountRes = await fetch('/api/bank-accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          companyId: activeCompany?.id,
-          accountName: `${group.bankName} - ${group.accountNumber}`,
-          bankName: group.bankName,
-          accountNumber: group.accountNumber,
-          accountType: group.accountType,
-          balance: group.earliestBalance,
-          currency: 'USD',
-        }),
-      });
-      const bankAccountData = await bankAccountRes.json();
-      if (!bankAccountRes.ok) {
-        throw new Error(bankAccountData?.error ?? 'Error al crear la cuenta bancaria');
-      }
-      const createdBankAccountId: string = bankAccountData.id;
+      // Check if bank account already exists for this company + account number
+      const checkRes = await fetch(
+        `/api/bank-accounts?companyId=${activeCompany?.id}`,
+        { credentials: 'include' }
+      );
+      const existingAccounts = await checkRes.json();
+      const existing = (Array.isArray(existingAccounts) ? existingAccounts : existingAccounts.data ?? [])
+        .find((a: any) => a.accountNumber === group.accountNumber || a.account_number === group.accountNumber);
+
+      const createdBankAccountId: string = existing
+        ? (existing.id)
+        : await (async () => {
+            const bankAccountRes = await fetch('/api/bank-accounts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                companyId: activeCompany?.id,
+                accountName: `${group.bankName} - ${group.accountNumber}`,
+                bankName: group.bankName,
+                accountNumber: group.accountNumber,
+                accountType: group.accountType,
+                balance: group.earliestBalance,
+                currency: 'USD',
+              }),
+            });
+            const bankAccountData = await bankAccountRes.json();
+            if (!bankAccountRes.ok) {
+              throw new Error(bankAccountData?.error ?? 'Error al crear la cuenta bancaria');
+            }
+            return bankAccountData.id as string;
+          })();
 
       // 2. Import all transactions in chronological order
       const allTransactions = group.statements
@@ -424,6 +454,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
         bankName: group.bankName,
         accountNumber: group.accountNumber,
       });
+      setImportedBankAccountId(createdBankAccountId);
 
       // 4. Advance to next group or finish
       if (index + 1 < statementGroups.length) {
@@ -773,19 +804,26 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
                     setImportSummary(null);
                     setInfo(null);
                     setError(null);
+                    setImportedBankAccountId(null);
                   }}
                   className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 border border-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors hover:bg-slate-800 hover:text-white"
                 >
                   <ArrowRight className="w-4 h-4 rotate-180" />
                   Nueva importación
                 </button>
-                <button
-                  onClick={onComplete}
-                  className="flex items-center gap-2 px-8 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg transition-colors shadow-lg shadow-indigo-500/20"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  Finalizar y cerrar
-                </button>
+                <div className="flex items-center gap-4">
+                  <AutoMatchButton
+                    bankAccountId={importedBankAccountId}
+                    periodId={activePeriodId}
+                  />
+                  <button
+                    onClick={onComplete}
+                    className="flex items-center gap-2 px-8 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-lg transition-colors shadow-lg"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    Finalizar y cerrar
+                  </button>
+                </div>
               </div>
             </div>
           )}

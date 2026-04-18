@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Landmark,
   ArrowLeftRight,
+  Gavel,
 } from 'lucide-react';
 
 export function AppShell() {
@@ -37,6 +38,7 @@ export function AppShell() {
     { name: 'Diario Contable', path: '/journal', icon: Receipt, module: 'journal', action: 'read' },
     { name: 'Cuentas Bancarias', path: '/banks', icon: Landmark, module: 'banking', action: 'read' },
     { name: 'Conciliación Bancaria', path: '/reconciliation', icon: ArrowLeftRight, module: 'banking', action: 'read' },
+    { name: 'Reglas Bancarias', path: '/bank-rules', icon: Gavel, module: 'banking', action: 'read' },
     { name: 'Reportes', path: '/reports', icon: FileText, module: 'reports', action: 'read' },
     { name: 'Exportar para CPA', path: '/export', icon: Download, module: 'reports', action: 'read' },
   ];

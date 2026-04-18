@@ -11,6 +11,7 @@ import { Reports } from './pages/Reports';
 import { CpaExport } from './pages/CpaExport';
 import { Settings } from './pages/Settings';
 import { Banks } from './pages/Banks';
+import { BankRules } from './pages/BankRules';
 import { Users } from './pages/Users';
 import { Onboarding } from './pages/Onboarding';
 import { SuperAdminGuard } from './components/SuperAdminGuard';
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="/journal" element={<Journal />} />
           <Route path="/banks" element={<Banks />} />
           <Route path="/reconciliation" element={<BankReconciliation />} />
+          <Route path="/bank-rules" element={<BankRules />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/export" element={<CpaExport />} />
           <Route path="/settings" element={<Settings />} />

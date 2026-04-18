@@ -1,11 +1,15 @@
 // ============================================================
 // BANK ROUTES — PostgreSQL 16 / Drizzle ORM
+// Security: companyId is ALWAYS extracted from the session,
+// never from the request body or query parameters.
 // ============================================================
 
 import { Elysia, t } from "elysia";
 import { statementImportService } from "../services/bank/statement-import.service.ts";
 import { suggestAccountBatch } from "../services/bank/smart-match.service.ts";
 import { matchTransaction, ignoreTransaction } from "../services/bank/reconciliation.service.ts";
+import { runAutoMatch, runGroupMatch } from "../services/bank/auto-match.service.ts";
+import { createAuditEntry } from "../services/audit.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
@@ -17,12 +21,17 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(authMiddleware)
   .guard({ beforeHandle: requireAuth })
   // ─────────────────────────────────────────────────────────────
-  // 1. IMPORT CSV (bank:create)
+  // 1. IMPORT CSV / OFX / QFX (bank:create)
   // ─────────────────────────────────────────────────────────────
   .use(requirePermission("bank", "create"))
   .post(
     "/import",
-    async ({ body, set }) => {
+    async ({ body, companyId, set }) => {
+      if (!companyId) {
+        set.status = 403;
+        return { error: "No active company in session." };
+      }
+
       const file = body.file as File;
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
@@ -33,7 +42,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       }
 
       const result = await statementImportService.processFile(
-        body.companyId,
+        companyId,
         body.bankAccountId ?? "",
         buffer,
         file.name
@@ -44,7 +53,6 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       body: t.Object({
         file: t.File(),
         bankAccountId: t.Optional(t.String()),
-        companyId: t.String()
       })
     }
   )
@@ -54,9 +62,14 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   // ─────────────────────────────────────────────────────────────
   .post(
     "/import-parsed",
-    async ({ body, set }) => {
+    async ({ body, companyId, set }) => {
+      if (!companyId) {
+        set.status = 403;
+        return { error: "No active company in session." };
+      }
+
       const result = await statementImportService.processParsedBatch(
-        body.companyId,
+        companyId,
         body.bankAccountId ?? undefined,
         body.transactions,
         body.bankName ?? undefined,
@@ -78,7 +91,6 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         accountNumber: t.Optional(t.String()),
         fileName: t.String(),
         importBatchId: t.String(),
-        companyId: t.String()
       })
     }
   )
@@ -89,8 +101,13 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(requirePermission("bank", "read"))
   .get(
     "/transactions",
-    async ({ query }) => {
-      const conditions = [eq(bankTransactions.companyId, query.companyId)];
+    async ({ query, companyId, set }) => {
+      if (!companyId) {
+        set.status = 403;
+        return { error: "No active company in session." };
+      }
+
+      const conditions = [eq(bankTransactions.companyId, companyId)];
       if (query.status) {
         conditions.push(eq(bankTransactions.status, query.status));
       }
@@ -102,7 +119,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         .orderBy(sql`${bankTransactions.transactionDate} DESC`);
 
       const descriptions = txs.map(tx => tx.description);
-      const suggestionMap = await suggestAccountBatch(query.companyId, descriptions);
+      const suggestionMap = await suggestAccountBatch(companyId, descriptions);
       const enriched = txs.map(tx => {
         const suggestions = suggestionMap.get(tx.description) ?? [];
         return {
@@ -117,7 +134,6 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     },
     {
       query: t.Object({
-        companyId: t.String(),
         status: t.Optional(t.String())
       })
     }
@@ -129,31 +145,40 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .use(requirePermission("bank", "read"))
   .get(
     "/suggest",
-    async ({ query }) => {
-      const suggestionMap = await suggestAccountBatch(query.companyId, [query.description]);
+    async ({ query, companyId, set }) => {
+      if (!companyId) {
+        set.status = 403;
+        return { error: "No active company in session." };
+      }
+
+      const suggestionMap = await suggestAccountBatch(companyId, [query.description]);
       return { success: true, data: suggestionMap.get(query.description) ?? [] };
     },
     {
       query: t.Object({
-        companyId: t.String(),
         description: t.String()
       })
     }
   )
 
   // ─────────────────────────────────────────────────────────────
-  // 4. RECONCILE (bank:reconcile)
+  // 4. RECONCILE (bank:approve)
   // ─────────────────────────────────────────────────────────────
   .use(requirePermission("bank", "approve"))
   .post(
     "/reconcile/:id",
-    async ({ params, body, request, set, user, sessionId }) => {
+    async ({ params, body, request, companyId, set, user, sessionId }) => {
+      if (!companyId) {
+        set.status = 403;
+        return { error: "No active company in session." };
+      }
+
       const uid = user!;
       const sid = sessionId!;
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
       const draftId = await matchTransaction(
-        body.companyId,
+        companyId,
         params.id,
         body.targetAccountId,
         body.bankAccountId,
@@ -162,7 +187,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         sid,
         ip
       );
-      
+
       return { success: true, journalEntryId: draftId };
     },
     {
@@ -170,7 +195,6 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         id: t.String()
       }),
       body: t.Object({
-        companyId: t.String(),
         targetAccountId: t.String(),
         bankAccountId: t.String(),
         periodId: t.String()
@@ -184,53 +208,112 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
   .group("", app => app
     .use(requirePermission("bank", "approve"))
     .post(
-    "/ignore/:id",
-    async ({ params, body, request, set, user }) => {
-      const uid = user!;
-      const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+      "/ignore/:id",
+      async ({ params, body, request, companyId, set, user }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
 
-      await ignoreTransaction(body.companyId, params.id, uid, ip);
-      return { success: true };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      body: t.Object({ companyId: t.String() })
-    }
-  )
+        const uid = user!;
+        const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
-  // ─────────────────────────────────────────────────────────────
-  // 6. ASSIGN GL ACCOUNT
-  // ─────────────────────────────────────────────────────────────
-  .patch(
-    "/transactions/:id/assign",
-    async ({ params, body, set }) => {
-      const [existing] = await db
-        .select({ id: bankTransactions.id })
-        .from(bankTransactions)
-        .where(
-          and(
-            eq(bankTransactions.id, params.id),
-            eq(bankTransactions.companyId, body.companyId)
-          )
-        )
-        .limit(1);
-
-      if (!existing) {
-        set.status = 404;
-        return { error: "Transacción no encontrada" };
+        await ignoreTransaction(companyId, params.id, uid, ip);
+        return { success: true };
+      },
+      {
+        params: t.Object({ id: t.String() }),
+        body: t.Object({})
       }
+    )
 
-      await db.update(bankTransactions)
-        .set({ glAccountId: body.glAccountId, status: "assigned" })
-        .where(eq(bankTransactions.id, params.id));
+    // ─────────────────────────────────────────────────────────
+    // 6. ASSIGN GL ACCOUNT
+    // ─────────────────────────────────────────────────────────
+    .patch(
+      "/transactions/:id/assign",
+      async ({ params, body, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
 
-      return { success: true, message: "Cuenta asignada" };
-    },
-    {
-      params: t.Object({ id: t.String() }),
-      body: t.Object({
-        companyId: t.String(),
-        glAccountId: t.String()
-      })
-    }
-  ));
+        const [existing] = await db
+          .select({ id: bankTransactions.id })
+          .from(bankTransactions)
+          .where(
+            and(
+              eq(bankTransactions.id, params.id),
+              eq(bankTransactions.companyId, companyId)
+            )
+          )
+          .limit(1);
+
+        if (!existing) {
+          set.status = 404;
+          return { error: "Transacción no encontrada" };
+        }
+
+        await db.update(bankTransactions)
+          .set({ glAccountId: body.glAccountId, status: "assigned" })
+          .where(eq(bankTransactions.id, params.id));
+
+        return { success: true, message: "Cuenta asignada" };
+      },
+      {
+        params: t.Object({ id: t.String() }),
+        body: t.Object({
+          glAccountId: t.String()
+        })
+      }
+    )
+
+    // ─────────────────────────────────────────────────────────
+    // 7. AUTO-MATCH (bank:approve)
+    // ─────────────────────────────────────────────────────────
+    .post(
+      "/auto-match",
+      async ({ body, companyId, user, sessionId, request, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
+
+        const uid = user!;
+        const sid = sessionId!;
+        const ip  = request.headers.get("x-forwarded-for") ?? "unknown";
+
+        const l1 = await runAutoMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip);
+        const l2 = await runGroupMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip);
+
+        await createAuditEntry({
+          companyId,
+          userId:      uid,
+          sessionId:   sid,
+          action:      "bank:auto_match",
+          module:      "bank",
+          entityType:  "bank_account",
+          entityId:    body.bankAccountId,
+          beforeState: null,
+          afterState: {
+            level1: { matched: l1.matched, pending: l1.pending },
+            level2: { matched: l2.matched, pending: l2.pending },
+          },
+          ipAddress: ip,
+        });
+
+        return {
+          success: true,
+          matched: l1.matched + l2.matched,
+          pending: l2.pending,
+          errors:  [...l1.errors, ...l2.errors],
+        };
+      },
+      {
+        body: t.Object({
+          bankAccountId: t.String(),
+          periodId:      t.String(),
+        })
+      }
+    )
+  );

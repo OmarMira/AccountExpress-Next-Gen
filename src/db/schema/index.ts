@@ -27,6 +27,9 @@ export {
   bankTransactions,
 } from "./accounting.schema.ts";
 export {
+  bankRules,
+} from "./bank-rules.schema.ts";
+export {
   bankAccounts,
   bankTransactionGroups,
   bankTransactionGroupItems,

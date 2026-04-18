@@ -31,6 +31,9 @@ export async function runMigrations(): Promise<void> {
   const migrationClient = postgres(connectionString, { max: 1 });
   const migrationDb = drizzle(migrationClient);
 
+  // Enable pg_trgm for fuzzy text similarity matching
+  await migrationDb.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
+
   // Run Drizzle Kit migrations
   await migrate(migrationDb, {
     migrationsFolder: join(__dirname, "../../drizzle/migrations"),

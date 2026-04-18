@@ -31,5 +31,12 @@ export const INDEXES: string[] = [
 
   `CREATE INDEX IF NOT EXISTS idx_audit_logs_chain
      ON audit_logs(chain_index)`,
+
+  // ── pg_trgm fuzzy matching (smart-match engine) ───────────────────────
+  `CREATE INDEX IF NOT EXISTS idx_bank_tx_description_trgm
+     ON bank_transactions USING gin(description gin_trgm_ops)`,
+
+  `CREATE INDEX IF NOT EXISTS idx_coa_name_trgm
+     ON chart_of_accounts USING gin(name gin_trgm_ops)`,
 ];
 

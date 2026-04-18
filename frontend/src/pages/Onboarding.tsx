@@ -34,7 +34,7 @@ export function Onboarding() {
     try {
       // In a real scenario, we might need a specific endpoint to create and assign
       // but here we use the standard POST /companies assuming superadmin auth
-      const companyResponse = await fetchApi('/companies', {
+      await fetchApi('/companies', {
         method: 'POST',
         body: JSON.stringify({
           legalName: formData.legalName,

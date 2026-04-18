@@ -11,6 +11,7 @@ import { bankTransactions } from "../../db/schema/accounting.schema.ts";
 import { bankAccounts } from "../../db/schema/bank-accounts.schema.ts";
 import { and, eq } from "drizzle-orm";
 import { randomUUID, createHash } from "node:crypto";
+import { BankRulesService } from "./bank-rules.service";
 
 export interface ParsedTransaction {
     date: string;
@@ -288,6 +289,12 @@ class StatementImportService {
             if (existing.length > 0) {
                 duplicates++;
             } else {
+                // Apply Bank Rules Engine
+                const matchingRule = await BankRulesService.findMatchingRule(companyId, {
+                    description: t.description,
+                    transactionType: t.amount < 0 ? 'debit' : 'credit'
+                });
+
                 await db.insert(bankTransactions).values({
                     id: randomUUID(),
                     companyId,
@@ -298,7 +305,9 @@ class StatementImportService {
                     transactionType: t.amount < 0 ? 'debit' : 'credit',
                     // Store the fingerprint as referenceNumber when no real one is provided
                     referenceNumber: t.referenceNumber ?? fingerprint,
-                    status: 'pending',
+                    status: matchingRule ? 'assigned' : 'pending',
+                    glAccountId: matchingRule?.glAccountId ?? null,
+                    appliedRuleId: matchingRule?.id ?? null,
                     importBatchId: batchId,
                     createdAt: new Date(),
                 });

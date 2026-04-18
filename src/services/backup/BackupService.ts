@@ -1,4 +1,5 @@
 import { encryptFile, decryptFile, hashFile } from './crypto.service';
+import { stampChain } from '../audit/timestamp.service.ts';
 import { readdir, stat, unlink, mkdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { spawn } from 'child_process';
@@ -11,6 +12,8 @@ import { logger } from '../../lib/logger.ts';
 import { env } from '../../config/validate.ts';
 
 const pipelineAsync = promisify(pipeline);
+
+const RETENTION_DAYS = 2555; // IRS 7-year retention requirement (7 * 365)
 
 export interface BackupResult {
   filename: string;
@@ -100,11 +103,21 @@ export class BackupService {
     // 3. Calcular hash de integridad ANTES de encriptar
     const auditHash = await hashFile(tempGzPath);
 
+    // RFC 3161 timestamp token — provides cryptographic proof of backup creation time.
+    // FreeTSA is an external service; failure must not block the backup.
+    let rfc3161Token: string | null = null;
+    try {
+      rfc3161Token = await stampChain(auditHash);
+    } catch (e) {
+      logger.warn("BackupService", "RFC 3161 timestamping failed — backup will proceed without token", e);
+    }
+
     // 4. Encriptar el archivo comprimido con el hash en los metadatos
     const encryptedPath = await encryptFile(tempGzPath, password, {
       createdAt: now.toISOString(),
       auditHash,
-      format: 'postgresql-gzip'
+      format: 'postgresql-gzip',
+      rfc3161Token,
     });
 
     // 5. Mover al destino final y limpiar archivos temporales
@@ -191,15 +204,17 @@ export class BackupService {
     return { success: true, message: "Base de datos PostgreSQL restaurada e íntegra." };
   }
 
-  async pruneOldBackups(keepCount: number = 30): Promise<void> {
+  async pruneOldBackups(retentionDays: number = RETENTION_DAYS): Promise<void> {
+    const cutoff  = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
     const backups = await this.listBackups(1000);
-    if (backups.length <= keepCount) return;
-    
-    const toDelete = backups.slice(keepCount);
-    for (const b of toDelete) {
-      await unlink(join(BACKUPS_DIR, b.filename)).catch((e) => {
-        logger.error("BackupService", "Error deleting backup file durante prune", e);
-      });
+
+    for (const b of backups) {
+      const backupDate = new Date(b.createdAt);
+      if (backupDate < cutoff) {
+        await unlink(join(BACKUPS_DIR, b.filename)).catch((e) => {
+          logger.error("BackupService", "Error deleting backup file durante prune", e);
+        });
+      }
     }
   }
 

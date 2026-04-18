@@ -60,6 +60,26 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
     })
   })
 
+  // GET /audit/integrity-report — forensic integrity report (JSON download)
+  .get("/integrity-report", async ({ set }) => {
+    const chainResult = await verifyAuditChain();
+
+    const [countRow] = await db.execute(sql`SELECT COUNT(*) AS total FROM audit_logs`) as { total: string }[];
+    const [lastRow]  = await db.execute(sql`SELECT created_at FROM audit_logs ORDER BY chain_index DESC LIMIT 1`) as { created_at: string }[];
+
+    const report = {
+      generatedAt:    new Date().toISOString(),
+      chainIntegrity: chainResult.valid,
+      totalEntries:   parseInt(countRow?.total ?? "0", 10),
+      lastEntryAt:    lastRow?.created_at ?? null,
+      details:        chainResult,
+    };
+
+    set.headers["Content-Type"]        = "application/json";
+    set.headers["Content-Disposition"] = `attachment; filename="integrity-report-${Date.now()}.json"`;
+    return report;
+  })
+
   // GET /audit/verify — cryptographic chain validation
   .get("/verify", async () => {
     return await verifyAuditChain();

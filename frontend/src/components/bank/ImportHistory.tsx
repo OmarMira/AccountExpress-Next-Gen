@@ -3,17 +3,28 @@ import { fetchApi } from '../../lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
 import { Database, Clock, ChevronDown } from 'lucide-react';
+import { AutoMatchButton } from './AutoMatchButton';
 
 export const ImportHistory: React.FC = () => {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const queryClient = useQueryClient();
 
+  const companyId = activeCompany?.id;
 
   const { data: transactions, isLoading, error } = useQuery({
-    queryKey: ['bank-transactions-history', activeCompany?.id],
-    queryFn: () => fetchApi(`/bank/transactions?companyId=${activeCompany?.id}`),
-    enabled: !!activeCompany?.id
+    queryKey: ['bank-transactions-history', companyId],
+    queryFn: () => fetchApi(`/bank/transactions?companyId=${companyId}`),
+    enabled: !!companyId
   });
+
+  const { data: openPeriodsData } = useQuery({
+    queryKey: ['open-periods', companyId],
+    queryFn: () => fetchApi(`/fiscal-periods?companyId=${companyId}&status=open`),
+    enabled: !!companyId,
+  });
+  const activePeriodId: string | null = Array.isArray(openPeriodsData)
+    ? (openPeriodsData[0]?.id ?? null)
+    : null;
 
   const { data: glAccountsData } = useQuery({
     queryKey: ['gl-accounts', activeCompany?.id],
@@ -65,6 +76,9 @@ export const ImportHistory: React.FC = () => {
   const pending = txs.filter((t: any) => t.status === 'pending');
   const rest = txs.filter((t: any) => t.status !== 'pending');
 
+  const firstPendingBankAccountId: string | null =
+    pending[0]?.bankAccount ?? pending[0]?.bank_account ?? null;
+
   const renderTable = (rows: any[], showAssign: boolean) => (
     <div className="bg-slate-950 border-2 border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl mb-6">
       <div className="max-h-[500px] overflow-y-auto">
@@ -93,11 +107,16 @@ export const ImportHistory: React.FC = () => {
                 <td className="px-6 py-4 text-center">
                   <span className={`inline-flex px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border ${
                     t.status === 'reconciled' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                    : t.appliedRuleId ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
                     : t.status === 'assigned' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                     : t.status === 'ignored' ? 'bg-slate-800 text-slate-400 border-slate-700'
                     : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
                   }`}>
-                    {t.status === 'reconciled' ? 'Conciliado' : t.status === 'assigned' ? 'Asignado' : t.status === 'ignored' ? 'Ignorado' : 'Pendiente'}
+                    {t.status === 'reconciled' ? 'Conciliado' 
+                      : t.appliedRuleId ? 'Regla Aplicada'
+                      : t.status === 'assigned' ? 'Asignado' 
+                      : t.status === 'ignored' ? 'Ignorado' 
+                      : 'Pendiente'}
                   </span>
                 </td>
                 <td className="px-6 py-4">
@@ -136,6 +155,13 @@ export const ImportHistory: React.FC = () => {
     </div>
   );
 
+  console.log('[AutoMatch Debug]', {
+    firstPendingBankAccountId,
+    activePeriodId,
+    pendingCount: pending.length,
+    firstPending: pending[0],
+  });
+
   return (
     <div className="bg-slate-900 border-2 border-slate-800 rounded-[3.5rem] shadow-3xl overflow-hidden relative">
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/5 blur-[120px] pointer-events-none"></div>
@@ -164,10 +190,16 @@ export const ImportHistory: React.FC = () => {
           <>
             {pending.length > 0 && (
               <div className="mb-8">
-                <h4 className="text-xs font-black text-amber-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
-                  Pendientes de asignación ({pending.length})
-                </h4>
+                <div className="mb-4 flex items-center justify-between">
+                  <h4 className="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
+                    Pendientes de asignación ({pending.length})
+                  </h4>
+                  <AutoMatchButton
+                    bankAccountId={firstPendingBankAccountId}
+                    periodId={activePeriodId}
+                  />
+                </div>
                 {renderTable(pending, true)}
               </div>
             )}

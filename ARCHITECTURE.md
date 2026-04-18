@@ -99,3 +99,40 @@ Este protocolo es de cumplimiento estricto para Antigravity en cada interacción
 
 **Solución aplicada:** Se eliminó la llamada a `runMigrations()` dentro de `runSeed()`. Cuando `seed.ts` se ejecuta directamente (`import.meta.main`), las migraciones se corren antes de invocar `runSeed()`. Cuando se importa desde `index.ts`, `index.ts` ya corrió `runMigrations()` previamente.
 
+---
+
+## Deployment Security Requirements
+
+These requirements are mandatory before any production deployment.
+
+### TLS 1.3
+
+TLS termination is the responsibility of the reverse proxy (nginx or Caddy).
+The application server (Bun/Elysia) must never be exposed directly to the internet.
+
+Minimum nginx TLS configuration:
+
+```nginx
+ssl_protocols TLSv1.3;
+ssl_prefer_server_ciphers off;
+ssl_session_timeout 1d;
+ssl_session_cache shared:SSL:10m;
+ssl_stapling on;
+ssl_stapling_verify on;
+```
+
+### AES-256 encryption at rest
+
+PostgreSQL data encryption at rest is the responsibility of the hosting provider
+or server administrator. For self-hosted deployments, enable filesystem-level
+encryption (LUKS on Linux) before initializing the PostgreSQL data directory.
+Alternatively, use `pgcrypto` for column-level encryption on high-sensitivity
+fields such as `users.password_hash` and `sessions`.
+
+### Compliance note
+
+No production deployment should occur without both TLS 1.3 and encryption at
+rest active. Failure to comply violates the IRS data security requirements
+applicable to systems storing financial records subject to 7-year retention.
+
+

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { fetchApi } from '../../lib/api';
-import { ShieldCheck, Lock, Unlock, Trash2, Pencil, Search, Plus, UserPlus, X, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Lock, Unlock, Trash2, Pencil, Search, UserPlus, X } from 'lucide-react';
 
 interface AdminUser {
   id: string;
@@ -103,7 +103,7 @@ export function AdminUsers() {
         // For now, let's assume we need to provide a valid companyId from the user's focus or a list.
         // If we don't have one, this might fail unless we pick a default.
         // Let's assume most users have at least one company or we can get it from sessions.
-        const res = await fetchApi('/users', {
+        await fetchApi('/users', {
           method: 'POST',
           body: JSON.stringify({
             ...formData,
