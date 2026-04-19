@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
+import { Plus, Search, Trash2, FolderTree, AlertCircle, Pencil, Printer } from 'lucide-react';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { PermissionGate } from '../components/PermissionGate';
-import { Plus, Search, Trash2, FolderTree, AlertCircle, Pencil } from 'lucide-react';
 
 import type { Account } from '../components/accounts/types';
 import { BALANCE_LABELS } from '../components/accounts/constants';
@@ -21,6 +22,7 @@ export function Accounts() {
   const [editParentCode, setEditParentCode] = useState('');
   const [formError, setFormError] = useState('');
   const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, isDangerous?: boolean} | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const [formData, setFormData] = useState({
     code: '', name: '', accountType: 'asset', normalBalance: 'debit',
     parentCode: '', description: '',
@@ -278,6 +280,12 @@ export function Accounts() {
               className="w-full sm:w-64 pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors placeholder:text-gray-500"
             />
           </div>
+          <button
+            onClick={() => setShowPrintModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors border border-gray-700"
+          >
+            <Printer className="w-4 h-4" /> Imprimir Plan
+          </button>
           <PermissionGate module="accounts" action="create">
             <button
               onClick={() => setShowModal(true)}
@@ -354,6 +362,27 @@ export function Accounts() {
         isDangerous={confirmDialog?.isDangerous}
         onConfirm={confirmDialog?.onConfirm || (() => {})}
         onCancel={() => setConfirmDialog(null)}
+      />
+
+      {/* --- Print Preview Modal --- */}
+      <PrintPreviewModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        title="Plan de Cuentas (Nomenclatura)"
+        config={{
+          moduleName: 'accounts',
+          searchByDescription: true,
+          columnSelector: true,
+          mandatoryColumns: ['code', 'name']
+        }}
+        columns={[
+          { key: 'code', label: 'Código', align: 'left' },
+          { key: 'name', label: 'Nombre de Cuenta', align: 'left' },
+          { key: 'accountType', label: 'Tipo', align: 'center', format: (val) => val.toUpperCase() },
+          { key: 'normalBalance', label: 'Naturaleza', align: 'center', format: (val) => val === 'debit' ? 'Deudora' : 'Acreedora' },
+          { key: 'description', label: 'Descripción', align: 'left' }
+        ]}
+        data={accounts}
       />
     </div>
   );

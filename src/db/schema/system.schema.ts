@@ -177,8 +177,8 @@ export const sessions = pgTable("sessions", {
   lastActiveAt: timestamp("last_active_at", { withTimezone: true }).notNull(),
   isValid: boolean("is_valid").default(true).notNull(),
 }, (table) => ({
-  idxSessionsUserId:  index("idx_sessions_user_id").on(table.userId),
-  idxSessionsValid:   index("idx_sessions_is_valid").on(table.isValid),
+  idxSessionsUserId: index("idx_sessions_user_id").on(table.userId),
+  idxSessionsValid: index("idx_sessions_is_valid").on(table.isValid),
 }));
 
 // ─────────────────────────────────────────────────────────────
@@ -208,7 +208,7 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => ({
   idxAuditCompanyCreated: index("idx_audit_company_created").on(table.companyId, table.createdAt),
-  idxAuditModule:         index("idx_audit_module").on(table.module),
+  idxAuditModule: index("idx_audit_module").on(table.module),
 }));
 
 // ─────────────────────────────────────────────────────────────

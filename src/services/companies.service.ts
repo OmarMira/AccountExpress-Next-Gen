@@ -5,9 +5,9 @@
 // ============================================================
 
 import { db } from "../db/connection.ts";
-import { 
-  companies, users, userCompanyRoles, roles, 
-  journalEntries, chartOfAccounts, fiscalPeriods, 
+import {
+  companies, users, userCompanyRoles, roles,
+  journalEntries, chartOfAccounts, fiscalPeriods,
   auditLogs, bankAccounts, sessions,
   bankTransactions, bankTransactionGroups, bankTransactionGroupItems
 } from "../db/schema/index.ts";
@@ -36,12 +36,14 @@ export async function listCompanies(userId: string, isSuperAdmin: boolean) {
   }
 
   return db
-    .select({ id: companies.id, legalName: companies.legalName, tradeName: companies.tradeName,
-              ein: companies.ein, address: companies.address, city: companies.city,
-              state: companies.state, zipCode: companies.zipCode, phone: companies.phone,
-              email: companies.email, fiscalYearStart: companies.fiscalYearStart,
-              currency: companies.currency, isActive: companies.isActive,
-              createdAt: companies.createdAt, updatedAt: companies.updatedAt })
+    .select({
+      id: companies.id, legalName: companies.legalName, tradeName: companies.tradeName,
+      ein: companies.ein, address: companies.address, city: companies.city,
+      state: companies.state, zipCode: companies.zipCode, phone: companies.phone,
+      email: companies.email, fiscalYearStart: companies.fiscalYearStart,
+      currency: companies.currency, isActive: companies.isActive,
+      createdAt: companies.createdAt, updatedAt: companies.updatedAt
+    })
     .from(companies)
     .innerJoin(userCompanyRoles, eq(companies.id, userCompanyRoles.companyId))
     .where(
@@ -56,26 +58,26 @@ export async function listCompanies(userId: string, isSuperAdmin: boolean) {
 
 // ── Create Company ───────────────────────────────────────────
 export async function createCompany(input: CompanyInput): Promise<string> {
-  const id  = uuidv4();
+  const id = uuidv4();
   const now = new Date();
 
   await db.transaction(async (tx) => {
     await tx.insert(companies).values({
       id,
-      legalName:       input.legalName,
-      tradeName:       input.tradeName ?? null,
-      ein:             input.ein ?? null,
-      address:         input.address ?? null,
-      city:            input.city ?? null,
-      state:           input.state ?? null,
-      zipCode:         input.zipCode ?? null,
-      phone:           input.phone ?? null,
-      email:           input.email ?? null,
+      legalName: input.legalName,
+      tradeName: input.tradeName ?? null,
+      ein: input.ein ?? null,
+      address: input.address ?? null,
+      city: input.city ?? null,
+      state: input.state ?? null,
+      zipCode: input.zipCode ?? null,
+      phone: input.phone ?? null,
+      email: input.email ?? null,
       fiscalYearStart: input.fiscalYearStart,
-      currency:        input.currency,
-      isActive:        true,
-      createdAt:       now,
-      updatedAt:       now,
+      currency: input.currency,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
     });
     await seedGaapForCompany(id, tx);
   });
@@ -88,17 +90,17 @@ export async function updateCompany(id: string, input: Partial<CompanyInput>): P
   if (!existing) throw new Error("Company not found");
 
   const updates: Partial<typeof companies.$inferInsert> = { updatedAt: new Date() };
-  if (input.legalName      !== undefined) updates.legalName      = input.legalName;
-  if (input.tradeName      !== undefined) updates.tradeName      = input.tradeName ?? null;
-  if (input.ein            !== undefined) updates.ein            = input.ein ?? null;
-  if (input.address        !== undefined) updates.address        = input.address ?? null;
-  if (input.city           !== undefined) updates.city           = input.city ?? null;
-  if (input.state          !== undefined) updates.state          = input.state ?? null;
-  if (input.zipCode        !== undefined) updates.zipCode        = input.zipCode ?? null;
-  if (input.phone          !== undefined) updates.phone          = input.phone ?? null;
-  if (input.email          !== undefined) updates.email          = input.email ?? null;
+  if (input.legalName !== undefined) updates.legalName = input.legalName;
+  if (input.tradeName !== undefined) updates.tradeName = input.tradeName ?? null;
+  if (input.ein !== undefined) updates.ein = input.ein ?? null;
+  if (input.address !== undefined) updates.address = input.address ?? null;
+  if (input.city !== undefined) updates.city = input.city ?? null;
+  if (input.state !== undefined) updates.state = input.state ?? null;
+  if (input.zipCode !== undefined) updates.zipCode = input.zipCode ?? null;
+  if (input.phone !== undefined) updates.phone = input.phone ?? null;
+  if (input.email !== undefined) updates.email = input.email ?? null;
   if (input.fiscalYearStart !== undefined) updates.fiscalYearStart = input.fiscalYearStart;
-  if (input.currency       !== undefined) updates.currency       = input.currency;
+  if (input.currency !== undefined) updates.currency = input.currency;
 
   await db.update(companies).set(updates).where(eq(companies.id, id));
 }
@@ -116,7 +118,7 @@ export async function archiveCompany(id: string): Promise<void> {
 // ── Delete Company (Hard Delete with Cascading User Cleanup) ───
 export async function deleteCompany(id: string): Promise<void> {
   console.log(`[DELETE_COMPANY] Starting purge for company ID: ${id}`);
-  
+
   const [existing] = await db.select({ id: companies.id }).from(companies).where(eq(companies.id, id)).limit(1);
   if (!existing) {
     console.error(`[DELETE_COMPANY] Company ${id} not found`);
@@ -138,8 +140,8 @@ export async function deleteCompany(id: string): Promise<void> {
   }
 
   // 2. Identify users that should be cleaned up
-  const companyUsers = await db.select({ 
-    userId: userCompanyRoles.userId 
+  const companyUsers = await db.select({
+    userId: userCompanyRoles.userId
   }).from(userCompanyRoles).where(eq(userCompanyRoles.companyId, id));
 
   console.log(`[DELETE_COMPANY] Found ${companyUsers.length} users associated with company.`);
@@ -149,7 +151,7 @@ export async function deleteCompany(id: string): Promise<void> {
   for (const item of companyUsers) {
     const uid = item.userId;
     const [uData] = await db.select({ isSuperAdmin: users.isSuperAdmin, username: users.username }).from(users).where(eq(users.id, uid)).limit(1);
-    
+
     if (uData?.isSuperAdmin) {
       console.log(`[DELETE_COMPANY] Skipping user ${uData.username} (Super Admin)`);
       continue;
@@ -185,7 +187,7 @@ export async function deleteCompany(id: string): Promise<void> {
 
   // 3. Execute full cleanup in transaction
   console.log(`[DELETE_COMPANY] Executing transaction for company ${id} and ${usersToDelete.length} associated users.`);
-  
+
   await db.transaction(async (tx) => {
     // A. Clean Banking
     const groupIds = (await tx.select({ id: bankTransactionGroups.id }).from(bankTransactionGroups).where(eq(bankTransactionGroups.companyId, id))).map(g => g.id);
@@ -203,7 +205,7 @@ export async function deleteCompany(id: string): Promise<void> {
     await tx.delete(auditLogs).where(eq(auditLogs.companyId, id));
     await tx.delete(fiscalPeriods).where(eq(fiscalPeriods.companyId, id));
     await tx.delete(userCompanyRoles).where(eq(userCompanyRoles.companyId, id));
-    
+
     // C. Clean Chart of Accounts
     await tx.delete(chartOfAccounts).where(eq(chartOfAccounts.companyId, id));
 
@@ -226,15 +228,15 @@ export async function deleteCompany(id: string): Promise<void> {
 export async function listCompanyUsers(companyId: string) {
   return db
     .select({
-      id:              users.id,
-      username:        users.username,
-      email:           users.email,
-      firstName:       users.firstName,
-      lastName:        users.lastName,
-      roleName:        roles.name,
-      roleActive:      userCompanyRoles.isActive,
-      grantedAt:       userCompanyRoles.grantedAt,
-      revokedAt:       userCompanyRoles.revokedAt,
+      id: users.id,
+      username: users.username,
+      email: users.email,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      roleName: roles.name,
+      roleActive: userCompanyRoles.isActive,
+      grantedAt: userCompanyRoles.grantedAt,
+      revokedAt: userCompanyRoles.revokedAt,
     })
     .from(userCompanyRoles)
     .innerJoin(users, eq(userCompanyRoles.userId, users.id))
@@ -265,15 +267,15 @@ export async function addUserToCompany(
 
   if (existing) throw new Error("User already has an active role in this company");
 
-  const id  = uuidv4();
+  const id = uuidv4();
   const now = new Date();
 
   await db.insert(userCompanyRoles).values({
     id,
-    userId:    targetUserId,
+    userId: targetUserId,
     companyId,
     roleId,
-    isActive:  true,
+    isActive: true,
     grantedBy: grantedByUserId,
     grantedAt: now,
   });
@@ -305,7 +307,7 @@ export async function revokeUserFromCompany(
   const [jeCount] = await db.select({ c: count() })
     .from(journalEntries)
     .where(and(eq(journalEntries.createdBy, targetUserId), eq(journalEntries.companyId, companyId)));
-    
+
   const [btCount] = await db.select({ c: count() })
     .from(bankTransactions)
     .where(and(eq(bankTransactions.matchedBy, targetUserId), eq(bankTransactions.companyId, companyId)));

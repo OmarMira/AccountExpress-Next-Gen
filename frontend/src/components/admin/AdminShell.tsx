@@ -1,10 +1,11 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
-import { Building2, Users, ChevronLeft, LogOut } from 'lucide-react';
+import { Building2, Users, Shield, ChevronLeft, LogOut } from 'lucide-react';
 
 const navItems = [
   { name: 'Empresas', path: '/admin/companies', icon: Building2 },
   { name: 'Usuarios', path: '/admin/users', icon: Users },
+  { name: 'Bitácora', path: '/admin/logs', icon: Shield },
 ];
 
 export function AdminShell() {

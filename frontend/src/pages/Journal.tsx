@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
 import { PermissionGate } from '../components/PermissionGate';
-import { Plus, Search, Trash2, CheckCircle, XCircle, FileText, AlertCircle, X, FileCheck2 } from 'lucide-react';
-import 'lucide-react';
+import { Plus, Search, Trash2, CheckCircle, XCircle, FileText, AlertCircle, X, FileCheck2, Printer } from 'lucide-react';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 
 interface JournalEntry {
   id: string;
@@ -38,11 +38,12 @@ interface DraftLine {
 export function Journal() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const queryClient = useQueryClient();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  
+
   const [showModal, setShowModal] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -51,7 +52,7 @@ export function Journal() {
   const [description, setDescription] = useState('');
   const [reference, setReference] = useState('');
   const [periodId, setPeriodId] = useState('');
-  
+
   const [lines, setLines] = useState<DraftLine[]>([
     { accountId: '', description: '', debitAmount: '', creditAmount: '' },
     { accountId: '', description: '', debitAmount: '', creditAmount: '' }
@@ -181,9 +182,9 @@ export function Journal() {
 
   const filteredEntries = useMemo(() => {
     return entries.filter(e => {
-      const matchSearch = e.entry_number.includes(searchTerm) || 
-                          e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (e.reference && e.reference.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchSearch = e.entry_number.includes(searchTerm) ||
+        e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (e.reference && e.reference.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchStatus = statusFilter ? e.status === statusFilter : true;
       return matchSearch && matchStatus;
     });
@@ -207,20 +208,20 @@ export function Journal() {
           <h1 className="text-2xl font-bold text-white tracking-tight">Diario Contable</h1>
           <p className="text-sm text-gray-400 mt-1">Gestión de asientos y movimientos de doble partida</p>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
           <div className="relative w-full sm:w-48">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Buscar..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500"
             />
           </div>
-          
-          <select 
+
+          <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="w-full sm:w-40 py-2 px-3 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 appearance-none"
@@ -230,9 +231,17 @@ export function Journal() {
             <option value="posted">Publicado</option>
             <option value="voided">Anulado</option>
           </select>
-          
+
+          <button
+            onClick={() => setShowPrintModal(true)}
+            className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors border border-gray-700"
+          >
+            <Printer className="w-4 h-4 text-gray-400" />
+            Imprimir Diario
+          </button>
+
           <PermissionGate module="journal" action="create">
-            <button 
+            <button
               onClick={() => setShowModal(true)}
               className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 whitespace-nowrap"
             >
@@ -245,7 +254,7 @@ export function Journal() {
 
       {loadingEntries ? (
         <div className="space-y-4">
-          {[1,2,3,4].map(i => (
+          {[1, 2, 3, 4].map(i => (
             <div key={i} className="animate-pulse bg-gray-800/50 h-16 rounded-lg border border-gray-700/50" />
           ))}
         </div>
@@ -291,7 +300,7 @@ export function Journal() {
                       <div className="flex items-center justify-end gap-2">
                         {entry.status === 'draft' && (
                           <PermissionGate module="journal" action="approve">
-                            <button 
+                            <button
                               onClick={() => {
                                 if (confirm('¿Publicar asiento? Una vez publicado no podrá ser editado.')) {
                                   postMutation.mutate(entry.id);
@@ -306,7 +315,7 @@ export function Journal() {
                         )}
                         {entry.status === 'posted' && (
                           <PermissionGate module="journal" action="void">
-                            <button 
+                            <button
                               onClick={() => {
                                 if (confirm('¿Anular asiento? Esto creará una reversión automática.')) {
                                   voidMutation.mutate(entry.id);
@@ -342,7 +351,7 @@ export function Journal() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto flex-1">
               {formError && (
                 <div className="mb-6 bg-rose-500/10 border border-rose-500/50 rounded-lg p-3 flex items-start gap-3">
@@ -362,8 +371,8 @@ export function Journal() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div>
                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Fecha</label>
-                    <input 
-                      type="date" 
+                    <input
+                      type="date"
                       required
                       value={entryDate}
                       onChange={e => setEntryDate(e.target.value)}
@@ -372,7 +381,7 @@ export function Journal() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Periodo Fiscal</label>
-                    <select 
+                    <select
                       required
                       disabled={openPeriods.length === 0}
                       value={periodId || openPeriods[0]?.id || ''}
@@ -386,8 +395,8 @@ export function Journal() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Referencia (Opcional)</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={reference}
                       onChange={e => setReference(e.target.value)}
                       placeholder="Factura, cheque..."
@@ -398,8 +407,8 @@ export function Journal() {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Descripción del Asiento</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
                     value={description}
                     onChange={e => setDescription(e.target.value)}
@@ -415,7 +424,7 @@ export function Journal() {
                     <div className="col-span-2 text-right">Débitos</div>
                     <div className="col-span-2 text-right">Créditos</div>
                   </div>
-                  
+
                   <div className="divide-y divide-gray-700/50">
                     {lines.map((line, idx) => (
                       <div key={idx} className="grid grid-cols-12 gap-4 p-4 items-start group">
@@ -434,8 +443,8 @@ export function Journal() {
                           </select>
                         </div>
                         <div className="col-span-4">
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             placeholder="Descripción (opcional)..."
                             value={line.description}
                             onChange={e => updateLine(idx, 'description', e.target.value)}
@@ -443,8 +452,8 @@ export function Journal() {
                           />
                         </div>
                         <div className="col-span-2">
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             min="0" step="0.01"
                             placeholder="0.00"
                             value={line.debitAmount}
@@ -454,8 +463,8 @@ export function Journal() {
                           />
                         </div>
                         <div className="col-span-2 relative">
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             min="0" step="0.01"
                             placeholder="0.00"
                             value={line.creditAmount}
@@ -464,7 +473,7 @@ export function Journal() {
                             disabled={parseFloat(line.debitAmount) > 0}
                           />
                           {lines.length > 2 && (
-                            <button 
+                            <button
                               type="button"
                               onClick={() => removeLine(idx)}
                               className="absolute -right-8 top-1/2 -translate-y-1/2 text-gray-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all p-1"
@@ -478,8 +487,8 @@ export function Journal() {
                   </div>
 
                   <div className="p-4 bg-gray-800/30 border-t border-gray-700/50">
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={addLine}
                       className="text-sm font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-2 transition-colors"
                     >
@@ -500,7 +509,7 @@ export function Journal() {
                       </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-8">
                     <div>
                       <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider text-right mb-1">Total Débitos</p>
@@ -516,18 +525,18 @@ export function Journal() {
 
               </form>
             </div>
-            
+
             <div className="p-6 border-t border-gray-800 bg-gray-900/80 flex justify-end gap-3 shrink-0 rounded-b-2xl">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={closeModal}
                 className="px-6 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
                 disabled={isSubmitting || createMutation.isPending}
               >
                 Cancelar
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 form="journalForm"
                 disabled={isSubmitting || createMutation.isPending || !isBalanced || openPeriods.length === 0}
                 className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-indigo-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -538,6 +547,27 @@ export function Journal() {
           </div>
         </div>
       )}
+    <PrintPreviewModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        title="Libro Diario de Contabilidad"
+        config={{
+          moduleName: 'journal',
+          dateRange: true,
+          searchByDescription: true,
+          columnSelector: true,
+          mandatoryColumns: ['entry_number', 'entry_date', 'total_amount']
+        }}
+        columns={[
+          { key: 'entry_number', label: 'N° Asiento', align: 'left' },
+          { key: 'entry_date', label: 'Fecha', align: 'left' },
+          { key: 'description', label: 'Glosa / Descripción', align: 'left' },
+          { key: 'reference', label: 'Referencia', align: 'left' },
+          { key: 'total_amount', label: 'Monto Total', align: 'right', format: (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: activeCompany?.currency || 'USD' }).format(val) },
+          { key: 'status', label: 'Estado', align: 'center', format: (val) => val === 'posted' ? 'Publicado' : val === 'voided' ? 'Anulado' : 'Borrador' }
+        ]}
+        data={filteredEntries}
+      />
     </div>
   );
 }

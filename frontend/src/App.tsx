@@ -18,6 +18,7 @@ import { SuperAdminGuard } from './components/SuperAdminGuard';
 import { Companies } from './pages/admin/Companies';
 import { CompanyDetail } from './pages/admin/CompanyDetail';
 import { AdminUsers } from './pages/admin/Users';
+import { AuditLogs } from './pages/admin/AuditLogs';
 import { AdminShell } from './components/admin/AdminShell';
 
 export default function App() {
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="/admin/companies" element={<Companies />} />
             <Route path="/admin/companies/:id" element={<CompanyDetail />} />
             <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/logs" element={<AuditLogs />} />
           </Route>
         </Route>
 

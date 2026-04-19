@@ -1,13 +1,15 @@
-
+import React, { useState } from 'react';
 import { fetchApi } from '../../lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../../store/authStore';
-import { Database, Clock, ChevronDown } from 'lucide-react';
+import { Database, Clock, ChevronDown, Printer } from 'lucide-react';
 import { AutoMatchButton } from './AutoMatchButton';
+import { PrintPreviewModal } from '../PrintPreviewModal';
 
 export const ImportHistory: React.FC = () => {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const queryClient = useQueryClient();
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const companyId = activeCompany?.id;
 
@@ -178,6 +180,13 @@ export const ImportHistory: React.FC = () => {
             </p>
           </div>
         </div>
+        <button
+          onClick={() => setShowPrintModal(true)}
+          className="flex items-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-2xl text-sm font-bold transition-all border border-gray-700 shadow-xl"
+        >
+          <Printer className="w-5 h-5 text-gray-400" />
+          Imprimir Registro
+        </button>
       </div>
 
       <div className="p-10 relative z-10">
@@ -214,6 +223,27 @@ export const ImportHistory: React.FC = () => {
           </>
         )}
       </div>
+
+      <PrintPreviewModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        title="Libro de Transacciones Bancarias"
+        config={{
+          moduleName: 'bank_transactions',
+          dateRange: true,
+          searchByDescription: true,
+          columnSelector: true,
+          mandatoryColumns: ['transactionDate', 'description', 'amount']
+        }}
+        columns={[
+          { key: 'transactionDate', label: 'Fecha', align: 'left', format: (val) => formatDate(val) },
+          { key: 'description', label: 'Descripción', align: 'left' },
+          { key: 'amount', label: 'Monto', align: 'right', format: (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: activeCompany?.currency || 'USD' }).format(val) },
+          { key: 'status', label: 'Estado', align: 'center', format: (val) => val === 'reconciled' ? 'Conciliado' : val === 'assigned' ? 'Asignado' : 'Pendiente' },
+          { key: 'glAccountId', label: 'Cuenta Contable', align: 'left', format: (val) => glAccounts.find((a: any) => a.id === val)?.name || '—' }
+        ]}
+        data={txs}
+      />
     </div>
   );
 };

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Landmark, Plus, Trash2, X, Pencil } from 'lucide-react';
+import { Landmark, Plus, Trash2, X, Pencil, Printer } from 'lucide-react';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 
 const emptyForm = {
   accountName: '', bankName: '', accountNumber: '',
@@ -14,6 +15,7 @@ export function Banks() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const [editingBank, setEditingBank] = useState<any | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
 
@@ -50,7 +52,8 @@ export function Banks() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => fetchApi(`/bank-accounts/${id}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bank-accounts'] })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bank-accounts', activeCompany?.id] }),
+    onError: (err: any) => alert(`Error al desactivar cuenta: ${err.message}`)
   });
 
   const openEdit = (b: any) => {
@@ -155,13 +158,22 @@ export function Banks() {
           <h1 className="text-2xl font-bold text-white tracking-tight">Cuentas Bancarias</h1>
           <p className="text-sm text-gray-400 mt-1">Gestión de cuentas bancarias registradas</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" />
-          Nueva Cuenta Bancaria
-        </button>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <button
+            onClick={() => setShowPrintModal(true)}
+            className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors border border-gray-700"
+          >
+            <Printer className="w-4 h-4 text-gray-400" />
+            Imprimir
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            Nueva Cuenta
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -213,7 +225,12 @@ export function Banks() {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => { if (confirm('¿Desactivar esta cuenta?')) deleteMutation.mutate(b.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm('¿Desactivar esta cuenta bancaria?')) {
+                              deleteMutation.mutate(b.id);
+                            }
+                          }}
                           className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-md transition-colors"
                           title="Eliminar"
                         >
@@ -260,6 +277,28 @@ export function Banks() {
           </div>
         </div>
       )}
+
+      <PrintPreviewModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        title="Catálogo de Cuentas Bancarias"
+        config={{
+          moduleName: 'banks',
+          dateRange: false,
+          searchByDescription: true,
+          columnSelector: true,
+          mandatoryColumns: ['accountName', 'bankName', 'balance']
+        }}
+        columns={[
+          { key: 'accountName', label: 'Alias', align: 'left' },
+          { key: 'bankName', label: 'Banco', align: 'left' },
+          { key: 'accountNumber', label: 'N° Cuenta', align: 'left' },
+          { key: 'accountType', label: 'Tipo', align: 'center', format: (val) => val === 'checking' ? 'Corriente' : val === 'savings' ? 'Ahorros' : val === 'credit' ? 'Crédito' : 'Otro' },
+          { key: 'balance', label: 'Saldo Disponible', align: 'right', format: (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: activeCompany?.currency || 'USD' }).format(val) },
+          { key: 'currency', label: 'Moneda', align: 'center' }
+        ]}
+        data={banks}
+      />
     </div>
   );
 }

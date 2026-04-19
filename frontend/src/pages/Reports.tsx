@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { FileBarChart, Download, Building, Calendar } from 'lucide-react';
+import { FileBarChart, Download, Building, Calendar, Printer } from 'lucide-react';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 
 export function Reports() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
@@ -11,6 +12,7 @@ export function Reports() {
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().substring(0, 10));
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().substring(0, 10));
   const [endDate, setEndDate] = useState(new Date().toISOString().substring(0, 10));
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const { data: balanceSheet, isLoading: loadBS } = useQuery({
     queryKey: ['report-balance-sheet', activeCompany?.id, asOfDate],
@@ -169,13 +171,22 @@ export function Reports() {
           </p>
         </div>
 
-        <button 
-          onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20"
-        >
-          <Download className="w-4 h-4" />
-          Exportar a Excel
-        </button>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button 
+            onClick={() => setShowPrintModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors border border-gray-700 shadow-lg"
+          >
+            <Printer className="w-4 h-4 text-gray-400" />
+            Imprimir Reporte
+          </button>
+          <button 
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 whitespace-nowrap"
+          >
+            <Download className="w-4 h-4" />
+            Exportar a Excel
+          </button>
+        </div>
       </div>
 
       {/* Tabs and Controls */}
@@ -450,6 +461,76 @@ export function Reports() {
           </div>
         </div>
       </div>
+      {/* Modal contents... */}
+
+      {/* --- Print Preview Modal --- */}
+      <PrintPreviewModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        title={
+          activeTab === 'balance-sheet' ? 'Balance General' :
+          activeTab === 'income-statement' ? 'Estado de Resultados' :
+          activeTab === 'trial-balance' ? 'Balance de Comprobación' :
+          activeTab === 'cash-flow' ? 'Estado de Flujo de Efectivo' : 'Antigüedad de Cuentas'
+        }
+        config={{
+          moduleName: 'reports',
+          dateRange: activeTab === 'income-statement' || activeTab === 'cash-flow',
+          columnSelector: true,
+          mandatoryColumns: ['name', 'balance']
+        }}
+        columns={[
+          { key: 'code', label: 'Código', align: 'left' },
+          { key: 'name', label: 'Concepto / Cuenta', align: 'left' },
+          { key: 'balance', label: 'Monto / Saldo', align: 'right', format: (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: activeCompany?.currency || 'USD' }).format(val) }
+        ]}
+        data={(() => {
+          if (activeTab === 'balance-sheet' && balanceSheet?.data) {
+            const d = balanceSheet.data;
+            return [
+              { name: 'ACTIVOS', code: 'HEADER', balance: d.assets.total },
+              ...d.assets.items,
+              { name: 'PASIVOS', code: 'HEADER', balance: d.liabilities.total },
+              ...d.liabilities.items,
+              { name: 'CAPITAL', code: 'HEADER', balance: d.equity.total },
+              ...d.equity.items
+            ];
+          }
+          if (activeTab === 'income-statement' && incomeStatement?.data) {
+            const d = incomeStatement.data;
+            return [
+              { name: 'INGRESOS', code: 'HEADER', balance: d.revenue.total },
+              ...d.revenue.items,
+              { name: 'GASTOS', code: 'HEADER', balance: d.expenses.total },
+              ...d.expenses.items,
+              { name: 'UTILIDAD NETA', code: 'TOTAL', balance: d.netIncome }
+            ];
+          }
+          if (activeTab === 'trial-balance' && trialBalance?.data) {
+            return trialBalance.data.items.map((i: any) => ({ ...i, balance: (i.totalDebits || 0) - (i.totalCredits || 0) }));
+          }
+          if (activeTab === 'cash-flow' && cashFlow?.data) {
+            const cf = cashFlow.data;
+            return [
+              { name: 'Actividades de Operación', code: 'HEADER', balance: cf.operating.netCash },
+              { name: 'Utilidad Neta', code: '', balance: cf.operating.netIncome },
+              ...cf.operating.adjustments,
+              { name: 'Actividades de Inversión', code: 'HEADER', balance: cf.investing.netCash },
+              ...cf.investing.items,
+              { name: 'Actividades de Financiación', code: 'HEADER', balance: cf.financing.netCash },
+              ...cf.financing.items,
+              { name: 'TOTAL CAMBIO EFECTIVO', code: 'TOTAL', balance: cf.netCashChange }
+            ];
+          }
+          if (activeTab === 'aging' && agingReport?.data) {
+            return agingReport.data.buckets.flatMap((b: any) => [
+              { name: b.label, code: 'BUCKET', balance: b.total },
+              ...b.transactions.map((t: any) => ({ ...t, name: t.description, balance: t.amount }))
+            ]);
+          }
+          return [];
+        })()}
+      />
     </div>
   );
 }

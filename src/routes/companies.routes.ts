@@ -7,10 +7,10 @@ import { Elysia, t } from "elysia";
 import { db } from "../db/connection.ts";
 import { users, userCompanyRoles } from "../db/schema/index.ts";
 import { eq, and, isNull } from "drizzle-orm";
-import { 
-  createCompany, 
-  updateCompany, 
-  archiveCompany, 
+import {
+  createCompany,
+  updateCompany,
+  archiveCompany,
   deleteCompany,
   listCompanies,
   addUserToCompany,
@@ -93,7 +93,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
             )
           )
           .limit(1);
-          
+
         if (!role) {
           set.status = 403; return { error: "Access denied" };
         }
@@ -150,7 +150,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       }
 
       await archiveCompany(params.id);
-      
+
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
         companyId: params.id, userId: uid, sessionId,
@@ -260,7 +260,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
       }
 
       const ucrId = await addUserToCompany(params.id, body.userId, body.roleId, uid);
-        
+
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
         companyId: params.id, userId: uid, sessionId,
@@ -304,14 +304,14 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
             )
           )
           .limit(1);
-          
+
         if (!role) {
           set.status = 403; return { error: "Access denied" };
         }
       }
 
       await revokeUserFromCompany(params.id, params.userId);
-        
+
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
         companyId: params.id, userId: uid, sessionId,

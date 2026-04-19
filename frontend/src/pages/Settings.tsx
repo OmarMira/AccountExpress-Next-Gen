@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Settings as SettingsIcon, Building, Users, Calendar, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff, Trash2, FileText, Clock, Search, Download } from 'lucide-react';
+import { Settings as SettingsIcon, Building, Users, Calendar, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff, Trash2, FileText, Clock, Search, Download, Printer } from 'lucide-react';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { BackupPanel } from '../components/BackupPanel';
 
 export function Settings() {
@@ -11,42 +12,75 @@ export function Settings() {
   const setActiveCompany = useAuthStore((state) => state.setActiveCompany);
   const queryClient = useQueryClient();
   
-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups' | 'audit'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups'>('company');
+  const [companyViewMode, setCompanyViewMode] = useState<'list' | 'edit' | 'create'>('list');
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
 
   // --- Modals State ---
   const [notification, setNotification] = useState<{title: string, message: string, type: 'success' | 'error'} | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{title: string, message: string, onConfirm: () => void} | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+
+  // --- Companies List State ---
+  const { data: companies = [], refetch: refetchCompanies } = useQuery({
+    queryKey: ['companies'],
+    queryFn: async () => {
+      const res = await fetchApi('/companies');
+      return res || [];
+    },
+    enabled: activeTab === 'company'
+  });
 
   // --- Company Form State ---
   const [companyForm, setCompanyForm] = useState({
-    legalName: activeCompany?.legalName || '',
-    ein: activeCompany?.ein || '',
-    address: activeCompany?.address || '',
-    email: activeCompany?.email || '',
-    phone: activeCompany?.phone || ''
+    legalName: '',
+    tradeName: '',
+    ein: '',
+    address: '',
+    email: '',
+    phone: '',
+    logo: '',
+    fiscalYearStart: '01-01',
+    currency: 'USD'
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const updateCompanyMutation = useMutation({
-    mutationFn: async (data: typeof companyForm) => fetchApi(`/companies/${activeCompany?.id}`, {
+    mutationFn: async (data: any) => fetchApi(`/companies/${selectedCompany?.id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
     }),
     onSuccess: () => {
-      setNotification({ title: 'Éxito', message: 'Datos de la empresa actualizados correctamente', type: 'success' });
-      setActiveCompany({ ...activeCompany, ...companyForm } as any);
+      setNotification({ title: 'Éxito', message: 'Empresa actualizada correctamente', type: 'success' });
+      setCompanyViewMode('list');
+      refetchCompanies();
       
-      // Sincronizar la lista maestra de empresas para el selector
-      const currentList = useAuthStore.getState().availableCompanies;
-      const newList = currentList.map(c => 
-        c.id === activeCompany?.id ? { ...c, ...companyForm } : c
+      // Actualizar la tienda si la empresa editada es la activa
+      if (selectedCompany?.id === activeCompany?.id) {
+        setActiveCompany({ ...activeCompany, ...companyForm } as any);
+      }
+      
+      // Sincronizar disponible
+      const newList = companies.map((c: any) => 
+        c.id === selectedCompany?.id ? { ...c, ...companyForm } : c
       );
       useAuthStore.getState().setAvailableCompanies(newList);
-      
-      setFormErrors({});
     },
-    onError: (err: Error) => setNotification({ title: 'Error de Sistema', message: err.message, type: 'error' })
+    onError: (err: Error) => setNotification({ title: 'Error', message: err.message, type: 'error' })
+  });
+
+  const createCompanyMutation = useMutation({
+    mutationFn: async (data: any) => fetchApi('/companies', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    onSuccess: () => {
+      setNotification({ title: 'Éxito', message: 'Empresa creada exitosamente', type: 'success' });
+      setCompanyViewMode('list');
+      refetchCompanies();
+    },
+    onError: (err: Error) => setNotification({ title: 'Error al crear', message: err.message, type: 'error' })
   });
 
   const validateForm = () => {
@@ -64,15 +98,41 @@ export function Settings() {
   const handleCompanySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      updateCompanyMutation.mutate(companyForm);
+      if (companyViewMode === 'create') {
+        createCompanyMutation.mutate(companyForm);
+      } else {
+        updateCompanyMutation.mutate(companyForm);
+      }
     }
+  };
+
+  const openCompanyEdit = (c: any) => {
+    setSelectedCompany(c);
+    setCompanyForm({
+      legalName: c.legalName || '',
+      tradeName: c.tradeName || '',
+      ein: c.ein || '',
+      address: c.address || '',
+      email: c.email || '',
+      phone: c.phone || '',
+      logo: c.logo || '',
+      fiscalYearStart: c.fiscalYearStart || '01-01',
+      currency: c.currency || 'USD'
+    });
+    setCompanyViewMode('edit');
+    setFormErrors({});
+  };
+
+  const handleSwitchCompany = (c: any) => {
+    setActiveCompany(c);
+    setNotification({ title: 'Empresa Cambiada', message: `Ahora gestionando ${c.legalName}`, type: 'success' });
   };
 
   // --- Users State ---
   const { data: usersData, refetch: refetchUsers } = useQuery({
     queryKey: ['users', activeCompany?.id],
     queryFn: () => fetchApi(`/users?companyId=${activeCompany?.id}`),
-    enabled: (activeTab === 'users' || activeTab === 'audit') && !!activeCompany,
+    enabled: activeTab === 'users' && !!activeCompany,
     select: (res: { data: any[] }) => res.data ?? [],
   });
   const users: any[] = usersData ?? [];
@@ -382,9 +442,6 @@ export function Settings() {
           <button onClick={() => setActiveTab('backups')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'backups' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
             <Database className="w-5 h-5" /> Respaldos del Sistema
           </button>
-          <button onClick={() => setActiveTab('audit')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'audit' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
-            <FileText className="w-5 h-5" /> Bitácora de Auditoría
-          </button>
         </div>
 
         {/* Content Area */}
@@ -393,66 +450,265 @@ export function Settings() {
           {/* TAB: COMPANY */}
           {activeTab === 'company' && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-white border-b border-gray-800 pb-3">Perfil Legal de la Empresa</h2>
-              <form onSubmit={handleCompanySubmit} className="space-y-4 max-w-2xl">
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Nombre Legal Completo</label>
-                  <input 
-                    type="text" 
-                    value={companyForm.legalName} 
-                    onChange={e => setCompanyForm({...companyForm, legalName: e.target.value})} 
-                    className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.legalName ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
-                  />
-                  {formErrors.legalName && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.legalName}</p>}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1">EIN / Identificación Tributaria</label>
-                    <input 
-                      type="text" 
-                      value={companyForm.ein} 
-                      onChange={e => setCompanyForm({...companyForm, ein: e.target.value})} 
-                      className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.ein ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
-                    />
-                    {formErrors.ein && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.ein}</p>}
+              {companyViewMode === 'list' ? (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <h2 className="text-xl font-bold text-white">Gestión de Empresas</h2>
+                    {user?.isSuperAdmin && (
+                      <button
+                        onClick={() => {
+                          setCompanyForm({ legalName: '', tradeName: '', ein: '', address: '', email: '', phone: '', logo: '', fiscalYearStart: '01-01', currency: 'USD' });
+                          setCompanyViewMode('create');
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        <Building className="w-4 h-4" />
+                        Nueva Empresa
+                      </button>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-1">Teléfono Fijo / Móvil</label>
-                    <input 
-                      type="text" 
-                      value={companyForm.phone} 
-                      onChange={e => setCompanyForm({...companyForm, phone: e.target.value})} 
-                      className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.phone ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
-                    />
-                    {formErrors.phone && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.phone}</p>}
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead className="text-gray-500 border-b border-gray-800 uppercase text-xs">
+                        <tr>
+                          <th className="py-3 px-4">Empresa</th>
+                          <th className="py-3 px-4">EIN</th>
+                          <th className="py-3 px-4">Contacto</th>
+                          <th className="py-3 px-4">Estado</th>
+                          <th className="py-3 px-4 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800/50">
+                        {companies.length === 0 && (
+                          <tr><td colSpan={5} className="py-6 text-center text-gray-500 text-sm">No hay empresas asignadas.</td></tr>
+                        )}
+                        {companies.map((c: any) => (
+                          <tr 
+                            key={c.id} 
+                            onDoubleClick={() => openCompanyEdit(c)}
+                            className={`hover:bg-gray-800/50 cursor-pointer transition-colors group ${activeCompany?.id === c.id ? 'bg-indigo-500/5' : ''}`}
+                            title="Doble clic para editar"
+                          >
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded bg-gray-950 flex items-center justify-center overflow-hidden border border-gray-800">
+                                  {c.logo ? <img src={c.logo} alt="" className="w-full h-full object-contain" /> : <Building className="w-4 h-4 text-gray-700" />}
+                                </div>
+                                <div>
+                                  <div className="font-medium text-gray-200">{c.legalName}</div>
+                                  <div className="text-[10px] text-gray-500 uppercase tracking-tighter">{c.tradeName || 'S/NM'}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-gray-400 font-mono text-xs">{c.ein || 'N/A'}</td>
+                            <td className="py-3 px-4">
+                              <div className="text-gray-300 text-xs">{c.email}</div>
+                              <div className="text-[10px] text-gray-500">{c.phone}</div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                c.isActive !== false ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-600/40 text-gray-400'
+                              }`}>
+                                {c.isActive !== false ? 'ACTIVA' : 'INACTIVA'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-3 ml-auto">
+                                <button
+                                  onClick={() => handleSwitchCompany(c)}
+                                  className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded transition-all ${
+                                    activeCompany?.id === c.id 
+                                      ? 'bg-indigo-500 text-white cursor-default' 
+                                      : 'bg-gray-800 text-indigo-400 hover:bg-indigo-500/20'
+                                  }`}
+                                >
+                                  {activeCompany?.id === c.id ? <CheckCircle className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                  {activeCompany?.id === c.id ? 'Activa' : 'Gestionar'}
+                                </button>
+                                <button
+                                  onClick={() => openCompanyEdit(c)}
+                                  className="text-gray-400 hover:text-white p-1.5 hover:bg-gray-800 rounded transition-colors"
+                                  title="Editar"
+                                >
+                                  <SettingsIcon className="w-4 h-4" />
+                                </button>
+                                {user?.isSuperAdmin && activeCompany?.id !== c.id && (
+                                  <button
+                                    onClick={() => setConfirmDialog({
+                                      title: '¿Archivar Empresa?',
+                                      message: 'Esta empresa dejará de estar disponible para el uso diario.',
+                                      onConfirm: () => {
+                                        fetchApi(`/companies/${c.id}`, { method: 'DELETE' })
+                                          .then(() => {
+                                            refetchCompanies();
+                                            setNotification({ title: 'Éxito', message: 'Empresa archivada', type: 'success' });
+                                          })
+                                          .catch(err => setNotification({ title: 'Error', message: err.message, type: 'error' }));
+                                      }
+                                    })}
+                                    className="text-gray-600 hover:text-rose-400 p-1.5 hover:bg-rose-500/10 rounded transition-colors"
+                                    title="Archivar"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Correo Electrónico Oficial</label>
-                  <input 
-                    type="email" 
-                    value={companyForm.email} 
-                    onChange={e => setCompanyForm({...companyForm, email: e.target.value})} 
-                    className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.email ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
-                  />
-                  {formErrors.email && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.email}</p>}
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+                    <h2 className="text-xl font-bold text-white">
+                      {companyViewMode === 'create' ? 'Nueva Empresa' : `Editar: ${selectedCompany?.legalName}`}
+                    </h2>
+                    <button 
+                      onClick={() => setCompanyViewMode('list')}
+                      className="text-xs font-bold text-indigo-400 hover:text-white transition-colors"
+                    >
+                      &larr; Volver a la lista
+                    </button>
+                  </div>
+                  <form onSubmit={handleCompanySubmit} className="space-y-4 max-w-2xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Nombre Legal Completo</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.legalName} 
+                          onChange={e => setCompanyForm({...companyForm, legalName: e.target.value})} 
+                          placeholder="Nombre Legal, Inc."
+                          className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.legalName ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                        />
+                        {formErrors.legalName && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.legalName}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Nombre Comercial (DBA)</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.tradeName} 
+                          onChange={e => setCompanyForm({...companyForm, tradeName: e.target.value})} 
+                          placeholder="Nombre Fantasía (Opcional)"
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition-colors" 
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">EIN / Identificación Tributaria</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.ein} 
+                          onChange={e => setCompanyForm({...companyForm, ein: e.target.value})} 
+                          className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.ein ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                        />
+                        {formErrors.ein && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.ein}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-1">Teléfono Fijo / Móvil</label>
+                        <input 
+                          type="text" 
+                          value={companyForm.phone} 
+                          onChange={e => setCompanyForm({...companyForm, phone: e.target.value})} 
+                          className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.phone ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                        />
+                        {formErrors.phone && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.phone}</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Correo Electrónico Oficial</label>
+                      <input 
+                        type="email" 
+                        value={companyForm.email} 
+                        onChange={e => setCompanyForm({...companyForm, email: e.target.value})} 
+                        className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.email ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                      />
+                      {formErrors.email && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.email}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-1">Dirección Física</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.address} 
+                        onChange={e => setCompanyForm({...companyForm, address: e.target.value})} 
+                        className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.address ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
+                      />
+                      {formErrors.address && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.address}</p>}
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-800">
+                      <label className="block text-sm font-medium text-gray-400 mb-3">Logo de la Empresa</label>
+                      <div className="flex items-center gap-6">
+                        <div className="w-24 h-24 bg-gray-950 border-2 border-dashed border-gray-800 rounded-2xl flex items-center justify-center overflow-hidden shrink-0">
+                          {companyForm.logo ? (
+                            <img src={companyForm.logo} alt="Preview" className="w-full h-full object-contain p-2" />
+                          ) : (
+                            <div className="text-center p-2 text-gray-600">
+                              <Building className="w-6 h-6 mx-auto mb-1 opacity-20" />
+                              <span className="text-[8px] font-bold uppercase">Sin Logo</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-4">
+                          <p className="text-[10px] text-gray-500 leading-relaxed font-medium max-w-sm">Este logo se utilizará automáticamente en todos los reportes oficiales.</p>
+                          <div className="flex gap-2">
+                            <label className="cursor-pointer px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl text-xs font-bold border border-indigo-500/20 transition-all flex items-center gap-2">
+                              <Download className="w-3.5 h-3.5 rotate-180" />
+                              Subir
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="hidden" 
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => setCompanyForm({...companyForm, logo: reader.result as string});
+                                    reader.readAsDataURL(file);
+                                  }
+                                }}
+                              />
+                            </label>
+                            {companyForm.logo && (
+                              <button 
+                                type="button"
+                                onClick={() => setCompanyForm({...companyForm, logo: ''})}
+                                className="px-4 py-2 bg-gray-800 hover:bg-rose-500/10 text-gray-500 hover:text-rose-400 rounded-xl text-xs font-bold border border-gray-700 hover:border-rose-500/20 transition-all"
+                              >
+                                Eliminar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 flex gap-3">
+                      <button 
+                        type="submit" 
+                        disabled={updateCompanyMutation.isPending || createCompanyMutation.isPending} 
+                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-lg disabled:opacity-50"
+                      >
+                        <Save className="w-5 h-5" /> 
+                        {companyViewMode === 'create' ? 'Crear Empresa' : 'Guardar Cambios'}
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setCompanyViewMode('list')}
+                        className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium rounded-lg transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-1">Dirección Registrada</label>
-                  <input 
-                    type="text" 
-                    value={companyForm.address} 
-                    onChange={e => setCompanyForm({...companyForm, address: e.target.value})} 
-                    className={`w-full bg-gray-800 border rounded-lg px-4 py-2.5 text-white focus:outline-none transition-colors ${formErrors.address ? 'border-rose-500 focus:border-rose-500' : 'border-gray-700 focus:border-indigo-500'}`} 
-                  />
-                  {formErrors.address && <p className="text-rose-400 text-xs mt-1.5 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> {formErrors.address}</p>}
-                </div>
-                <div className="pt-4">
-                  <button type="submit" disabled={updateCompanyMutation.isPending} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-lg disabled:opacity-50">
-                    <Save className="w-5 h-5" /> Guardar Cambios
-                  </button>
-                </div>
-              </form>
+              )}
             </div>
           )}
 
@@ -461,13 +717,22 @@ export function Settings() {
             <div className="space-y-8">
               <div className="flex items-center justify-between border-b border-gray-800 pb-3">
                 <h2 className="text-xl font-bold text-white">Gestión de Usuarios</h2>
-                <button
-                  onClick={() => { setShowCreateForm(!showCreateForm); setCreateError(''); }}
-                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  {showCreateForm ? 'Cancelar' : 'Nuevo Usuario'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowPrintModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors border border-gray-700"
+                  >
+                    <Printer className="w-4 h-4 text-gray-400" />
+                    Imprimir
+                  </button>
+                  <button
+                    onClick={() => { setShowCreateForm(!showCreateForm); setCreateError(''); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    {showCreateForm ? 'Cancelar' : 'Nuevo Usuario'}
+                  </button>
+                </div>
               </div>
 
               {/* Formulario de alta */}
@@ -1268,6 +1533,27 @@ export function Settings() {
         </div>
       )}
 
+      <PrintPreviewModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        title="Directorio de Usuarios de la Empresa"
+        config={{
+          moduleName: 'users',
+          dateRange: false,
+          searchByDescription: true,
+          columnSelector: true,
+          mandatoryColumns: ['username', 'email']
+        }}
+        columns={[
+          { key: 'firstName', label: 'Nombre', align: 'left' },
+          { key: 'lastName', label: 'Apellido', align: 'left' },
+          { key: 'username', label: 'Usuario', align: 'left' },
+          { key: 'email', label: 'Correo', align: 'left' },
+          { key: 'roleId', label: 'Rol', align: 'center', format: (val) => val === 'role-company-admin-00-000000000002' ? 'Administrador' : 'Solo Lectura' },
+          { key: 'isActive', label: 'Estado', align: 'center', format: (val) => val ? 'Activo' : 'Inactivo' }
+        ]}
+        data={users}
+      />
     </div>
   );
 }

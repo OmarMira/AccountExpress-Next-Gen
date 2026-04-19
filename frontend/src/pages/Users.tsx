@@ -3,10 +3,12 @@
 // Gestión de usuarios y roles por tenant.
 // ============================================================
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
-import { UserPlus, Shield, Lock, Unlock, RefreshCw } from 'lucide-react';
+import { fetchApi } from '../lib/api';
+import { UserPlus, Shield, Lock, Unlock, RefreshCw, Printer } from 'lucide-react';
+import { PrintPreviewModal } from '../components/PrintPreviewModal';
 
 // ── Tipos ────────────────────────────────────────────────────
 
@@ -34,6 +36,11 @@ interface Role {
 export function Users() {
   const activeCompany = useAuthStore((s) => s.activeCompany);
   const queryClient = useQueryClient();
+  
+  if (!activeCompany) {
+    return <div className="p-8 text-white">Cargando contexto de empresa...</div>;
+  }
+
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     username: '', email: '', password: '',
@@ -41,30 +48,39 @@ export function Users() {
   });
   const [roleModal, setRoleModal] = useState<{ userId: string; currentRoleId: string } | null>(null);
   const [newRoleId, setNewRoleId] = useState('');
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   const companyId = activeCompany?.id;
 
   // ── Queries ───────────────────────────────────────────────
 
-  const { data: usersData, isLoading } = useQuery({
+  const { data: users = [], isLoading } = useQuery<UserRow[]>({
     queryKey: ['users', companyId],
     queryFn: async () => {
-      const res = await fetch(`/api/users?companyId=${companyId}`, { credentials: 'include' });
-      return res.json();
+      const res = await fetchApi(`/users?companyId=${companyId}`);
+      return Array.isArray(res) ? res : res?.data ?? [];
     },
     enabled: !!companyId,
   });
 
-  const { data: rolesData } = useQuery({
+  const { data: roles = [] } = useQuery<Role[]>({
     queryKey: ['roles'],
     queryFn: async () => {
-      const res = await fetch('/api/users/roles', { credentials: 'include' });
-      return res.json();
+      return await fetchApi('/users/roles');
     },
   });
 
-  const users: UserRow[] = usersData?.data ?? [];
-  const roles: Role[]    = rolesData?.data ?? [];
+  const safeUsers = useMemo(() => {
+    return (users || []).map((u: any) => ({
+      ...u,
+      firstName: u?.firstName || '',
+      lastName: u?.lastName || '',
+      username: u?.username || '—',
+      email: u?.email || '—',
+      roleDisplayName: u?.roleDisplayName || '—',
+      isActive: u?.isActive === 1 || u?.isActive === true
+    }));
+  }, [users]);
 
   // ── Mutations ─────────────────────────────────────────────
 
@@ -137,13 +153,22 @@ export function Users() {
           <h1 className="text-2xl font-bold text-white">Usuarios y Roles</h1>
           <p className="text-gray-400 text-sm mt-1">Gestión de accesos para esta empresa</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
-          <UserPlus size={16} />
-          Nuevo Usuario
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowPrintModal(true)}
+            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-700 shadow-lg"
+          >
+            <Printer size={16} />
+            Imprimir Lista
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-blue-500/50 shadow-lg shadow-blue-500/10"
+          >
+            <UserPlus size={16} />
+            Nuevo Usuario
+          </button>
+        </div>
       </div>
 
       {/* Formulario de creación */}
@@ -299,7 +324,33 @@ export function Users() {
           </div>
         </div>
       )}
-
+      <PrintPreviewModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        title="Nómina de Usuarios (Permisos)"
+        config={{
+          moduleName: 'users',
+          columnSelector: true,
+          mandatoryColumns: ['username', 'roleDisplayName']
+        }}
+        columns={[
+          { key: 'firstName', label: 'Nombre', align: 'left' },
+          { key: 'lastName', label: 'Apellido', align: 'left' },
+          { key: 'username', label: 'Usuario', align: 'left' },
+          { key: 'email', label: 'Email', align: 'left' },
+          { key: 'roleDisplayName', label: 'Rol', align: 'center' },
+          { key: 'isActive', label: 'Estado', align: 'center', format: (val: any) => val ? 'ACTIVO' : 'INACTIVO' },
+          { key: 'lastLoginAt', label: 'Último Acceso', align: 'left', format: (val: any) => {
+              if (!val) return 'Nunca';
+              try {
+                const date = new Date(val);
+                if (isNaN(date.getTime())) return '—';
+                return date.toLocaleString();
+              } catch (e) { return '—'; }
+          }}
+        ]}
+        data={safeUsers}
+      />
     </div>
   );
 }
