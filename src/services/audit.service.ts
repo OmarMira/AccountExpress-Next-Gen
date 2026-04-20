@@ -53,7 +53,7 @@ interface AuditLogRow {
 }
 
 // ── HMAC-SHA256 helper ───────────────────────────────────────
-function hmacSha256(data: string): string {
+export function hmacSha256(data: string): string {
   return createHmac("sha256", env.AUDIT_HMAC_SECRET).update(data, "utf8").digest("hex");
 }
 

@@ -209,6 +209,7 @@ export const auditLogs = pgTable("audit_logs", {
 }, (table) => ({
   idxAuditCompanyCreated: index("idx_audit_company_created").on(table.companyId, table.createdAt),
   idxAuditModule: index("idx_audit_module").on(table.module),
+  uqAuditChain: uniqueIndex("uq_audit_chain").on(table.companyId, table.chainIndex),
 }));
 
 // ─────────────────────────────────────────────────────────────

@@ -52,7 +52,9 @@ export const envSchema = z.object({
 
   // AI Configuration (Ollama)
   OLLAMA_URL:           z.string().url().optional(),
-  OLLAMA_MODEL:         z.string().optional(),
+  // Herramientas de Base de Datos (PostgreSQL 17)
+  PG_DUMP_PATH:         z.string().optional(),
+  PSQL_PATH:            z.string().optional(),
 });
 
 export function validateEnv(): void {

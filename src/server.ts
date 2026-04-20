@@ -18,6 +18,7 @@ import { reportsRoutes }       from "./routes/reports.routes.ts";
 import { glAccountsRoutes }    from "./routes/gl-accounts.routes.ts";
 import { dashboardRoutes }     from "./routes/dashboard.routes.ts";
 import { usersRoutes }         from "./routes/users.routes.ts";
+import { diagnosticsRoutes }   from "./routes/diagnostics.routes.ts";
 import { backupRoutes, backupScheduler } from "./api/routes/backup.routes.ts";
 import { reconciliationGroupRoutes } from "./routes/reconciliation-group.routes.ts";
 import { globalRateLimiter } from "./middleware/rate-limit.ts";
@@ -57,6 +58,7 @@ export const app = new Elysia()
     .use(glAccountsRoutes)
     .use(dashboardRoutes)
     .use(usersRoutes)
+    .use(diagnosticsRoutes)
     .use(backupRoutes)
     .use(reconciliationGroupRoutes)
   )

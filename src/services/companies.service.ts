@@ -57,7 +57,7 @@ export async function listCompanies(userId: string, isSuperAdmin: boolean) {
 }
 
 // ── Create Company ───────────────────────────────────────────
-export async function createCompany(input: CompanyInput): Promise<string> {
+export async function createCompany(input: CompanyInput, createdByUserId?: string): Promise<string> {
   const id = uuidv4();
   const now = new Date();
 
@@ -80,6 +80,18 @@ export async function createCompany(input: CompanyInput): Promise<string> {
       updatedAt: now,
     });
     await seedGaapForCompany(id, tx);
+
+    if (createdByUserId) {
+      await tx.insert(userCompanyRoles).values({
+        id: uuidv4(),
+        userId: createdByUserId,
+        companyId: id,
+        roleId: "role-company-admin-00-000000000002",
+        isActive: true,
+        grantedBy: createdByUserId,
+        grantedAt: now,
+      });
+    }
   });
   return id;
 }

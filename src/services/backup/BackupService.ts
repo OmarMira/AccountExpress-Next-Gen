@@ -38,8 +38,8 @@ export interface ValidationResult {
 }
 
 const BACKUPS_DIR = 'data/backups';
-const PG_DUMP_PATH = process.env.PG_DUMP_PATH ?? 'pg_dump';
-const PSQL_PATH    = process.env.PSQL_PATH    ?? 'psql';
+const PG_DUMP_PATH = env.PG_DUMP_PATH ?? 'pg_dump';
+const PSQL_PATH    = env.PSQL_PATH    ?? 'psql';
 
 export class BackupService {
   constructor() {
@@ -49,6 +49,12 @@ export class BackupService {
   private async ensureDir() {
     try {
       await mkdir(BACKUPS_DIR, { recursive: true });
+      // Validate herramientas
+      if (env.PG_DUMP_PATH) {
+        await stat(env.PG_DUMP_PATH).catch(() => {
+           logger.warn("BackupService", `La ruta configurada de PG_DUMP no existe: ${env.PG_DUMP_PATH}`);
+        });
+      }
     } catch (e) {
       logger.error("BackupService", "Directory initialization failed", e);
     }
@@ -78,18 +84,24 @@ export class BackupService {
     const tempSqlPath = join(BACKUPS_DIR, `temp-${dateStr}.sql`);
     const tempGzPath  = join(BACKUPS_DIR, `temp-${dateStr}.sql.gz`);
 
-    const dbUrl = env.DATABASE_URL;
+    const dbUrl = env.DATABASE_ADMIN_URL || env.DATABASE_URL;
 
     // 1. Ejecutar pg_dump y guardar en archivo temporal
+    const args = [dbUrl, '--format=plain', '--file=' + tempSqlPath];
+    logger.info("BackupService", `Ejecutando backup con: ${PG_DUMP_PATH}`);
+
     await new Promise<void>((resolve, reject) => {
-      const dumpProcess = spawn(PG_DUMP_PATH, [dbUrl, '--format=plain', '--file=' + tempSqlPath]);
+      const dumpProcess = spawn(PG_DUMP_PATH, args, { shell: false });
       
       dumpProcess.on('close', (code) => {
         if (code === 0) resolve();
         else reject(new Error(`pg_dump falló con código ${code}`));
       });
 
-      dumpProcess.on('error', (err) => reject(err));
+      dumpProcess.on('error', (err) => {
+        logger.error("BackupService", "Fallo al iniciar el proceso pg_dump", err);
+        reject(err);
+      });
     });
 
     // 2. Comprimir el SQL con gzip
@@ -144,7 +156,13 @@ export class BackupService {
       const fullPath = join(BACKUPS_DIR, file);
       const fileStat = await stat(fullPath);
       
-      const parts = file.replace('backup-', '').replace('.sql.enc', '').split('-');
+      // Limpiar prefijo y sufijos para parsear la fecha del nombre del archivo
+      let datePart = file.replace('backup-', '');
+      ['.sql.gz.enc', '.sql.enc', '.db.enc'].forEach(ext => {
+        datePart = datePart.replace(ext, '');
+      });
+      
+      const parts = datePart.split('-');
       let createdAt = fileStat.mtime.toISOString();
       if (parts.length >= 6) {
         createdAt = `${parts[0]}-${parts[1]}-${parts[2]}T${parts[3]}:${parts[4]}:${parts[5]}.000Z`;
@@ -169,7 +187,7 @@ export class BackupService {
    */
   async restoreBackup(filename: string, password: string): Promise<RestoreResult> {
     const fullPath = join(BACKUPS_DIR, filename);
-    const dbUrl = env.DATABASE_URL;
+    const dbUrl = env.DATABASE_ADMIN_URL || env.DATABASE_URL;
     
     // 1. Decriptar y obtener datos + metadatos
     const { data, metadata } = await decryptFile(fullPath, password);

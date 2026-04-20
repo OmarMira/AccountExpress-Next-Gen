@@ -2,9 +2,31 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Settings as SettingsIcon, Building, Users, Calendar, Save, UserPlus, XCircle, CheckCircle, ShieldAlert, Database, Shield, Eye, EyeOff, Trash2, FileText, Clock, Search, Download, Printer } from 'lucide-react';
+import { 
+  Settings as SettingsIcon, 
+  Building, 
+  Users, 
+  Calendar, 
+  Save, 
+  UserPlus, 
+  XCircle, 
+  CheckCircle, 
+  ShieldAlert, 
+  Database, 
+  Shield, 
+  Eye, 
+  EyeOff, 
+  Trash2, 
+  FileText, 
+  Clock, 
+  Search, 
+  Download, 
+  Printer, 
+  ShieldCheck 
+} from 'lucide-react';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { BackupPanel } from '../components/BackupPanel';
+import DiagnosticsPanel from '../components/admin/DiagnosticsPanel';
 
 export function Settings() {
   const user = useAuthStore((state) => state.user);
@@ -12,7 +34,7 @@ export function Settings() {
   const setActiveCompany = useAuthStore((state) => state.setActiveCompany);
   const queryClient = useQueryClient();
   
-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups' | 'diagnostics'>('company');
   const [companyViewMode, setCompanyViewMode] = useState<'list' | 'edit' | 'create'>('list');
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
 
@@ -442,6 +464,14 @@ export function Settings() {
           <button onClick={() => setActiveTab('backups')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'backups' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
             <Database className="w-5 h-5" /> Respaldos del Sistema
           </button>
+          {user?.isSuperAdmin && (
+            <button 
+              onClick={() => setActiveTab('diagnostics')} 
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'diagnostics' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}
+            >
+              <ShieldCheck className="w-5 h-5" /> Diagnóstico
+            </button>
+          )}
         </div>
 
         {/* Content Area */}
@@ -1124,6 +1154,9 @@ export function Settings() {
 
           {/* TAB: BACKUPS */}
           {activeTab === 'backups' && <BackupPanel />}
+
+          {/* TAB: DIAGNOSTICS */}
+          {activeTab === 'diagnostics' && <DiagnosticsPanel />}
 
           {/* TAB: AUDIT */}
           {activeTab === 'audit' && (

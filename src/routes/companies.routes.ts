@@ -42,7 +42,7 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
         set.status = 403; return { error: "Super Admin privileges required" };
       }
 
-      const companyId = await createCompany(body);
+      const companyId = await createCompany(body, uid);
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
 
       await createAuditEntry({
