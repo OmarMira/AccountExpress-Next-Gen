@@ -1,50 +1,52 @@
 # AccountExpress — Core Contable Next-Gen
 
-Sistema de contabilidad de doble entrada y conciliación bancaria diseñado para pequeñas y medianas empresas. Construido con un enfoque estricto en la **integridad financiera y seguridad**: cada asiento de diario genera una cadena de auditoría criptográfica, las transacciones usan bloqueos a nivel de fila (row-level locking) para evitar condiciones de carrera, y la arquitectura sigue un modelo "Fail-Fast".
+Sistema de contabilidad de doble entrada y conciliación bancaria diseñado para pequeñas y medianas empresas. Construido con un enfoque estricto en la **integridad financiera, seguridad y estabilidad técnica**: cada asiento de diario genera una cadena de auditoría criptográfica, las transacciones usan bloqueos a nivel de fila (row-level locking) para evitar condiciones de carrera, y la arquitectura sigue un modelo "Fail-Fast".
 
 ## Progreso y Bitácora del Sistema (Changelog)
 
 A lo largo del desarrollo, el sistema se ha refactorizado y asegurado sustancialmente. Esta bitácora resume la arquitectura actual y los hitos alcanzados:
 
-- **Motor de Reglas Bancarias Inteligente:** Implementación de un motor de clasificación automática de transacciones basado en prioridades (0-20), condiciones de coincidencia de texto y asignación automática de cuentas del Libro Mayor.
-- **Gestión Centralizada de Empresas:** Transformación del módulo de configuración en un Panel de Gestión Multi-Empresa que permite a los Super Usuarios crear, editar y alternar entre espacios de trabajo (tenants) con un solo clic.
-- **Seguridad de Respaldos e Integridad:** Añadido panel de generación de backups manuales y reportes de validación de integridad criptográfica para detectar cualquier manipulación externa de los datos contables.
-- **Remoción de Inteligencia Artificial:** Se eliminó por completo la dependencia de paneles AI y componentes inyectados para mantener un sistema financiero puro, determinista y seguro.
-- **Motor Financiero Seguro:** Validación matemática estricta para la partida doble y uso de transacciones atómicas con `row-level locking`.
-- **Plan de Cuentas (GL) Estándar:** Estructura US GAAP con esquemas en minúsculas estrictas (`asset`, `liability`, `equity`, `revenue`, `expense`).
-- **Seguridad de Variables de Entorno (Fail-Fast):** Uso exclusivo del esquema de validación en `src/config/validate.ts`.
+- **Panel de Diagnóstico de Salud Integral:** Implementación de un tablero proactivo que permite verificar en tiempo real el estado de las sesiones, la integridad de los logs de auditoría y la salud de los respaldos automáticos, permitiendo reparaciones atómicas con un solo clic.
+- **Motor de Reglas Bancarias Inteligente:** Sistema de clasificación automática basado en prioridades (0-20), condiciones de coincidencia lógica y asignación automática del Libro Mayor (GL).
+- **Selector de Cuentas Premium:** Integración del componente `AccountSelector` con búsqueda avanzada y badges visuales para identificar rápidamente el Balance Normal (Débito/Crédito) y el Tipo de Cuenta (Activo, Pasivo, etc.).
+- **Estabilización Técnica Total:** Resolución del 100% de errores de TypeScript (`bun run typecheck`) y endurecimiento de la cadena de auditoría mediante sincronización de caché en memoria para registros inmutables.
+- **Gestión Centralizada de Empresas:** Panel multi-tenant que permite a los Super Usuarios gestionar espacios de trabajo independientes con un solo clic.
+- **Seguridad de Respaldos:** Sistema automatizado de backups para PostgreSQL 17 con validación de rutas y entorno.
+- **Plan de Cuentas Standard:** Estructura US GAAP estricta con esquemas en minúsculas y siembra automática jerárquica.
 
 ## Módulos del Sistema
 
-- **Gestión de Empresas (Multi-Tenant)** — Tablero administrativo para gestionar múltiples entidades jurídicas, logos, datos legales y cambio de contexto de trabajo.
-- **Motor de Reglas Bancarias** — Automatización del flujo de caja mediante reglas con prioridad configurable, permitiendo que las reglas críticas se ejecuten antes que las generales.
-- **Plan de Cuentas (GL)** — Catálogo jerárquico contable con validación estricta y siembra automática por empresa.
+- **Diagnóstico y Salud** — Tablero administrativo para detectar y reparar inconsistencias de datos, sesiones expiradas y brechas en la cadena de auditoría.
+- **Gestión de Empresas (Multi-Tenant)** — Control total sobre entidades jurídicas, logos, datos legales y cambio de contexto operativo.
+- **Motor de Reglas Bancarias** — Automatización del flujo de caja mediante reglas con prioridad configurable (Crítica a Muy Baja).
+- **Plan de Cuentas (GL)** — Catálogo contable jerárquico con validación estricta y badges dinámicos de estado.
 - **Libro Diario y Transacciones** — Asientos de doble entrada atómicos, validación matemática de balance (`debit == credit`) y prevención de concurrencias.
-- **Gestión de Usuarios y RBAC** — Control de acceso estricto, gestión de usuarios segura y protección inmutable del Super Administrador.
-- **Auditoría e Integridad** — Registro de acciones administrativas (System Audit Log) y verificación cruzada HMAC SHA-256 para asientos contables.
-- **Conciliación Bancaria** — Herramientas para importar transacciones y conciliarlas contra el libro mayor usando el motor de reglas.
-- **Períodos Fiscales** — Control total sobre cierres contables y bloqueos de períodos para evitar modificaciones en años fiscales cerrados.
-- **Respaldos y Reportes** — Generación de copias de seguridad de la base de datos y exportación de reportes financieros certificados.
+- **Auditoría e Integridad** — Registro inmutable de acciones (Audit Log) y verificación cruzada HMAC SHA-256 para la integridad del Journal.
+- **Conciliación Bancaria** — Importación y conciliación de extractos bancarios contra el libro mayor mediante el motor de reglas y smart-match.
+- **Períodos Fiscales** — Control de cierres y bloqueos definitivos para evitar modificaciones en ejercicios contables finalizados.
 
 ## Stack Tecnológico y Arquitectura
 
+
 ### Backend (API REST)
+
+
 - **Runtime:** Bun v1.2+
-- **Framework:** Elysia.js (Tipado estricto end-to-end)
+- **Framework:** Elysia.js (Tipado estricto end-to-end con 0 errores reportados)
 - **ORM:** Drizzle ORM
-- **Base de Datos:** PostgreSQL 16
+- **Base de Datos:** PostgreSQL 17
 - **Seguridad:** 
-  - Validaciones de variables Fail-Fast con Zod.
-  - Firma inmutable con HMAC SHA-256 para el Journal.
-  - Trazabilidad HMAC para Logs de Auditoría.
-  - Autenticación mediante sesiones stateful HTTP-only.
+  - Validaciones Fail-Fast con Zod y tipado seguro `companyId`.
+  - Firma HMAC SHA-256 inmutable para el Journal y Logs de Auditoría.
+  - Autenticación mediante sesiones stateful HTTP-only endurecidas.
 
 ### Frontend (SPA)
+
+
 - **Framework:** React 18 con TypeScript
 - **Bundler:** Vite
-- **Estado Global:** Zustand (Persistencia de sesión y empresa activa)
-- **Mutaciones:** React Query (`@tanstack/query`)
-- **Estilos:** Tailwind CSS con diseño de alta densidad (Glassmorphism)
+- **Estado Global:** Zustand (Persistencia de sesión y contexto de empresa)
+- **UX/UI:** Tailwind CSS con temas dinámicos, Glassmorphism y componentes personalizados (`AccountSelector`).
 
 ## Instalación y Despliegue
 
@@ -74,7 +76,7 @@ bun run dev:all
 
 ## Reglas Maestras de Operación
 
-1. **Jerarquía de Reglas Bancarias:** Las reglas se evalúan por su campo `priority`. Una regla con prioridad `0` (Crítica) siempre se aplicará antes que una con prioridad `20` (Muy Baja).
-2. **Aislamiento Multitenant:** La seguridad de los datos depende del `companyId` inyectado en cada petición desde la sesión del usuario. Ninguna query puede saltarse este filtro.
-3. **Bloqueo Fiscal Definitivo:** Una vez que un período fiscal se marca como `BLOQUEADO`, el backend rechazará cualquier intento de escritura (INSERT/UPDATE/DELETE) en fechas pertenecientes a dicho período.
-4. **Integridad HMAC:** Cada fila del libro diario está vinculada a la anterior mediante un hash criptográfico. Si una sola entrada es alterada manualmente en la base de datos, la cadena se rompe y el sistema emitirá una alerta de seguridad.
+1. **Prioridad de Reglas:** Las reglas bancarias se evalúan estrictamente por su campo `priority`. Las reglas de baja numeración (0) se ejecutan antes que las generales (20).
+2. **Aislamiento Multitenant:** La seguridad depende del `companyId` inyectado. El backend rechaza peticiones sin contexto de empresa válido para usuarios administrativos.
+3. **Inmutabilidad de Auditoría:** La tabla `audit_logs` es físicamente inmutable mediante triggers. Las reparaciones de integridad se realizan sincronizando el caché de la aplicación con la base de datos.
+4. **Integridad HMAC:** Cada fila del libro diario está encadenada criptográficamente. Cualquier alteración externa invalida la cadena y dispara alertas de seguridad.

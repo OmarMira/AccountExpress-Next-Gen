@@ -87,13 +87,11 @@ export async function runAutoMatch(
       }
 
       await matchTransaction(
-        {
-          transactionId: tx.id,
-          glAccountId: tx.glAccountId,
-          periodId,
-          bankGlAccountId,
-          description: tx.description
-        },
+        companyId,
+        tx.id,
+        tx.glAccountId,
+        bankGlAccountId,
+        periodId,
         userId,
         sessionId,
         ipAddress

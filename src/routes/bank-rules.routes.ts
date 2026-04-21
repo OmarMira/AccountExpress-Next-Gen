@@ -4,14 +4,16 @@ import { authMiddleware } from "../middleware/auth.middleware";
 
 export const bankRulesRouter = new Elysia({ prefix: "/bank-rules" })
   .use(authMiddleware)
-  .get("/", async ({ query, companyId }) => {
+  .get("/", async ({ query, companyId, set }) => {
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
     return await BankRulesService.getRules(companyId);
   }, {
     query: t.Object({
       companyId: t.String(),
     })
   })
-  .post("/", async ({ body, companyId }) => {
+  .post("/", async ({ body, companyId, set }) => {
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
     const b = body as any;
     return await BankRulesService.createRule({
       name: b.name,

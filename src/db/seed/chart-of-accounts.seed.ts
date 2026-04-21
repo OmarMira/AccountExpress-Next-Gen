@@ -138,4 +138,3 @@ export const GAAP_ACCOUNTS: AccountSeed[] = [
   { code: "5990", name: "Miscellaneous Expense",              accountType: "expense",  normalBalance: "debit",  parentCode: "5100", level: 2, taxCategory: "Schedule C - Other Expenses", description: "Small one-off expenses not classified elsewhere" },
   { code: "6900", name: "Bank Charges & Adjustments",         accountType: "expense",  normalBalance: "debit",  parentCode: "5100", level: 2, taxCategory: "Schedule C - Other Expenses", description: "Bank fees, adjustments, and auto-match tolerance differences" },
 ];
-
