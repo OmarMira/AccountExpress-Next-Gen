@@ -18,6 +18,9 @@ export function Banks() {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [editingBank, setEditingBank] = useState<any | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
+  // Separate string state for balance input: avoids type coercion issues
+  // and allows US-format commas while keeping cursor stable.
+  const [balanceStr, setBalanceStr] = useState('0');
 
   const { data: banks = [], isLoading } = useQuery({
     queryKey: ['bank-accounts', activeCompany?.id],
@@ -58,13 +61,17 @@ export function Banks() {
 
   const openEdit = (b: any) => {
     setEditingBank(b);
+    const bal = Number(b.balance ?? 0);
+    setBalanceStr(
+      bal === 0 ? '0' : bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    );
     setForm({
       accountName: b.accountName ?? '',
       bankName: b.bankName ?? '',
       accountNumber: b.accountNumber ?? '',
       accountType: b.accountType ?? 'checking',
       routingNumber: b.routingNumber ?? '',
-      balance: b.balance ?? 0,
+      balance: bal,
       currency: b.currency ?? 'USD',
       notes: b.notes ?? ''
     });
@@ -74,82 +81,30 @@ export function Banks() {
     setShowModal(false);
     setEditingBank(null);
     setForm({ ...emptyForm });
+    setBalanceStr('0');
+  };
+
+  // Parse the balanceStr (may contain commas like "32,615.55") to a float
+  const parsedBalance = () => {
+    const clean = balanceStr.replace(/,/g, '');
+    return parseFloat(clean) || 0;
   };
 
   const handleSubmit = () => {
+    const finalForm = { ...form, balance: parsedBalance() };
     if (editingBank) {
-      editMutation.mutate({ ...form, id: editingBank.id });
+      editMutation.mutate({ ...finalForm, id: editingBank.id });
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(finalForm);
     }
   };
 
   const isPending = createMutation.isPending || editMutation.isPending;
   const isModalOpen = showModal || !!editingBank;
 
-  const FormFields = () => (
-    <div className="p-6 overflow-y-auto flex-1 space-y-6">
-      <div className="grid grid-cols-2 gap-6">
-        {[
-          { label: 'Alias de la cuenta', key: 'accountName', placeholder: 'Ej: Cuenta Corriente Principal' },
-          { label: 'Banco emisor', key: 'bankName', placeholder: 'Ej: Bank of America' },
-          { label: 'Número de cuenta', key: 'accountNumber', placeholder: 'Últimos 4 dígitos o completo' },
-          { label: 'Número de ruta (ABA)', key: 'routingNumber', placeholder: 'Opcional' },
-        ].map(({ label, key, placeholder }) => (
-          <div key={key} className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
-            <input
-              type="text"
-              placeholder={placeholder}
-              value={(form as any)[key]}
-              onChange={e => setForm({ ...form, [key]: e.target.value })}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
-            />
-          </div>
-        ))}
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo de cuenta</label>
-          <select
-            value={form.accountType}
-            onChange={e => setForm({ ...form, accountType: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
-          >
-            <option value="checking">Corriente (Checking)</option>
-            <option value="savings">Ahorros (Savings)</option>
-            <option value="credit">Crédito</option>
-            <option value="other">Otra</option>
-          </select>
-        </div>
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Moneda</label>
-          <select
-            value={form.currency}
-            onChange={e => setForm({ ...form, currency: e.target.value })}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
-          >
-            <option value="USD">USD — Dólar</option>
-            <option value="EUR">EUR — Euro</option>
-            <option value="MXN">MXN — Peso mexicano</option>
-          </select>
-        </div>
-        <div className="space-y-2 col-span-2">
-          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo inicial</label>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">
-              {form.currency === 'EUR' ? '€' : '$'}
-            </span>
-            <input
-              type="number"
-              step="0.01"
-              value={form.balance}
-              onChange={e => setForm({ ...form, balance: parseFloat(e.target.value) || 0 })}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors font-mono"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // ─── FormFields is INTENTIONALLY INLINED below (not a sub-component).
+  // Defining it as a sub-component inside Banks() causes React to unmount/remount
+  // it on every parent re-render, losing input focus on each keystroke.
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -209,7 +164,7 @@ export function Banks() {
                     <td className="px-6 py-4 text-gray-400 font-mono">{b.accountNumber}</td>
                     <td className="px-6 py-4">
                       <span className="px-2 py-1 text-xs rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                        {b.accountType}
+                        {({ checking: 'Corriente', savings: 'Ahorros', credit: 'Crédito', other: 'Otra' } as Record<string,string>)[b.accountType] ?? b.accountType}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right font-mono text-gray-300">
@@ -258,7 +213,92 @@ export function Banks() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <FormFields />
+            {/* ── Form fields — inlined to preserve input focus on re-render ── */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                {[
+                  { label: 'Alias de la cuenta', key: 'accountName', placeholder: 'Ej: Cuenta Corriente Principal' },
+                  { label: 'Banco emisor', key: 'bankName', placeholder: 'Ej: Bank of America' },
+                  { label: 'Número de cuenta', key: 'accountNumber', placeholder: 'Últimos 4 dígitos o completo' },
+                  { label: 'Número de ruta (ABA)', key: 'routingNumber', placeholder: 'Opcional' },
+                ].map(({ label, key, placeholder }) => (
+                  <div key={key} className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</label>
+                    <input
+                      type="text"
+                      placeholder={placeholder}
+                      value={(form as any)[key]}
+                      onChange={e => setForm({ ...form, [key]: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                ))}
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo de cuenta</label>
+                  <select
+                    value={form.accountType}
+                    onChange={e => setForm({ ...form, accountType: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="checking">Corriente (Checking)</option>
+                    <option value="savings">Ahorros (Savings)</option>
+                    <option value="credit">Crédito</option>
+                    <option value="other">Otra</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Moneda</label>
+                  <select
+                    value={form.currency}
+                    onChange={e => setForm({ ...form, currency: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="USD">USD — Dólar</option>
+                    <option value="EUR">EUR — Euro</option>
+                    <option value="MXN">MXN — Peso mexicano</option>
+                  </select>
+                </div>
+
+                {/* ── Balance field: type=text to preserve focus + allow US comma-format ── */}
+                <div className="space-y-2 col-span-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Saldo Inicial</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">
+                      {form.currency === 'EUR' ? '€' : '$'}
+                    </span>
+                    <input
+                      id="bank-balance-input"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={balanceStr}
+                      onChange={e => {
+                        // Allow digits, commas, dots, and a leading minus
+                        const raw = e.target.value.replace(/[^0-9.,\-]/g, '');
+                        setBalanceStr(raw);
+                      }}
+                      onBlur={() => {
+                        // On blur: reformat to US locale (e.g. 32,615.55)
+                        const num = parseFloat(balanceStr.replace(/,/g, '')) || 0;
+                        setBalanceStr(
+                          num === 0 ? '0' : num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        );
+                      }}
+                      onFocus={e => {
+                        // On focus: strip commas so user can edit the raw number
+                        setBalanceStr(balanceStr.replace(/,/g, ''));
+                        // Select all for easy replacement
+                        e.target.select();
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-3 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors font-mono"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-600">Formato: 32,615.55 — Este valor se actualiza automáticamente al importar resúmenes bancarios.</p>
+                </div>
+              </div>
+            </div>
             <div className="p-6 border-t border-gray-800 bg-gray-900/80 flex justify-end gap-3 shrink-0 rounded-b-2xl">
               <button
                 onClick={closeModal}

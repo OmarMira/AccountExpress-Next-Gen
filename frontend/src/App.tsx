@@ -12,6 +12,7 @@ import { CpaExport } from './pages/CpaExport';
 import { Settings } from './pages/Settings';
 import { Banks } from './pages/Banks';
 import { BankRules } from './pages/BankRules';
+import { MovementSummary } from './pages/MovementSummary';
 import { Users } from './pages/Users';
 import { Onboarding } from './pages/Onboarding';
 import { SuperAdminGuard } from './components/SuperAdminGuard';
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/export" element={<CpaExport />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/movement-summary" element={<MovementSummary />} />
         </Route>
 
         {/* Super Admin Routes */}

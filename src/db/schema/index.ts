@@ -35,3 +35,7 @@ export {
   bankTransactionGroupItems,
 } from "./bank-accounts.schema.ts";
 
+// Group C — AI
+export {
+  aiConversations,
+} from "./ai.schema.ts";

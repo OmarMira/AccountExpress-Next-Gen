@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { PermissionGate } from './PermissionGate';
@@ -13,7 +14,10 @@ import {
   Landmark,
   ArrowLeftRight,
   Gavel,
+  BarChart3,
+  Brain,
 } from 'lucide-react';
+import { AIPanel } from './AIPanel';
 
 export function AppShell() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -22,6 +26,7 @@ export function AppShell() {
   const logout = useAuthStore((state) => state.logout);
   const location = useLocation();
   const navigate = useNavigate();
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -38,8 +43,9 @@ export function AppShell() {
     { name: 'Diario Contable', path: '/journal', icon: Receipt, module: 'journal', action: 'read' },
     { name: 'Cuentas Bancarias', path: '/banks', icon: Landmark, module: 'banking', action: 'read' },
     { name: 'Conciliación Bancaria', path: '/reconciliation', icon: ArrowLeftRight, module: 'banking', action: 'read' },
-    { name: 'Reglas Bancarias', path: '/bank-rules', icon: Gavel, module: 'banking', action: 'read' },
-    { name: 'Reportes', path: '/reports', icon: FileText, module: 'reports', action: 'read' },
+    { name: 'Reglas Bancarias',     path: '/bank-rules',     icon: Gavel,          module: 'banking', action: 'read' },
+    { name: 'Resumen de Movimientos', path: '/movement-summary', icon: BarChart3, module: 'reports', action: 'read' },
+    { name: 'Reportes',             path: '/reports',         icon: FileText,       module: 'reports', action: 'read' },
     { name: 'Exportar para CPA', path: '/export', icon: Download, module: 'reports', action: 'read' },
   ];
 
@@ -90,6 +96,14 @@ export function AppShell() {
         </nav>
 
         <div className="border-t border-slate-800 pt-4 pb-4 px-3 space-y-1 flex-shrink-0">
+          <button
+            onClick={() => setAiPanelOpen(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-indigo-400 hover:text-white hover:bg-indigo-500/10 transition-colors text-sm"
+          >
+            <Brain className="w-4 h-4" />
+            <span>Asistente IA</span>
+          </button>
+
           <button
             onClick={() => navigate('/settings')}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm"
@@ -146,6 +160,11 @@ export function AppShell() {
         </main>
       </div>
 
+      <AIPanel
+        isOpen={aiPanelOpen}
+        onClose={() => setAiPanelOpen(false)}
+        companyId={activeCompany.id}
+      />
     </div>
   );
 }

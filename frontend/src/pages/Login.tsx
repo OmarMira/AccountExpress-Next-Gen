@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
 import { AlertCircle, Lock } from 'lucide-react';
+import { AISetupScreen } from '../components/AISetupScreen';
 
 export function Login() {
   const [username, setUsername] = useState('');
@@ -11,6 +12,7 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
+  const [showAISetup, setShowAISetup] = useState(false);
 
   const navigate = useNavigate();
   const setAuth = useAuthStore((state) => state.setUser);
@@ -46,7 +48,7 @@ export function Login() {
       setAuth(data.user);
       setAvailableCompanies(data.companies);
       
-      navigate('/select-company', { replace: true });
+      setShowAISetup(true);
     } catch (err: any) {
       if (err.message.includes('Locked out until')) {
         const match = err.message.match(/Locked out until (.+)/);
@@ -62,6 +64,10 @@ export function Login() {
 
   return (
     <div className="space-y-6">
+      {showAISetup ? (
+        <AISetupScreen onComplete={() => navigate('/select-company', { replace: true })} />
+      ) : (
+        <>
       {error && !lockedUntil && (
         <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
@@ -118,6 +124,8 @@ export function Login() {
           </button>
         </div>
       </form>
+        </>
+      )}
     </div>
   );
 }

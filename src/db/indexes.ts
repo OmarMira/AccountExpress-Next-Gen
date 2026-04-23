@@ -38,5 +38,9 @@ export const INDEXES: string[] = [
 
   `CREATE INDEX IF NOT EXISTS idx_coa_name_trgm
      ON chart_of_accounts USING gin(name gin_trgm_ops)`,
+
+  // ── Schema evolution (idempotent column additions) ────────────────────
+  `ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS initial_balance INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE bank_accounts ADD COLUMN IF NOT EXISTS initial_balance_period_start TEXT`,
 ];
 

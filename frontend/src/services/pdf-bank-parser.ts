@@ -319,11 +319,12 @@ export async function parseBankPDF(file: File): Promise<ParsedBankStatement> {
 
   const { periodStart, periodEnd } = extractPeriod(fullText);
 
+  // Fixed: use [^\n]*? (non-greedy) so dates like "January 1, 2025" don't block extraction.
   const begMatch = fullText.match(
-    /[Bb]eginning\s+balance[^$\n\d]*\$?\s*([\d,]+\.\d{2})|[Ss]aldo\s+(?:inicial|anterior)[^$\n\d]*\$?\s*([\d,]+\.\d{2})/i
+    /[Bb]eginning\s+balance[^\n]*?\$\s*([\d,]+\.\d{2})|[Ss]aldo\s+(?:inicial|anterior)[^\n]*?[$€]\s*([\d,]+\.\d{2})/i
   );
   const endMatch = fullText.match(
-    /[Ee]nding\s+balance[^$\n\d]*\$?\s*([\d,]+\.\d{2})|[Ss]aldo\s+final[^$\n\d]*\$?\s*([\d,]+\.\d{2})/i
+    /[Ee]nding\s+balance[^\n]*?\$\s*([\d,]+\.\d{2})|[Ss]aldo\s+final[^\n]*?[$€]\s*([\d,]+\.\d{2})/i
   );
 
   const beginningBalance = begMatch

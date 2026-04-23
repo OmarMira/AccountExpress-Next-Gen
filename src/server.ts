@@ -21,6 +21,8 @@ import { usersRoutes }         from "./routes/users.routes.ts";
 import { diagnosticsRoutes }   from "./routes/diagnostics.routes.ts";
 import { backupRoutes, backupScheduler } from "./api/routes/backup.routes.ts";
 import { reconciliationGroupRoutes } from "./routes/reconciliation-group.routes.ts";
+import { movementSummaryRoutes }     from "./routes/movement-summary.routes.ts";
+import { aiRoutes }                  from "./routes/ai.routes.ts";
 import { globalRateLimiter } from "./middleware/rate-limit.ts";
 import { logger } from "./lib/logger.ts";
 import { AppError } from "./lib/errors.ts";
@@ -61,6 +63,8 @@ export const app = new Elysia()
     .use(diagnosticsRoutes)
     .use(backupRoutes)
     .use(reconciliationGroupRoutes)
+    .use(movementSummaryRoutes)
+    .use(aiRoutes)
   )
 
   // ── Error handler ──────────────────────────────────────────

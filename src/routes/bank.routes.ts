@@ -76,6 +76,22 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         body.accountNumber ?? undefined,
         body.importBatchId
       );
+
+      // ── Update initial balance if this statement is the earliest ─
+      if (
+        result.bankAccountId &&
+        body.beginningBalance !== undefined &&
+        body.beginningBalance !== null &&
+        body.periodStart
+      ) {
+        await statementImportService.updateInitialBalanceIfEarlier(
+          companyId,
+          result.bankAccountId,
+          body.beginningBalance,
+          body.periodStart
+        );
+      }
+
       return { success: true, ...result };
     },
     {
@@ -91,6 +107,9 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         accountNumber: t.Optional(t.String()),
         fileName: t.String(),
         importBatchId: t.String(),
+        // New: beginning balance and period start from the PDF statement header
+        beginningBalance: t.Optional(t.Number()),
+        periodStart: t.Optional(t.String()),
       })
     }
   )
@@ -118,8 +137,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         .where(and(...conditions))
         .orderBy(sql`${bankTransactions.transactionDate} DESC`);
 
-      const descriptions = txs.map(tx => tx.description);
+      const descriptions = Array.from(new Set(txs.map(tx => tx.description)));
+      
       const suggestionMap = await suggestAccountBatch(companyId, descriptions);
+
       const enriched = txs.map(tx => {
         const suggestions = suggestionMap.get(tx.description) ?? [];
         return {

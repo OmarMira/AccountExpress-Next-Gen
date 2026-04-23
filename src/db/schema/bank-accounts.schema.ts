@@ -15,6 +15,11 @@ export const bankAccounts = pgTable("bank_accounts", {
   accountType: text("account_type").notNull().default("checking"),
   // balance stored as integer cents to avoid floating point issues
   balance: integer("balance").notNull().default(0),
+  // initialBalance: the "Beginning balance" from the EARLIEST imported statement
+  // Stored in integer cents (same convention as balance).
+  // initialBalancePeriodStart: ISO date (YYYY-MM-DD) of that earliest statement period.
+  initialBalance: integer("initial_balance").notNull().default(0),
+  initialBalancePeriodStart: text("initial_balance_period_start"),
   glAccountId: text("gl_account_id").references(() => chartOfAccounts.id),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

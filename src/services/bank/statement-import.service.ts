@@ -192,6 +192,7 @@ class StatementImportService {
 
         return {
             batchId,
+            bankAccountId: matchingAccountId,
             totalParsed: txns.length,
             importedCount: imported,
             duplicateCount: duplicates,
@@ -432,6 +433,61 @@ class StatementImportService {
 
         return txns;
     }
+  // ── Update initial balance if new period is earlier ──────────
+  // Called after each PDF import batch.
+  // Rule: initialBalance = beginningBalance of the EARLIEST statement period
+  // ever imported for this account.
+  //
+  // beginningBalanceDollars  — float (e.g. 32615.55), converted to cents here
+  // periodStart              — ISO date "YYYY-MM-DD" of the statement start
+  async updateInitialBalanceIfEarlier(
+    companyId: string,
+    bankAccountId: string,
+    beginningBalanceDollars: number,
+    periodStart: string
+  ): Promise<void> {
+    // Security: verify the account belongs to this tenant
+    const accounts = await db
+      .select({
+        id: bankAccounts.id,
+        periodStart: bankAccounts.initialBalancePeriodStart,
+      })
+      .from(bankAccounts)
+      .where(and(eq(bankAccounts.id, bankAccountId), eq(bankAccounts.companyId, companyId)))
+      .limit(1);
+
+    if (accounts.length === 0) return;  // Not found or wrong tenant
+
+    const current = accounts[0];
+
+    // Also select the stored initial_balance to detect "0 stored from a broken import"
+    const balanceRows = await db
+      .select({ initialBalance: bankAccounts.initialBalance })
+      .from(bankAccounts)
+      .where(and(eq(bankAccounts.id, bankAccountId), eq(bankAccounts.companyId, companyId)))
+      .limit(1);
+
+    const storedBalance = balanceRows[0]?.initialBalance ?? 0;
+    const incomingCents = Math.round(beginningBalanceDollars * 100);
+
+    const shouldUpdate =
+      current.periodStart === null ||
+      current.periodStart === undefined ||
+      periodStart < current.periodStart ||
+      // Same period but balance was 0 (broken parser run) and now we have the real value
+      (periodStart === current.periodStart && storedBalance === 0 && incomingCents > 0);
+
+    if (shouldUpdate) {
+      await db
+        .update(bankAccounts)
+        .set({
+          initialBalance: Math.round(beginningBalanceDollars * 100),
+          initialBalancePeriodStart: periodStart,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(bankAccounts.id, bankAccountId), eq(bankAccounts.companyId, companyId)));
+    }
+  }
 }
 
 export const statementImportService = new StatementImportService();

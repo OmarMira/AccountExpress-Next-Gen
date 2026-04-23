@@ -406,6 +406,9 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
           fileName: `${group.bankName}-${group.accountNumber}`,
           importBatchId,
           companyId: activeCompany?.id ?? '',
+          // ── Initial balance: from the earliest statement (already sorted) ──
+          beginningBalance: group.earliestBalance,
+          periodStart: group.statements[0].periodStart,
         }),
       });
       const importData = await importRes.json();
@@ -455,6 +458,32 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
         accountNumber: group.accountNumber,
       });
       setImportedBankAccountId(createdBankAccountId);
+
+      // ── 3b. Sync missing metadata on existing accounts ────────────────
+      // Even when all transactions are duplicates, we still want to fill in
+      // any fields that were blank/defaulted when the account was first created.
+      if (existing) {
+        const patchFields: Record<string, any> = {};
+
+        // Update bankName if it was blank
+        if (!existing.bankName && group.bankName) {
+          patchFields.bankName = group.bankName;
+        }
+        // Update balance if it was $0 and the PDF has a valid beginning balance
+        const existingBalance = Number(existing.balance ?? 0);
+        if (existingBalance === 0 && group.earliestBalance > 0) {
+          patchFields.balance = group.earliestBalance;
+        }
+
+        if (Object.keys(patchFields).length > 0) {
+          await fetch(`/api/bank-accounts/${createdBankAccountId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(patchFields),
+          });
+        }
+      }
 
       // 4. Advance to next group or finish
       if (index + 1 < statementGroups.length) {
