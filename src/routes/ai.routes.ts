@@ -291,6 +291,148 @@ Fecha actual: ${new Date().toISOString().split('T')[0]}`,
     }
   )
 
+  // ── POST /ai/suggest-rule ───────────────────────────────────
+  .post('/suggest-rule', async ({ body, set }) => {
+    const { companyId, message: userMessage } = body as any;
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
+
+    // Obtener plan de cuentas real de la empresa
+    const accounts = await db.execute(sql`
+      SELECT id, code, name, account_type
+      FROM chart_of_accounts
+      WHERE company_id = ${companyId} AND is_active = true
+      ORDER BY code ASC
+      LIMIT 80
+    `) as any[];
+
+    // Obtener prioridad máxima actual para sugerir la siguiente
+    const [priorityRow] = await db.execute(sql`
+      SELECT COALESCE(MAX(priority), 0) AS max_priority
+      FROM bank_rules
+      WHERE company_id = ${companyId}
+    `) as any[];
+    const nextPriority = Number(priorityRow.max_priority) + 1;
+
+    const accountsText = accounts
+      .map((a: any) => `${a.code} | ${a.name} | ${a.account_type} | id:${a.id}`)
+      .join('\n');
+
+    const systemPrompt = `Eres un asistente contable especializado en clasificación bancaria bajo US GAAP y las leyes del estado de Florida.
+El usuario va a describir un tipo de transacción bancaria. Tu tarea es sugerir una regla bancaria para clasificarla automáticamente.
+Debes responder ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+El JSON debe tener exactamente estos campos:
+{
+  "name": "string — nombre descriptivo de la regla",
+  "conditionType": "contains" | "starts_with" | "equals",
+  "conditionValue": "string — texto a buscar en la descripción de la transacción, en mayúsculas",
+  "transactionDirection": "debit" | "credit" | "any",
+  "glAccountId": "string — el id exacto de la cuenta del plan de cuentas provisto",
+  "autoAdd": false,
+  "priority": ${nextPriority},
+  "explanation": "string — explicación breve en español de por qué elegiste esa cuenta"
+}
+REGLAS ESTRICTAS:
+- glAccountId DEBE ser uno de los ids del plan de cuentas provisto. NUNCA inventes un id.
+- autoAdd siempre es false.
+- Si no puedes determinar la cuenta correcta con certeza, elige la más razonable y explícalo en explanation.
+- Responde SOLO el JSON. Nada más.
+
+PLAN DE CUENTAS DISPONIBLE:
+${accountsText}`;
+
+    const ollamaResponse = await fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama3.2:3b',
+        stream: false,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+      }),
+    });
+
+    if (!ollamaResponse.ok) {
+      set.status = 503;
+      return { error: 'Ollama no disponible.' };
+    }
+
+    const ollamaData = await ollamaResponse.json() as any;
+    const rawText: string = ollamaData.message?.content ?? '';
+
+    // Extraer JSON de la respuesta (puede venir con texto extra en modelos pequeños)
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      set.status = 422;
+      return { error: 'El modelo no retornó un JSON válido.', raw: rawText };
+    }
+
+    let suggested: any;
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      // Normalizar: aceptar tanto camelCase como snake_case, y limpiar espacios
+      suggested = {
+        name: String(parsed.name ?? '').trim(),
+        conditionType: String(parsed.conditionType ?? parsed.condition_type ?? '').trim(),
+        conditionValue: String(parsed.conditionValue ?? parsed.condition_value ?? '').trim().toUpperCase(),
+        transactionDirection: String(parsed.transactionDirection ?? parsed.transaction_direction ?? 'any').trim(),
+        glAccountId: String(parsed.glAccountId ?? parsed.gl_account_id ?? '').trim(),
+        autoAdd: false,
+        priority: Number(parsed.priority ?? 0),
+        explanation: String(parsed.explanation ?? '').trim(),
+      };
+    } catch {
+      set.status = 422;
+      return { error: 'JSON malformado en la respuesta del modelo.', raw: rawText };
+    }
+
+    // Validar que glAccountId exista en el plan de cuentas real
+    let validAccount = accounts.find((a: any) => a.id === suggested.glAccountId);
+    if (!validAccount) {
+      validAccount = accounts.find((a: any) => a.code === suggested.glAccountId);
+    }
+    if (!validAccount) {
+      set.status = 422;
+      return { error: 'El modelo sugirió una cuenta que no existe en el plan de cuentas.', raw: rawText };
+    }
+    suggested.glAccountId = validAccount.id;
+
+    // Verificar si ya existe una regla con el mismo conditionValue
+    const existingRules = await db.execute(sql`
+      SELECT id, name FROM bank_rules
+      WHERE company_id = ${companyId}
+        AND LOWER(condition_value) = LOWER(${suggested.conditionValue})
+        AND is_active = true
+    `) as any[];
+
+    if (existingRules.length > 0) {
+      return {
+        duplicate: true,
+        existingRuleName: existingRules[0].name,
+        message: `Ya existe una regla activa con la condición "${suggested.conditionValue}": "${existingRules[0].name}". No se creó una nueva regla para evitar duplicados.`
+      };
+    }
+
+    return {
+      suggested: {
+        name: suggested.name,
+        conditionType: suggested.conditionType,
+        conditionValue: suggested.conditionValue,
+        transactionDirection: suggested.transactionDirection,
+        glAccountId: suggested.glAccountId,
+        glAccountCode: validAccount.code,
+        glAccountName: validAccount.name,
+        autoAdd: false,
+        priority: nextPriority,
+        explanation: suggested.explanation,
+      }
+    };
+  }, {
+    body: t.Object({ message: t.String(), companyId: t.String() })
+  })
+
+
   // ── POST /ai/install ────────────────────────────────────────
   // Fire-and-forget: starts the install pipeline in background,
   // returns { started: true } immediately.

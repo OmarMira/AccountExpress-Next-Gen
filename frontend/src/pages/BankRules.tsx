@@ -311,61 +311,125 @@ export function BankRules() {
       </div>
 
       {showForm && (
-        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl">
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            if (editingId) updateMutation.mutate({ ...formData, id: editingId });
-            else createMutation.mutate(formData);
-          }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <input 
-              required
-              className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-indigo-500"
-              placeholder="Nombre"
-              value={formData.name}
-              onChange={e => setFormData({...formData, name: e.target.value})}
-            />
-            <div className="flex gap-2">
-               <select 
-                 className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none"
-                 value={formData.conditionType}
-                 onChange={e => setFormData({...formData, conditionType: e.target.value as any})}
-               >
-                 <option value="contains">Contiene</option>
-                 <option value="starts_with">Empieza</option>
-                 <option value="equals">Igual</option>
-               </select>
-               <input 
-                 required
-                 className="flex-1 bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none"
-                 placeholder="Valor"
-                 value={formData.conditionValue}
-                 onChange={e => setFormData({...formData, conditionValue: e.target.value})}
-               />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-700/60 rounded-3xl shadow-2xl w-full max-w-2xl relative flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-800">
+              <h2 className="text-xl font-bold text-white">
+                {editingId ? 'Editar Regla Bancaria' : 'Nueva Regla Bancaria'}
+              </h2>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <AccountSelector
-              accounts={Array.isArray(glAccounts) ? glAccounts : []}
-              value={formData.glAccountId}
-              onChange={(id) => setFormData({ ...formData, glAccountId: id })}
-              required
-            />
-            <select 
-              required
-              className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-indigo-500"
-              value={formData.priority}
-              onChange={e => setFormData({...formData, priority: parseInt(e.target.value)})}
+
+            {/* Modal Body */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (editingId) updateMutation.mutate({ ...formData, id: editingId });
+                else createMutation.mutate(formData);
+              }}
+              className="px-8 py-6 flex flex-col gap-5"
             >
-              <option value="0">0 — Prioridad Crítica (Se evalúa primero)</option>
-              <option value="5">5 — Prioridad Alta</option>
-              <option value="10">10 — Prioridad Normal</option>
-              <option value="15">15 — Prioridad Baja</option>
-              <option value="20">20 — Prioridad Muy Baja</option>
-            </select>
-            <div className="flex items-center gap-4">
-               <button type="submit" className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex-1 md:flex-none">
-                 {editingId ? 'Actualizar' : 'Guardar'}
-               </button>
-            </div>
-          </form>
+              {/* Nombre */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Nombre de la regla</label>
+                <input
+                  required
+                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors"
+                  placeholder="Ej: Pagos de Lyft - Ingresos de transporte"
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+
+              {/* Condición */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Condición</label>
+                <div className="flex gap-3">
+                  <select
+                    className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors w-40 shrink-0"
+                    value={formData.conditionType}
+                    onChange={e => setFormData({ ...formData, conditionType: e.target.value as any })}
+                  >
+                    <option value="contains">Contiene</option>
+                    <option value="starts_with">Empieza con</option>
+                    <option value="equals">Igual a</option>
+                  </select>
+                  <input
+                    required
+                    className="flex-1 bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors"
+                    placeholder="Ej: LYFT, UBER, AMAZON..."
+                    value={formData.conditionValue}
+                    onChange={e => setFormData({ ...formData, conditionValue: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Dirección */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Dirección de la transacción</label>
+                <select
+                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors"
+                  value={formData.transactionDirection}
+                  onChange={e => setFormData({ ...formData, transactionDirection: e.target.value as any })}
+                >
+                  <option value="any">Cualquiera (débito o crédito)</option>
+                  <option value="debit">Solo débitos (salidas)</option>
+                  <option value="credit">Solo créditos (entradas)</option>
+                </select>
+              </div>
+
+              {/* Cuenta GL */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Cuenta contable (GL)</label>
+                <AccountSelector
+                  accounts={Array.isArray(glAccounts) ? glAccounts : []}
+                  value={formData.glAccountId}
+                  onChange={(id) => setFormData({ ...formData, glAccountId: id })}
+                  required
+                />
+              </div>
+
+              {/* Prioridad */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Prioridad</label>
+                <select
+                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors"
+                  value={formData.priority}
+                  onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
+                >
+                  <option value="0">0 — Prioridad Crítica (se evalúa primero)</option>
+                  <option value="5">5 — Prioridad Alta</option>
+                  <option value="10">10 — Prioridad Normal</option>
+                  <option value="15">15 — Prioridad Baja</option>
+                  <option value="20">20 — Prioridad Muy Baja</option>
+                </select>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800 mt-1">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="px-6 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-sm font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm transition-colors"
+                >
+                  {editingId ? 'Actualizar regla' : 'Guardar regla'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -412,6 +476,7 @@ export function BankRules() {
                   <td className="p-4 text-right">
                     <button 
                       onClick={() => {
+                        setShowForm(true);
                         setEditingId(rule.id);
                         setFormData({
                           name: rule.name,
@@ -419,20 +484,18 @@ export function BankRules() {
                           conditionValue: rule.conditionValue,
                           transactionDirection: rule.transactionDirection,
                           glAccountId: rule.glAccountId,
-                          autoAdd: rule.autoAdd,
-                          priority: rule.priority,
-                          isActive: rule.isActive
+                          autoAdd: rule.autoAdd ?? false,
+                          priority: rule.priority ?? 10,
+                          isActive: rule.isActive ?? true,
                         });
-                        setShowForm(true);
                       }}
                       className="text-indigo-400 hover:text-white mr-4"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={(e) => { 
-                        e.stopPropagation();
-                        if (window.confirm('¿Eliminar esta regla?')) {
+                      onClick={() => {
+                        if (window.confirm(`¿Eliminar la regla "${rule.name}"?`)) {
                           deleteMutation.mutate(rule.id);
                         }
                       }}

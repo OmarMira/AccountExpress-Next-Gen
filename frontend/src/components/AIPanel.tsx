@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { fetchApi } from '../lib/api';
-import { X, Send, BrainCircuit, Loader2 } from 'lucide-react';
+import { X, Send, BrainCircuit, Loader2, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 interface AIPanelProps {
   isOpen: boolean;
@@ -13,10 +13,27 @@ interface Message {
   content: string;
 }
 
+interface RuleSuggestion {
+  name: string;
+  conditionType: 'contains' | 'starts_with' | 'equals';
+  conditionValue: string;
+  transactionDirection: 'debit' | 'credit' | 'any';
+  glAccountId: string;
+  glAccountCode: string;
+  glAccountName: string;
+  autoAdd: boolean;
+  priority: number;
+  explanation: string;
+}
+
 export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [ruleMode, setRuleMode] = useState(false);
+  const [ruleSuggestion, setRuleSuggestion] = useState<RuleSuggestion | null>(null);
+  const [ruleCreating, setRuleCreating] = useState(false);
+  const [ruleCreated, setRuleCreated] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -56,10 +73,75 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
     }
   };
 
+  const suggestRule = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    setInput('');
+    setRuleSuggestion(null);
+    setRuleCreated(false);
+    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setSending(true);
+    try {
+      const data = await fetchApi('/ai/suggest-rule', {
+        method: 'POST',
+        body: JSON.stringify({ companyId, message: text }),
+      });
+      if (data.duplicate) {
+        setMessages((prev) => [...prev, {
+          role: 'assistant',
+          content: data.message,
+        }]);
+      } else if (data.suggested) {
+        setRuleSuggestion(data.suggested);
+        setMessages((prev) => [...prev, {
+          role: 'assistant',
+          content: `Sugerencia de regla lista. Revísala abajo antes de confirmar.`,
+        }]);
+      } else {
+        setMessages((prev) => [...prev, { role: 'error', content: data.error ?? 'No se pudo generar la sugerencia.' }]);
+      }
+    } catch {
+      setMessages((prev) => [...prev, { role: 'error', content: 'Error al conectar con el asistente.' }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const createRule = async () => {
+    if (!ruleSuggestion) return;
+    setRuleCreating(true);
+    try {
+      await fetchApi('/bank-rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: ruleSuggestion.name,
+          conditionType: ruleSuggestion.conditionType,
+          conditionValue: ruleSuggestion.conditionValue,
+          transactionDirection: ruleSuggestion.transactionDirection,
+          glAccountId: ruleSuggestion.glAccountId,
+          autoAdd: ruleSuggestion.autoAdd,
+          priority: ruleSuggestion.priority,
+          isActive: true,
+        }),
+      });
+      setRuleCreated(true);
+      setRuleSuggestion(null);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `✓ Regla "${ruleSuggestion.name}" creada exitosamente.` }]);
+    } catch {
+      setMessages((prev) => [...prev, { role: 'error', content: 'Error al crear la regla. Intenta de nuevo.' }]);
+    } finally {
+      setRuleCreating(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      if (ruleMode) {
+        suggestRule();
+      } else {
+        sendMessage();
+      }
     }
   };
 
@@ -143,27 +225,68 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
 
         {/* Input */}
         <div className="border-t border-slate-700/60 px-4 py-3 shrink-0">
+          {/* Mode toggle */}
+          <div className="flex gap-1 mb-2">
+            <button
+              onClick={() => { setRuleMode(false); setRuleSuggestion(null); setRuleCreated(false); setMessages([]); setInput(''); }}
+              className={`flex-1 text-xs py-1.5 rounded-lg transition-colors ${!ruleMode ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+            >
+              Chat
+            </button>
+            <button
+              onClick={() => { setRuleMode(true); setRuleSuggestion(null); setRuleCreated(false); setMessages([]); setInput(''); }}
+              className={`flex-1 text-xs py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 ${ruleMode ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+            >
+              <Sparkles className="w-3 h-3" />
+              Crear Regla
+            </button>
+          </div>
+
+          {/* Rule suggestion card */}
+          {ruleSuggestion && (
+            <div className="mb-2 p-3 bg-slate-800/80 border border-indigo-500/30 rounded-xl text-xs space-y-1.5">
+              <p className="font-semibold text-indigo-300 text-[11px] uppercase tracking-wide">Regla sugerida</p>
+              <p className="text-white font-medium">{ruleSuggestion.name}</p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-400">
+                <span>Condición:</span><span className="text-slate-200">{ruleSuggestion.conditionType} "{ruleSuggestion.conditionValue}"</span>
+                <span>Dirección:</span><span className="text-slate-200">{ruleSuggestion.transactionDirection}</span>
+                <span>Cuenta GL:</span><span className="text-slate-200">{ruleSuggestion.glAccountCode} — {ruleSuggestion.glAccountName}</span>
+                <span>Prioridad:</span><span className="text-slate-200">{ruleSuggestion.priority}</span>
+              </div>
+              <p className="text-slate-400 italic border-t border-slate-700 pt-1.5">{ruleSuggestion.explanation}</p>
+              <button
+                onClick={createRule}
+                disabled={ruleCreating}
+                className="w-full mt-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+              >
+                {ruleCreating ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                {ruleCreating ? 'Creando...' : 'Confirmar y crear regla'}
+              </button>
+            </div>
+          )}
+
+          {/* Input area */}
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Escribe tu pregunta... (Enter para enviar)"
+              placeholder={ruleMode ? 'Describe la transacción. Ej: "Los pagos de Lyft son gastos de transporte"' : 'Escribe tu pregunta... (Enter para enviar)'}
               rows={2}
               disabled={sending}
               className="flex-1 resize-none bg-slate-800/80 border border-slate-600/50 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 disabled:opacity-50 transition-colors"
             />
             <button
-              onClick={sendMessage}
+              onClick={ruleMode ? suggestRule : sendMessage}
               disabled={sending || !input.trim()}
               className="w-9 h-9 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-colors shrink-0"
             >
-              <Send className="w-4 h-4 text-white" />
+              {ruleMode ? <Sparkles className="w-4 h-4 text-white" /> : <Send className="w-4 h-4 text-white" />}
             </button>
           </div>
           <p className="text-[10px] text-gray-600 mt-1.5 text-center">
-            Shift+Enter para nueva línea
+            {ruleMode ? 'Describe la transacción en lenguaje natural' : 'Shift+Enter para nueva línea'}
           </p>
         </div>
       </div>
