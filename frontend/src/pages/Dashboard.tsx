@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
+import { useNavigate } from 'react-router-dom';
 import { 
   Building2, 
   ArrowUpRight, 
@@ -32,6 +33,7 @@ function getDaysUntil(dateStr: string): number | null {
 
 export function Dashboard() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
+  const navigate = useNavigate();
   
   // Métricas contables (journal summary)
   const { data, isLoading } = useQuery({
@@ -112,8 +114,16 @@ export function Dashboard() {
             activeAlerts.map((alert, i) => {
               const Icon = alert.icon;
               const style = alertStyles[alert.type];
+              const destination =
+                alert.icon === Landmark ? '/reconciliation?tab=history' :
+                alert.icon === Clock    ? '/settings?tab=periods' :
+                null;
               return (
-                <div key={i} className={`flex items-center gap-3 border rounded-xl px-4 py-3 ${style.container}`}>
+                <div
+                  key={i}
+                  onClick={destination ? () => navigate(destination) : undefined}
+                  className={`flex items-center gap-3 border rounded-xl px-4 py-3 ${style.container} ${destination ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+                >
                   <Icon className={`w-4 h-4 shrink-0 ${style.icon}`} />
                   <p className="text-sm font-medium">{alert.message}</p>
                 </div>

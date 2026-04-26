@@ -228,13 +228,13 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
           {/* Mode toggle */}
           <div className="flex gap-1 mb-2">
             <button
-              onClick={() => { setRuleMode(false); setRuleSuggestion(null); setRuleCreated(false); setMessages([]); setInput(''); }}
+              onClick={async () => { setRuleMode(false); setRuleSuggestion(null); setRuleCreated(false); setMessages([]); setInput(''); await fetchApi('/ai/clear-history', { method: 'POST', body: JSON.stringify({ companyId }) }); }}
               className={`flex-1 text-xs py-1.5 rounded-lg transition-colors ${!ruleMode ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
             >
               Chat
             </button>
             <button
-              onClick={() => { setRuleMode(true); setRuleSuggestion(null); setRuleCreated(false); setMessages([]); setInput(''); }}
+              onClick={async () => { setRuleMode(true); setRuleSuggestion(null); setRuleCreated(false); setMessages([]); setInput(''); await fetchApi('/ai/clear-history', { method: 'POST', body: JSON.stringify({ companyId }) }); }}
               className={`flex-1 text-xs py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 ${ruleMode ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
             >
               <Sparkles className="w-3 h-3" />

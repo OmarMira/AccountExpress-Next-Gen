@@ -131,14 +131,14 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
       });
       
       let msg = '';
-      if (res.matchesFound === 0 && res.totalPending > 0) {
-        msg = `Automatch finalizado: 0 conciliadas de ${Math.max(res.totalPending, 0)} pendientes.`;
-      } else if (res.totalPending === 0 && res.matchesFound > 0) {
+      if (res.matched === 0 && res.pending > 0) {
+        msg = `Automatch finalizado: 0 conciliadas de ${Math.max(res.pending, 0)} pendientes.`;
+      } else if (res.pending === 0 && res.matched > 0) {
         msg = '¡Éxito! Se resolvieron todas las transacciones pendientes.';
-      } else if (res.totalPending === 0 && res.matchesFound === 0) {
+      } else if (res.pending === 0 && res.matched === 0) {
         msg = 'No hay transacciones pendientes para conciliar.';
       } else {
-        msg = `Automatch completado: ${res.matchesFound} conciliadas de ${res.totalPending} pendientes.`;
+        msg = `Automatch completado: ${res.matched} conciliadas de ${res.pending} pendientes.`;
       }
       
       setToast({ message: msg, type: 'success' });

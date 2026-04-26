@@ -842,6 +842,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
                 </button>
                 <div className="flex items-center gap-4">
                   <AutoMatchButton
+                    companyId={activeCompany?.id ?? null}
                     bankAccountId={importedBankAccountId}
                     periodId={activePeriodId}
                   />

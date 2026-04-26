@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
@@ -34,7 +35,10 @@ export function Settings() {
   const setActiveCompany = useAuthStore((state) => state.setActiveCompany);
   const queryClient = useQueryClient();
   
-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups' | 'diagnostics'>('company');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups' | 'diagnostics'>(
+    (searchParams.get('tab') as 'company' | 'users' | 'roles' | 'periods' | 'backups' | 'diagnostics') ?? 'company'
+  );
   const [companyViewMode, setCompanyViewMode] = useState<'list' | 'edit' | 'create'>('list');
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
 

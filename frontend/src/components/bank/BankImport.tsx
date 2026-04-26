@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Upload,
   History,
@@ -20,7 +21,10 @@ import { ImportHistory } from './ImportHistory';
 type Tab = 'import' | 'history';
 
 export const BankImport: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('import');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>(
+    (searchParams.get('tab') as Tab) ?? 'import'
+  );
   const [showWizard, setShowWizard] = useState(false);
 
   const handleImportComplete = () => {

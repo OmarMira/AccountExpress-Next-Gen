@@ -74,7 +74,7 @@ export async function detectRAM(): Promise<number> {
 export function selectModel(ramGB: number): string {
   if (ramGB === 0 || ramGB < 16) return "llama3.2:1b";
   if (ramGB < 32)                return "llama3.2:3b";
-  return "llama3.1:8b";
+  return "gemma4:latest";
 }
 
 // ─────────────────────────────────────────────────────────────

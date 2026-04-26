@@ -24,145 +24,112 @@ import {
 // detectDataQuery — classifies user message as a data query
 // Returns a query type string, or null if it's an analysis question.
 // ─────────────────────────────────────────────────────────────
-function detectDataQuery(message: string): string | null {
-  const msg = message.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const meses: Record<string, string> = {
-    enero: '01', febrero: '02', marzo: '03', abril: '04',
-    mayo: '05', junio: '06', julio: '07', agosto: '08',
-    septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12'
-  };
-  for (const [nombre, numero] of Object.entries(meses)) {
-    if (msg.includes(nombre)) return `transactions_month:${numero}`;
-  }
-  if (/(desglose|por mes|mensual|detalle).*(transacciones|movimientos)/.test(msg)) return 'transactions_detail';
-  if (/(cuantas|numero de|total de|cantidad)?.*(transacciones|movimientos)/.test(msg)) return 'transactions_count';
-  if (/(balance|saldo|balances|cuentas bancarias)/.test(msg)) return 'balances';
-  if (/(asientos|journal entries|diario contable)/.test(msg)) return 'journal';
-  if (/(plan de cuentas|cuentas contables|chart of accounts)/.test(msg)) return 'chart';
-  return null;
+// ─────────────────────────────────────────────────────────────
+// SCHEMA CONTEXT — passed to Gemma 4 for Text-to-SQL generation
+// Only includes tables and columns relevant for business queries.
+// ─────────────────────────────────────────────────────────────
+const DB_SCHEMA_CONTEXT = `
+Tablas disponibles (PostgreSQL). Solo puedes usar SELECT. company_id es siempre obligatorio en el WHERE.
+
+bank_transactions(id, company_id, bank_account[FK bank_accounts.id], transaction_date[YYYY-MM-DD text], description, amount[numeric 15,2 — positivo=crédito negativo=débito], transaction_type[debit|credit], status[pending|assigned|reconciled|ignored], gl_account_id[FK chart_of_accounts.id])
+
+bank_accounts(id, company_id, account_name, bank_name, account_number, balance[integer cents — dividir entre 100 para dólares], is_active[boolean])
+
+chart_of_accounts(id, company_id, code, name, account_type[asset|liability|equity|revenue|expense], normal_balance[debit|credit], is_active[boolean])
+
+journal_entries(id, company_id, entry_number, entry_date[YYYY-MM-DD text], description, status[draft|posted|voided], period_id[FK fiscal_periods.id])
+
+journal_lines(id, journal_entry_id[FK journal_entries.id], company_id, account_id[FK chart_of_accounts.id], debit_amount[numeric 15,2], credit_amount[numeric 15,2], description)
+
+fiscal_periods(id, company_id, name, period_type[monthly|quarterly|annual], start_date[YYYY-MM-DD text], end_date[YYYY-MM-DD text], status[open|closed|locked])
+`.trim();
+
+// ─────────────────────────────────────────────────────────────
+// buildSqlPrompt — asks Gemma 4 to classify and optionally generate SQL
+// ─────────────────────────────────────────────────────────────
+function buildSqlPrompt(userMessage: string): string {
+  return `Eres un asistente de base de datos para un sistema contable.
+
+${DB_SCHEMA_CONTEXT}
+
+TAREA: Analiza el mensaje del usuario y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+
+Si el mensaje requiere datos del sistema (transacciones, saldos, cuentas, asientos, periodos):
+{"type": "sql", "query": "SELECT ... FROM ... WHERE company_id = $1 ..."}
+
+Si el mensaje es una pregunta general de contabilidad, impuestos o finanzas (NO relacionada con datos del sistema):
+{"type": "general"}
+
+Si el mensaje pregunta sobre períodos fiscales, su estado, fechas de apertura o cierre:
+{"type": "sql", "query": "SELECT name, period_type, start_date, end_date, status FROM fiscal_periods WHERE company_id = $1 ORDER BY end_date DESC LIMIT 5"}
+
+Si el mensaje es un saludo o conversación casual:
+{"type": "chat"}
+
+REGLAS CRÍTICAS:
+- SIEMPRE usa $1 como placeholder para company_id en el WHERE
+- NUNCA uses INSERT, UPDATE, DELETE, DROP, ALTER, CREATE
+- NUNCA inventes nombres de columnas — usa solo los del schema
+- Para montos en bank_accounts.balance: dividir entre 100 (están en centavos)
+- Para fechas: la columna es text en formato YYYY-MM-DD, usa LIKE o substring para filtrar por mes/año
+- El JSON debe ser una sola línea, sin saltos de línea dentro
+
+Mensaje a clasificar:`;
 }
 
 // ─────────────────────────────────────────────────────────────
-// fetchDataResponse — queries real DB data and returns formatted text
-// Called only when detectDataQuery returns a non-null type.
+// callGemma — single Ollama call, returns parsed response text
 // ─────────────────────────────────────────────────────────────
-async function fetchDataResponse(queryType: string, companyId: string): Promise<string> {
-  if (queryType.startsWith('transactions_month:')) {
-    const monthNum = queryType.split(':')[1];
-    const rows = await db.execute(sql`
-      SELECT
-        TO_CHAR(transaction_date::date, 'YYYY-MM') AS month,
-        COUNT(*) AS total,
-        SUM(amount) AS net_amount
-      FROM bank_transactions
-      WHERE company_id = ${companyId}
-        AND TO_CHAR(transaction_date::date, 'MM') = ${monthNum}
-      GROUP BY TO_CHAR(transaction_date::date, 'YYYY-MM')
-      ORDER BY month ASC
-    `) as any[];
+async function callGemma(
+  modelName: string,
+  systemPrompt: string,
+  userContent: string,
+  timeoutMs = 60_000
+): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch("http://localhost:11434/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: modelName,
+        stream: false,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user",   content: userContent },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
+    const data = await res.json() as { message?: { content: string } };
+    return data.message?.content?.trim() ?? "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-    if (!rows.length) return `No hay transacciones registradas para ese mes.`;
-
-    const nombreMes = Object.entries({
-      '01':'Enero','02':'Febrero','03':'Marzo','04':'Abril',
-      '05':'Mayo','06':'Junio','07':'Julio','08':'Agosto',
-      '09':'Septiembre','10':'Octubre','11':'Noviembre','12':'Diciembre'
-    }).find(([k]) => k === monthNum)?.[1] ?? monthNum;
-
-    let resp = `**Transacciones de ${nombreMes}**\n`;
-    for (const row of rows) {
-      resp += `\u2022 ${row.month}: ${row.total} transacciones | neto: $${Number(row.net_amount).toFixed(2)}\n`;
+// ─────────────────────────────────────────────────────────────
+// executeSafeQuery — runs a read-only SELECT with companyId bound to $1
+// Rejects any query that is not a pure SELECT.
+// ─────────────────────────────────────────────────────────────
+async function executeSafeQuery(
+  rawQuery: string,
+  companyId: string
+): Promise<Record<string, unknown>[]> {
+  const normalized = rawQuery.trim().toUpperCase();
+  if (!normalized.startsWith("SELECT")) {
+    throw new Error("Solo se permiten consultas SELECT.");
+  }
+  const forbidden = ["INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE"];
+  for (const keyword of forbidden) {
+    if (normalized.includes(keyword)) {
+      throw new Error(`Consulta bloqueada: contiene ${keyword}.`);
     }
-    return resp;
   }
-
-  if (queryType === 'transactions_count') {
-    const [stats] = await db.execute(sql`
-      SELECT
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE status = 'pending')    AS pending,
-        COUNT(*) FILTER (WHERE status = 'assigned')   AS assigned,
-        COUNT(*) FILTER (WHERE status = 'reconciled') AS reconciled,
-        COUNT(*) FILTER (WHERE status = 'ignored')    AS ignored,
-        MIN(transaction_date) AS oldest_date,
-        MAX(transaction_date) AS newest_date
-      FROM bank_transactions
-      WHERE company_id = ${companyId}
-    `) as any;
-
-    return `**Transacciones bancarias**\nTotal: ${stats.total}\n• Pendientes: ${stats.pending}\n• Asignadas: ${stats.assigned}\n• Conciliadas: ${stats.reconciled}\n• Ignoradas: ${stats.ignored}\n• Período: ${stats.oldest_date ?? 'N/A'} → ${stats.newest_date ?? 'N/A'}`;
-  }
-
-  if (queryType === 'transactions_detail') {
-    const [stats] = await db.execute(sql`
-      SELECT COUNT(*) AS total
-      FROM bank_transactions
-      WHERE company_id = ${companyId}
-    `) as any;
-
-    const byMonth = await db.execute(sql`
-      SELECT
-        TO_CHAR(transaction_date::date, 'YYYY-MM') AS month,
-        COUNT(*) AS total,
-        SUM(amount) AS net_amount
-      FROM bank_transactions
-      WHERE company_id = ${companyId}
-      GROUP BY TO_CHAR(transaction_date::date, 'YYYY-MM')
-      ORDER BY month ASC
-    `) as any[];
-
-    let resp = `**Transacciones bancarias — desglose mensual**\nTotal: ${stats.total}\n\n`;
-    for (const row of byMonth) {
-      resp += `• ${row.month}: ${row.total} transacciones | neto: $${Number(row.net_amount).toFixed(2)}\n`;
-    }
-    return resp;
-  }
-
-  if (queryType === 'balances') {
-    const accounts = await db.execute(sql`
-      SELECT account_name, bank_name, balance
-      FROM bank_accounts
-      WHERE company_id = ${companyId} AND is_active = true
-      ORDER BY account_name ASC
-    `) as any[];
-
-    let resp = `**Cuentas bancarias activas**\n`;
-    for (const acc of accounts) {
-      resp += `• ${acc.account_name} (${acc.bank_name}): $${(Number(acc.balance) / 100).toFixed(2)}\n`;
-    }
-    return resp;
-  }
-
-  if (queryType === 'journal') {
-    const [stats] = await db.execute(sql`
-      SELECT
-        COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE status = 'posted') AS posted,
-        COUNT(*) FILTER (WHERE status = 'draft')  AS draft
-      FROM journal_entries
-      WHERE company_id = ${companyId}
-    `) as any;
-
-    return `**Asientos contables**\nTotal: ${stats.total}\n• Publicados: ${stats.posted}\n• Borradores: ${stats.draft}`;
-  }
-
-  if (queryType === 'chart') {
-    const accounts = await db.execute(sql`
-      SELECT code, name, account_type
-      FROM chart_of_accounts
-      WHERE company_id = ${companyId} AND is_active = true
-      ORDER BY code ASC
-      LIMIT 50
-    `) as any[];
-
-    let resp = `**Plan de cuentas activo (${accounts.length} cuentas)**\n`;
-    for (const acc of accounts) {
-      resp += `• ${acc.code} - ${acc.name} (${acc.account_type})\n`;
-    }
-    return resp;
-  }
-
-  return 'No tengo esa información disponible.';
+  const rows = await db.execute(sql.raw(rawQuery.replace("$1", `'${companyId.replace(/'/g, "''")}'`))) as Record<string, unknown>[];
+  return rows;
 }
 
 export const aiRoutes = new Elysia({ prefix: "/ai" })
@@ -179,105 +146,123 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
   // ── POST /ai/chat ───────────────────────────────────────────
   .post(
     "/chat",
-    async ({ body, user, set }) => {
+    async ({ body, set, ...ctx }: any) => {
       try {
-      const { companyId, message } = body;
+        const { companyId, message } = body;
+        const user: string = (ctx as any).user ?? '';
 
-      // Short-circuit: data queries go directly to DB, skip Ollama
-      const dataQueryType = detectDataQuery(message);
-      if (dataQueryType) {
-        const dataResp = await fetchDataResponse(dataQueryType, companyId);
-        return { reply: dataResp, source: 'db' };
-      }
+        // 1. Check Ollama is running
+        const status = await checkOllamaStatus();
+        if (!status.ollamaRunning) {
+          set.status = 503;
+          return { error: "Ollama no está disponible" };
+        }
 
-      // 1. Verify Ollama is running
-      const status = await checkOllamaStatus();
-      if (!status.ollamaRunning) {
-        set.status = 503;
-        return { error: "Ollama no está disponible" };
-      }
+        const modelName = status.modelName;
 
-      // 2. Fetch last 10 conversation entries for this company
-      const history = await db
-        .select()
-        .from(aiConversations)
-        .where(eq(aiConversations.companyId, companyId))
-        .orderBy(asc(aiConversations.createdAt))
-        .limit(10);
+        // 2. Ask Gemma to classify the message and optionally generate SQL
+        let classification: { type: string; query?: string };
+        try {
+          const raw = await callGemma(modelName, buildSqlPrompt(message), message);
+          const jsonMatch = raw.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error("No JSON in classification response");
+          classification = JSON.parse(jsonMatch[0]);
+        } catch {
+          classification = { type: "general" };
+        }
 
-      // 3. Build message array for Ollama
-      const systemPrompt = {
-        role: "system",
-        content: `Eres el asistente contable de AccountExpress.
+        // 3. If SQL query — execute and format result via second Gemma call
+        if (classification.type === "sql" && classification.query) {
+          let dataText: string;
+          try {
+            const rows = await executeSafeQuery(classification.query, companyId);
+            if (rows.length === 0) {
+              dataText = "No se encontraron registros para esa consulta.";
+            } else {
+              dataText = JSON.stringify(rows, null, 2);
+            }
+          } catch (err) {
+            dataText = `Error ejecutando consulta: ${err instanceof Error ? err.message : String(err)}`;
+          }
+
+          const formatPrompt = `Eres un asistente contable para AccountExpress (Florida, USA).
+El usuario hizo esta pregunta: "${message.replace(/"/g, '\\"')}"
+Aquí están los datos reales de la base de datos en JSON:
+${dataText}
+Responde en lenguaje natural, de forma clara y concisa, en el mismo idioma del usuario.
+NUNCA inventes datos adicionales. Si los datos están vacíos, dilo directamente.
+No menciones SQL, JSON, ni detalles técnicos.`;
+
+          const naturalResponse = await callGemma(modelName, formatPrompt, message);
+          // Data responses are not persisted — factual data, not model dialogue
+          return { reply: naturalResponse, source: "db" };
+        }
+
+        // 4. General or chat — use conversation history + Ollama
+        const history = await db
+          .select()
+          .from(aiConversations)
+          .where(eq(aiConversations.companyId, companyId))
+          .orderBy(asc(aiConversations.createdAt))
+          .limit(6);
+
+        const systemPrompt = `Eres el asistente contable de AccountExpress.
 Eres un Auditor Forense y Consultor de Impuestos del estado de Florida, USA.
-Tu rol es responder preguntas de contabilidad, ayudar a crear reglas bancarias, y elaborar proyecciones financieras.
-NUNCA inventes números ni datos financieros.
-Si el usuario pregunta por cifras o datos del sistema, responde exactamente: "Para consultar datos del sistema, usa las secciones del menú de AccountExpress."
-NUNCA sugieras modificar registros directamente en la base de datos.
-NUNCA ejecutes ni sugieras comandos SQL.
-Si el usuario pide hacer algo que requiere modificar datos, explícale cómo hacerlo usando la interfaz de AccountExpress.
+Tu rol es responder preguntas de contabilidad, impuestos y finanzas bajo US GAAP y las leyes del estado de Florida.
+
+REGLAS ABSOLUTAS — nunca las violes:
+1. NUNCA inventes números, cifras, montos ni datos financieros.
+2. NUNCA inventes pasos de navegación ni instrucciones de interfaz de AccountExpress. Si el usuario pregunta cómo hacer algo en el sistema, responde únicamente: "Para esa acción, navega al módulo correspondiente en el menú de AccountExpress."
+3. NUNCA cites estatutos, códigos legales, regulaciones ni referencias legales específicas a menos que estés completamente seguro de su existencia y contenido exacto. Si no estás seguro, di: "Te recomiendo verificar con un CPA o el sitio oficial del estado de Florida (floridarevenue.com)."
+4. NUNCA sugieras modificar registros directamente en la base de datos.
+5. Si no sabes la respuesta con certeza, dilo directamente. Es mejor admitir incertidumbre que dar información incorrecta.
+
+Lo que SÍ puedes hacer:
+- Explicar conceptos contables, principios US GAAP, tipos de cuentas, asientos de ajuste, depreciación, etc.
+- Orientar sobre obligaciones fiscales generales en Florida (sales tax DR-15, payroll, etc.) sin inventar cifras específicas.
+- Ayudar a interpretar datos que el sistema ya consultó de la base de datos.
+
 Responde siempre en el idioma en que el usuario te escriba.
-Fecha actual: ${new Date().toISOString().split('T')[0]}`,
-      };
+Fecha actual: ${new Date().toISOString().split("T")[0]}`;
 
-      const messages = [
-        systemPrompt,
-        ...history.map((h) => ({ role: h.role, content: h.content })),
-        { role: "user", content: message },
-      ];
+        const ollamaMessages = [
+          { role: "system", content: systemPrompt },
+          ...history.map((h) => ({ role: h.role, content: h.content })),
+          { role: "user", content: message },
+        ];
 
-      // 4. Call Ollama /api/chat with 60-second timeout
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 60_000);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 60_000);
+        let ollamaRes: Response;
+        try {
+          ollamaRes = await fetch("http://localhost:11434/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: modelName, messages: ollamaMessages, stream: false }),
+            signal: controller.signal,
+          });
+        } catch (err) {
+          set.status = 503;
+          return { error: err instanceof Error ? err.message : "Error conectando con Ollama" };
+        } finally {
+          clearTimeout(timer);
+        }
 
-      let ollamaRes: Response;
-      try {
-        ollamaRes = await fetch("http://localhost:11434/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: status.modelName,
-            messages,
-            stream: false,
-          }),
-          signal: controller.signal,
-        });
-      } catch (err) {
-        set.status = 503;
-        return { error: err instanceof Error ? err.message : "Error conectando con Ollama" };
-      } finally {
-        clearTimeout(timer);
-      }
+        if (!ollamaRes.ok) {
+          set.status = 503;
+          return { error: await ollamaRes.text().catch(() => "Error desconocido de Ollama") };
+        }
 
-      if (!ollamaRes.ok) {
-        const errText = await ollamaRes.text().catch(() => "Error desconocido de Ollama");
-        set.status = 503;
-        return { error: errText };
-      }
+        const ollamaData = await ollamaRes.json() as { message?: { role: string; content: string } };
+        const reply = ollamaData.message?.content ?? "";
 
-      const ollamaData = (await ollamaRes.json()) as {
-        message?: { role: string; content: string };
-      };
-      const reply = ollamaData.message?.content ?? "";
+        // Persist only Ollama dialogue — never DB data responses
+        await db.insert(aiConversations).values([
+          { companyId, userId: user, role: "user",      content: message },
+          { companyId, userId: user, role: "assistant", content: reply   },
+        ]);
 
-      // 5. Persist user message + assistant reply
-      await db.insert(aiConversations).values([
-        {
-          companyId,
-          userId: user as string,
-          role: "user",
-          content: message,
-        },
-        {
-          companyId,
-          userId: user as string,
-          role: "assistant",
-          content: reply,
-        },
-      ]);
-
-      // 6. Return reply
-      return { reply };
+        return { reply };
       } catch (err) {
         set.status = 500;
         return { error: err instanceof Error ? err.message : String(err) };
@@ -295,6 +280,12 @@ Fecha actual: ${new Date().toISOString().split('T')[0]}`,
   .post('/suggest-rule', async ({ body, set }) => {
     const { companyId, message: userMessage } = body as any;
     if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
+
+    const status = await checkOllamaStatus();
+    if (!status.ollamaRunning) {
+      set.status = 503;
+      return { error: "Ollama no está disponible" };
+    }
 
     // Obtener plan de cuentas real de la empresa
     const accounts = await db.execute(sql`
@@ -344,7 +335,7 @@ ${accountsText}`;
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama3.2:3b',
+        model: status.modelName,
         stream: false,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -432,6 +423,16 @@ ${accountsText}`;
     body: t.Object({ message: t.String(), companyId: t.String() })
   })
 
+
+  // ── POST /ai/clear-history ──────────────────────────────────
+  .post('/clear-history', async ({ body, set }) => {
+    const { companyId } = body as any;
+    if (!companyId) { set.status = 400; return { error: 'companyId requerido.' }; }
+    await db.delete(aiConversations).where(eq(aiConversations.companyId, companyId));
+    return { cleared: true };
+  }, {
+    body: t.Object({ companyId: t.String() })
+  })
 
   // ── POST /ai/install ────────────────────────────────────────
   // Fire-and-forget: starts the install pipeline in background,
