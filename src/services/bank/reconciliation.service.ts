@@ -80,6 +80,7 @@ export async function matchTransaction(
     await tx.update(bankTransactions)
       .set({
         status: 'reconciled',
+        glAccountId: accountId,
         journalEntryId: draftId,
         matchedBy: userId,
         matchedAt: new Date()

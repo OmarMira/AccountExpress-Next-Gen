@@ -7,7 +7,7 @@
 
 import { db } from "../../db/connection.ts";
 import { bankTransactions, bankAccounts, bankRules } from "../../db/schema/index.ts";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, isNull } from "drizzle-orm";
 import { matchTransaction } from "./reconciliation.service.ts";
 import { suggestAccountBatch } from "./smart-match.service.ts";
 import { createGroup, reconcileGroup } from "./reconciliation-group.service.ts";
@@ -60,6 +60,78 @@ export async function runAutoMatch(
         "Bank account has no GL account assigned. Assign a GL account to this bank account before running auto-match.",
     });
     return result;
+  }
+
+  // 1.6. Rule-based match: apply active bank rules to ALL pending transactions
+  // This runs regardless of autoAdd — rules defined by the user should always
+  // be applied during auto-match, not only at import time.
+  const activeRules = await db
+    .select()
+    .from(bankRules)
+    .where(
+      and(
+        eq(bankRules.companyId, companyId),
+        eq(bankRules.isActive, true)
+      )
+    )
+    .orderBy(bankRules.priority);
+
+  const pendingForRules = await db
+    .select()
+    .from(bankTransactions)
+    .where(
+      and(
+        eq(bankTransactions.companyId, companyId),
+        eq(bankTransactions.bankAccount, bankAccountId),
+        or(
+          eq(bankTransactions.status, "pending"),
+          isNull(bankTransactions.glAccountId)
+        )
+      )
+    );
+
+  // Set initial pending count to the total found
+  result.pending = pendingForRules.length;
+
+  for (const tx of pendingForRules) {
+    const desc = (tx.description ?? "").toUpperCase();
+
+    // Find first matching rule by priority
+    const matchingRule = activeRules.find(rule => {
+      const val = rule.conditionValue.toUpperCase();
+      const dirMatch =
+        rule.transactionDirection === "any" ||
+        (rule.transactionDirection === "debit"  && tx.transactionType === "debit") ||
+        (rule.transactionDirection === "credit" && tx.transactionType === "credit");
+      if (!dirMatch) return false;
+      if (rule.conditionType === "contains")    return desc.includes(val);
+      if (rule.conditionType === "starts_with") return desc.startsWith(val);
+      if (rule.conditionType === "equals")      return desc === val;
+      return false;
+    });
+
+    if (!matchingRule) continue;
+
+    try {
+      await matchTransaction(
+        companyId,
+        tx.id,
+        matchingRule.glAccountId,
+        bankGlAccountId,
+        periodId,
+        userId,
+        sessionId,
+        ipAddress
+      );
+      result.matched++;
+      result.pending--;
+    } catch (err: unknown) {
+      result.errors.push({
+        transactionId: tx.id,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      result.pending++;
+    }
   }
 
   // 1.5. Deterministic Rules: Process transactions marked as 'autoAdd'
@@ -193,7 +265,10 @@ export async function runGroupMatch(
       and(
         eq(bankTransactions.companyId, companyId),
         eq(bankTransactions.bankAccount, bankAccountId),
-        eq(bankTransactions.status, "pending")
+        or(
+          eq(bankTransactions.status, "pending"),
+          isNull(bankTransactions.glAccountId)
+        )
       )
     );
 
@@ -211,7 +286,7 @@ export async function runGroupMatch(
     const txSuggestions = (suggestions.get(desc) ?? []).slice(0, MAX_SUGGESTIONS_FOR_GROUP);
 
     if (txSuggestions.length === 0) {
-      result.pending++;
+      // It will remain in result.pending
       continue;
     }
 
@@ -225,7 +300,7 @@ export async function runGroupMatch(
   // 5. Reconcile each group (minimum 2 transactions to justify grouping)
   for (const [glAccountId, txGroup] of groups.entries()) {
     if (txGroup.length < 2) {
-      result.pending += txGroup.length;
+      // They remain in result.pending
       continue;
     }
 
@@ -248,6 +323,7 @@ export async function runGroupMatch(
       });
 
       result.matched += txGroup.length;
+      result.pending -= txGroup.length;
     } catch (err: unknown) {
       for (const tx of txGroup) {
         result.errors.push({
@@ -255,7 +331,7 @@ export async function runGroupMatch(
           reason: err instanceof Error ? err.message : String(err),
         });
       }
-      result.pending += txGroup.length;
+      // They remain in result.pending
     }
   }
 

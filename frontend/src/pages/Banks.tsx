@@ -8,11 +8,16 @@ import { PrintPreviewModal } from '../components/PrintPreviewModal';
 const emptyForm = {
   accountName: '', bankName: '', accountNumber: '',
   accountType: 'checking', routingNumber: '', balance: 0,
-  currency: 'USD', notes: ''
+  currency: 'USD', notes: '', glAccountId: ''
 };
 
 export function Banks() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
+  const { data: glAccounts = [] } = useQuery({
+    queryKey: ['chart-of-accounts', activeCompany?.id],
+    queryFn: () => fetchApi(`/gl-accounts?companyId=${activeCompany?.id}`),
+    enabled: !!activeCompany,
+  });
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -73,7 +78,8 @@ export function Banks() {
       routingNumber: b.routingNumber ?? '',
       balance: bal,
       currency: b.currency ?? 'USD',
-      notes: b.notes ?? ''
+      notes: b.notes ?? '',
+      glAccountId: b.glAccountId ?? ''
     });
   };
 
@@ -306,6 +312,22 @@ export function Banks() {
               >
                 Cancelar
               </button>
+                  <div className="mb-4 text-left">
+                    <label className="block text-xs font-semibold text-gray-400 mb-1 uppercase tracking-wide">
+                      Cuenta Contable (GL)
+                    </label>
+                    <select
+                      className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none"
+                      value={form.glAccountId}
+                      onChange={e => setForm({ ...form, glAccountId: e.target.value })}
+                    >
+                      <option value="">— Sin asignar —</option>
+                      {(glAccounts as any[]).filter((a: any) => a.accountType === 'asset').map((a: any) => (
+                        <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
               <button
                 onClick={handleSubmit}
                 disabled={isPending}

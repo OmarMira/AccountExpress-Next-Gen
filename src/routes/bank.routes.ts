@@ -248,11 +248,8 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       }
     )
 
-    // ─────────────────────────────────────────────────────────
-    // 6. ASSIGN GL ACCOUNT
-    // ─────────────────────────────────────────────────────────
     .patch(
-      "/transactions/:id/assign",
+      "/transactions/:id",
       async ({ params, body, companyId, set }) => {
         if (!companyId) {
           set.status = 403;
@@ -275,16 +272,28 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
           return { error: "Transacción no encontrada" };
         }
 
+        const updateData: any = {};
+        if (body.glAccountId !== undefined) {
+          updateData.glAccountId = body.glAccountId;
+          updateData.status = "assigned";
+        }
+        if (body.transactionDate !== undefined) updateData.transactionDate = body.transactionDate;
+        if (body.description !== undefined) updateData.description = body.description;
+        if (body.amount !== undefined) updateData.amount = body.amount;
+
         await db.update(bankTransactions)
-          .set({ glAccountId: body.glAccountId, status: "assigned" })
+          .set(updateData)
           .where(eq(bankTransactions.id, params.id));
 
-        return { success: true, message: "Cuenta asignada" };
+        return { success: true, message: "Transacción actualizada" };
       },
       {
         params: t.Object({ id: t.String() }),
         body: t.Object({
-          glAccountId: t.String()
+          glAccountId: t.Optional(t.String()),
+          transactionDate: t.Optional(t.String()),
+          description: t.Optional(t.String()),
+          amount: t.Optional(t.Number())
         })
       }
     )

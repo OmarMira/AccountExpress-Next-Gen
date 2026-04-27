@@ -185,6 +185,7 @@ export function BankRules() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'priority', direction: 'asc' });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -271,13 +272,72 @@ export function BankRules() {
 
   const filteredRules = useMemo(() => {
     if (!Array.isArray(safeRules)) return [];
-    return safeRules.filter((r: any) => {
+    
+    // 1. Filter
+    let result = safeRules.filter((r: any) => {
       const name = r?.name || '';
       const conditionValue = r?.conditionValue || '';
-      return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             conditionValue.toLowerCase().includes(searchTerm.toLowerCase());
+      const account = Array.isArray(glAccounts) ? glAccounts.find((a: any) => a.id === r.glAccountId) : null;
+      const accountInfo = account ? `${account.code} ${account.name}` : '';
+      
+      const search = searchTerm.toLowerCase();
+      return name.toLowerCase().includes(search) ||
+             conditionValue.toLowerCase().includes(search) ||
+             accountInfo.toLowerCase().includes(search);
     });
-  }, [safeRules, searchTerm]);
+
+    // 2. Sort
+    if (sortConfig) {
+      result.sort((a: any, b: any) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+
+        // Special handling for Account column sorting
+        if (sortConfig.key === 'glAccountId' && Array.isArray(glAccounts)) {
+          const accA = glAccounts.find((acc: any) => acc.id === a.glAccountId);
+          const accB = glAccounts.find((acc: any) => acc.id === b.glAccountId);
+          aVal = accA ? `${accA.code} ${accA.name}` : '';
+          bVal = accB ? `${accB.code} ${accB.name}` : '';
+        }
+
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [safeRules, searchTerm, sortConfig, glAccounts]);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ column }: { column: string }) => {
+    if (!sortConfig || sortConfig.key !== column) return <ChevronDown className="w-3 h-3 opacity-20" />;
+    return sortConfig.direction === 'asc' 
+      ? <ChevronDown className="w-3 h-3 text-indigo-400 rotate-180 transition-transform" /> 
+      : <ChevronDown className="w-3 h-3 text-indigo-400 transition-transform" />;
+  };
+
+  const handleEditRule = (rule: any) => {
+    setShowForm(true);
+    setEditingId(rule.id);
+    setFormData({
+      name: rule.name,
+      conditionType: rule.conditionType,
+      conditionValue: rule.conditionValue,
+      transactionDirection: rule.transactionDirection,
+      glAccountId: rule.glAccountId,
+      autoAdd: rule.autoAdd ?? false,
+      priority: rule.priority ?? 10,
+      isActive: rule.isActive ?? true,
+    });
+  };
 
   if (error) return <div className="p-8 text-rose-500">Error cargando reglas.</div>;
   if (!activeCompany) return <div className="p-8 text-white">Seleccione una empresa primero.</div>;
@@ -289,7 +349,18 @@ export function BankRules() {
           <h1 className="text-3xl font-black text-white">Reglas Bancarias</h1>
           <p className="text-slate-400">Automatiza la categorización de transacciones.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+            <input
+              type="text"
+              placeholder="Buscar regla, condición o cuenta..."
+              className="bg-slate-950 border border-slate-800 pl-11 pr-4 py-3 rounded-xl text-sm text-white w-72 outline-none focus:border-indigo-500 transition-all shadow-inner"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-3">
           <button
             onClick={() => setShowPrintModal(true)}
             disabled={isLoading || rules.length === 0}
@@ -309,6 +380,7 @@ export function BankRules() {
           </PermissionGate>
         </div>
       </div>
+    </div>
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -353,7 +425,7 @@ export function BankRules() {
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Condición</label>
                 <div className="flex gap-3">
                   <select
-                    className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors w-40 shrink-0"
+                    className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors w-40 shrink-0 [&>option]:bg-slate-950"
                     value={formData.conditionType}
                     onChange={e => setFormData({ ...formData, conditionType: e.target.value as any })}
                   >
@@ -375,7 +447,7 @@ export function BankRules() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Dirección de la transacción</label>
                 <select
-                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors"
+                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors [&>option]:bg-slate-950"
                   value={formData.transactionDirection}
                   onChange={e => setFormData({ ...formData, transactionDirection: e.target.value as any })}
                 >
@@ -400,7 +472,7 @@ export function BankRules() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Prioridad</label>
                 <select
-                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors"
+                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors [&>option]:bg-slate-950"
                   value={formData.priority}
                   onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
                 >
@@ -440,16 +512,48 @@ export function BankRules() {
           <table className="w-full text-left text-white">
             <thead className="bg-slate-800/50">
               <tr>
-                <th className="p-4">Prioridad</th>
-                <th className="p-4">Nombre</th>
-                <th className="p-4">Condición</th>
-                <th className="p-4">Cuenta</th>
+                <th 
+                  className="p-4 cursor-pointer hover:bg-slate-800 transition-colors group"
+                  onClick={() => handleSort('priority')}
+                >
+                  <div className="flex items-center gap-2">
+                    Prioridad <SortIcon column="priority" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 cursor-pointer hover:bg-slate-800 transition-colors group"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center gap-2">
+                    Nombre <SortIcon column="name" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 cursor-pointer hover:bg-slate-800 transition-colors group"
+                  onClick={() => handleSort('conditionValue')}
+                >
+                  <div className="flex items-center gap-2">
+                    Condición <SortIcon column="conditionValue" />
+                  </div>
+                </th>
+                <th 
+                  className="p-4 cursor-pointer hover:bg-slate-800 transition-colors group"
+                  onClick={() => handleSort('glAccountId')}
+                >
+                  <div className="flex items-center gap-2">
+                    Cuenta <SortIcon column="glAccountId" />
+                  </div>
+                </th>
                 <th className="p-4 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {filteredRules.map((rule: any) => (
-                <tr key={rule.id} className="border-t border-slate-800">
+                <tr 
+                  key={rule.id} 
+                  className="border-t border-slate-800 hover:bg-slate-800/30 transition-colors cursor-pointer select-none group/row"
+                  onDoubleClick={() => handleEditRule(rule)}
+                >
                   <td className="p-4">
                     <span className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-lg text-[10px] font-black">{rule.priority}</span>
                   </td>
@@ -475,20 +579,7 @@ export function BankRules() {
                   </td>
                   <td className="p-4 text-right">
                     <button 
-                      onClick={() => {
-                        setShowForm(true);
-                        setEditingId(rule.id);
-                        setFormData({
-                          name: rule.name,
-                          conditionType: rule.conditionType,
-                          conditionValue: rule.conditionValue,
-                          transactionDirection: rule.transactionDirection,
-                          glAccountId: rule.glAccountId,
-                          autoAdd: rule.autoAdd ?? false,
-                          priority: rule.priority ?? 10,
-                          isActive: rule.isActive ?? true,
-                        });
-                      }}
+                      onClick={() => handleEditRule(rule)}
                       className="text-indigo-400 hover:text-white mr-4"
                     >
                       <Pencil className="w-4 h-4" />

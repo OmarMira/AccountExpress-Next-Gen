@@ -250,7 +250,7 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
                             col.align === 'right' ? 'text-right font-bold' : col.align === 'center' ? 'text-center' : ''
                           }`}
                         >
-                          {col.format ? col.format(row[col.key]) : row[col.key]}
+                          {col.format ? col.format(row[col.key], row) : row[col.key]}
                         </td>
                       ))}
                     </tr>

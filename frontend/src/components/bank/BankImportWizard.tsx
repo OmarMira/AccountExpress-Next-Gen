@@ -84,7 +84,7 @@ const StatHighlight = ({
 
 // ── Types ─────────────────────────────────────────────────────
 
-type Step = 'upload' | 'confirm' | 'preview';
+type Step = 'upload' | 'confirm' | 'assign-gl' | 'preview';
 
 interface StatementGroup {
   accountNumber: string;
@@ -123,6 +123,8 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
     : null;
 
   const [importedBankAccountId, setImportedBankAccountId] = useState<string | null>(null);
+  const [importedBankNeedsGL, setImportedBankNeedsGL] = useState(false);
+  const [selectedGlAccountId, setSelectedGlAccountId] = useState<string>('');
 
   const [step, setStep] = useState<Step>('upload');
   const [files, setFiles] = useState<File[]>([]);
@@ -489,7 +491,17 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
       if (index + 1 < statementGroups.length) {
         setCurrentGroupIndex(index + 1);
       } else {
-        setStep('preview');
+        // Check if the bank account needs a GL account assigned
+        const glCheck = await fetch(`/api/bank-accounts?companyId=${activeCompany?.id}`, { credentials: 'include' });
+        const glCheckData = await glCheck.json();
+        const createdAccount = (Array.isArray(glCheckData) ? glCheckData : glCheckData.data ?? [])
+          .find((a: any) => a.id === createdBankAccountId);
+        if (createdAccount && !createdAccount.glAccountId && !createdAccount.gl_account_id) {
+          setImportedBankNeedsGL(true);
+          setStep('assign-gl');
+        } else {
+          setStep('preview');
+        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -554,9 +566,11 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
           <div className="flex items-center gap-6">
             <StepIndicator active={step === 'upload'} completed={step !== 'upload'} step="01" label="Carga" icon={Upload} />
             <div className={`w-12 h-px ${step !== 'upload' ? 'bg-indigo-500' : 'bg-gray-800'}`} />
-            <StepIndicator active={step === 'confirm'} completed={step === 'preview'} step="02" label="Confirmación" icon={Target} />
+            <StepIndicator active={step === 'confirm'} completed={step === 'assign-gl' || step === 'preview'} step="02" label="Confirmación" icon={Target} />
+            <div className={`w-12 h-px ${step === 'assign-gl' || step === 'preview' ? 'bg-indigo-500' : 'bg-gray-800'}`} />
+            <StepIndicator active={step === 'assign-gl'} completed={step === 'preview'} step="03" label="Cuenta GL" icon={Check} />
             <div className={`w-12 h-px ${step === 'preview' ? 'bg-indigo-500' : 'bg-gray-800'}`} />
-            <StepIndicator active={step === 'preview'} completed={false} step="03" label="Verificación" icon={Check} />
+            <StepIndicator active={step === 'preview'} completed={false} step="04" label="Verificación" icon={Check} />
           </div>
         </div>
 
@@ -723,6 +737,61 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
                     ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     : <Save className="w-4 h-4" />}
                   {loading ? 'Procesando...' : 'Confirmar e Importar'}
+                </button>
+              </div>
+            </div>
+          )}
+
+
+          {step === 'assign-gl' && (
+            <div className="flex flex-col items-center justify-center py-12 px-8 gap-6">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+                <Landmark className="w-7 h-7 text-amber-400" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-white mb-1">Asignar Cuenta Contable</h3>
+                <p className="text-sm text-gray-400 max-w-md">
+                  La cuenta bancaria fue creada pero necesita una cuenta contable (GL) para registrar los movimientos en el libro mayor.
+                </p>
+              </div>
+              <div className="w-full max-w-sm">
+                <label className="block text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wide">
+                  Cuenta Contable (GL)
+                </label>
+                <select
+                  className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:border-indigo-500 outline-none"
+                  value={selectedGlAccountId}
+                  onChange={e => setSelectedGlAccountId(e.target.value)}
+                >
+                  <option value="">— Selecciona una cuenta —</option>
+                  {(glAccounts as any[]).filter((a: any) => a.accountType === 'asset' || a.account_type === 'asset').map((a: any) => (
+                    <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 w-full max-w-sm">
+                <button
+                  onClick={() => setStep('preview')}
+                  className="flex-1 py-3 rounded-xl border border-gray-700 text-gray-400 text-sm hover:text-white hover:border-gray-500 transition-colors"
+                >
+                  Omitir por ahora
+                </button>
+                <button
+                  disabled={!selectedGlAccountId}
+                  onClick={async () => {
+                    if (!selectedGlAccountId || !importedBankAccountId) return;
+                    await fetch(`/api/bank-accounts/${importedBankAccountId}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({ glAccountId: selectedGlAccountId }),
+                    });
+                    setImportedBankNeedsGL(false);
+                    setStep('preview');
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-sm font-bold transition-colors"
+                >
+                  Guardar y Continuar
                 </button>
               </div>
             </div>

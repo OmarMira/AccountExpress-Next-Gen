@@ -308,24 +308,29 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
         <>
           {modalContent}
           {toast && (
-            <div className="fixed bottom-8 right-8 z-[100001] animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[1000000] animate-in fade-in slide-in-from-top-10 duration-500 w-full max-w-xl px-4">
               <div className={`
-                flex items-center gap-4 px-6 py-4 rounded-2xl border shadow-2xl backdrop-blur-xl min-w-[320px]
-                ${toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 
-                  toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 
-                  'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'}
+                flex items-center gap-6 px-10 py-6 rounded-[2.5rem] border shadow-[0_30px_90px_-20px_rgba(0,0,0,0.7)] backdrop-blur-3xl
+                ${toast.type === 'success' ? 'bg-emerald-600 border-emerald-400/50 text-white' : 
+                  toast.type === 'error' ? 'bg-rose-600 border-rose-400/50 text-white' : 
+                  'bg-indigo-600 border-indigo-400/50 text-white'}
               `}>
-                {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 shrink-0" />}
-                {toast.type === 'error' && <AlertCircle className="w-5 h-5 shrink-0" />}
-                {toast.type === 'info' && <Zap className="w-5 h-5 shrink-0" />}
+                <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+                  {toast.type === 'success' && <CheckCircle2 className="w-8 h-8 text-white" />}
+                  {toast.type === 'error' && <AlertCircle className="w-8 h-8 text-white" />}
+                  {toast.type === 'info' && <Zap className="w-8 h-8 text-white" />}
+                </div>
                 
-                <p className="text-sm font-bold flex-1 pr-4 leading-snug">{toast.message}</p>
+                <div className="flex-1">
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Sistema AccountExpress</p>
+                  <p className="text-base font-black leading-tight tracking-tight">{toast.message}</p>
+                </div>
                 
                 <button 
                   onClick={() => setToast(null)}
-                  className="p-1 hover:bg-white/5 rounded-lg transition-colors text-current/50 hover:text-current"
+                  className="w-12 h-12 rounded-full hover:bg-white/10 flex items-center justify-center transition-all text-white/50 hover:text-white border border-white/10"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-6 h-6" />
                 </button>
               </div>
             </div>
