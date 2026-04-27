@@ -55,8 +55,20 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   })
 
   // GET /journal/:id
-  .get("/:id", async ({ params }) => {
-    return await getEntryWithLines(params.id);
+  .use(requirePermission("journal", "read"))
+  .get("/:id", async ({ params, companyId, set }) => {
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
+    
+    const entry = await getEntryWithLines(params.id);
+    if (!entry) { set.status = 404; return { error: "Journal entry not found" }; }
+
+    // Ownership check
+    if (entry.entry.companyId !== companyId) {
+      set.status = 403;
+      return { error: "Acceso denegado" };
+    }
+
+    return entry;
   }, {
     params: t.Object({
       id: t.String()

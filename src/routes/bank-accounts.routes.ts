@@ -5,6 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 // ⚠️ FIX: Import authMiddleware to get session context (user, companyId) server-side.
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
+import { requirePermission } from "../middleware/rbac.middleware.ts";
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -17,6 +18,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
   // ⚠️ FIX: companyId is now read from the authenticated session (ctx.companyId),
   // NOT from the query string. This prevents a tenant-escalation attack where an
   // authenticated user sends another company's companyId to read foreign data.
+  .use(requirePermission('bank-accounts', 'read'))
   .get('/', async ({ companyId, set }) => {
     if (!companyId) {
       set.status = 403;
@@ -36,6 +38,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
     }));
   })
 
+  .use(requirePermission('bank-accounts', 'write'))
   .post('/', async ({ body, companyId, set }) => {
     // ⚠️ FIX: companyId comes exclusively from the session, not from the request body.
     if (!companyId) {

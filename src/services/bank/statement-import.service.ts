@@ -61,8 +61,8 @@ function parseCSVLine(line: string): string[] {
     return line.split(regex).map(col => col.replace(/^"|"$/g, '').trim());
 }
 
-function normalizeDate(rawDate: string): string {
-    if (!rawDate) return new Date().toISOString().split('T')[0];
+function normalizeDate(rawDate: string): string | null {
+    if (!rawDate) return null;
 
     if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
         return rawDate.substring(0, 10);
@@ -74,7 +74,7 @@ function normalizeDate(rawDate: string): string {
         const d = parts[1].padStart(2, '0');
         let y = parts[2];
         if (y.length === 2) y = '20' + y;
-        return `${y}-${m}-${d}`;
+        if (y.length === 4) return `${y}-${m}-${d}`;
     }
 
     const d = new Date(rawDate);
@@ -82,7 +82,7 @@ function normalizeDate(rawDate: string): string {
         return d.toISOString().split('T')[0];
     }
 
-    return new Date().toISOString().split('T')[0];
+    return null;
 }
 
 // ── Main service class ───────────────────────────────────────
@@ -255,66 +255,70 @@ class StatementImportService {
         let imported = 0;
         let duplicates = 0;
 
-        for (const t of txns) {
-            const fingerprint = buildFingerprint(
-                companyId, bankAccountId,
-                t.date, t.description, t.amount, t.referenceNumber
-            );
+        await db.transaction(async (tx) => {
+            for (const t of txns) {
+                const fingerprint = buildFingerprint(
+                    companyId, bankAccountId,
+                    t.date, t.description, t.amount, t.referenceNumber
+                );
 
-            // Use fingerprint stored in referenceNumber field as dedup key
-            // when no real referenceNumber exists. When a real referenceNumber
-            // is present, use it for exact matching to allow identical payments
-            // that share the same fingerprint to still be distinguished by FITID.
-            const existingQuery = t.referenceNumber
-                ? db.select({ id: bankTransactions.id })
-                    .from(bankTransactions)
-                    .where(and(
-                        eq(bankTransactions.companyId, companyId),
-                        eq(bankTransactions.bankAccount, bankAccountId),
-                        eq(bankTransactions.referenceNumber, t.referenceNumber)
-                    ))
-                    .limit(1)
-                : db.select({ id: bankTransactions.id })
-                    .from(bankTransactions)
-                    .where(and(
-                        eq(bankTransactions.companyId, companyId),
-                        eq(bankTransactions.bankAccount, bankAccountId),
-                        eq(bankTransactions.transactionDate, t.date),
-                        eq(bankTransactions.description, t.description),
-                        eq(bankTransactions.amount, t.amount.toString())
-                    ))
-                    .limit(1);
+                // Use fingerprint stored in referenceNumber field as dedup key
+                // when no real referenceNumber exists. When a real referenceNumber
+                // is present, use it for exact matching to allow identical payments
+                // that share the same fingerprint to still be distinguished by FITID.
+                const existingQuery = t.referenceNumber
+                    ? tx.select({ id: bankTransactions.id })
+                        .from(bankTransactions)
+                        .where(and(
+                            eq(bankTransactions.companyId, companyId),
+                            eq(bankTransactions.bankAccount, bankAccountId),
+                            eq(bankTransactions.referenceNumber, t.referenceNumber)
+                        ))
+                        .limit(1)
+                    : tx.select({ id: bankTransactions.id })
+                        .from(bankTransactions)
+                        .where(and(
+                            eq(bankTransactions.companyId, companyId),
+                            eq(bankTransactions.bankAccount, bankAccountId),
+                            eq(bankTransactions.transactionDate, t.date),
+                            eq(bankTransactions.description, t.description),
+                            eq(bankTransactions.amount, t.amount.toString())
+                        ))
+                        .limit(1);
 
-            const existing = await existingQuery;
+                const existing = await existingQuery;
 
-            if (existing.length > 0) {
-                duplicates++;
-            } else {
-                // Apply Bank Rules Engine
-                const matchingRule = await BankRulesService.findMatchingRule(companyId, {
-                    description: t.description,
-                    transactionType: t.amount < 0 ? 'debit' : 'credit'
-                });
+                if (existing.length > 0) {
+                    duplicates++;
+                } else {
+                    // BankRulesService.findMatchingRule usa db global intencionalmente.
+                    // Es un SELECT de solo lectura sobre reglas que no participan
+                    // de esta transacción — no afecta la atomicidad de los inserts.
+                    const matchingRule = await BankRulesService.findMatchingRule(companyId, {
+                        description: t.description,
+                        transactionType: t.amount < 0 ? 'debit' : 'credit'
+                    });
 
-                await db.insert(bankTransactions).values({
-                    id: randomUUID(),
-                    companyId,
-                    bankAccount: bankAccountId,
-                    transactionDate: t.date,
-                    description: t.description,
-                    amount: t.amount.toString(),
-                    transactionType: t.amount < 0 ? 'debit' : 'credit',
-                    // Store the fingerprint as referenceNumber when no real one is provided
-                    referenceNumber: t.referenceNumber ?? fingerprint,
-                    status: matchingRule ? 'assigned' : 'pending',
-                    glAccountId: matchingRule?.glAccountId ?? null,
-                    appliedRuleId: matchingRule?.id ?? null,
-                    importBatchId: batchId,
-                    createdAt: new Date(),
-                });
-                imported++;
+                    await tx.insert(bankTransactions).values({
+                        id: randomUUID(),
+                        companyId,
+                        bankAccount: bankAccountId,
+                        transactionDate: t.date,
+                        description: t.description,
+                        amount: t.amount.toString(),
+                        transactionType: t.amount < 0 ? 'debit' : 'credit',
+                        // Store the fingerprint as referenceNumber when no real one is provided
+                        referenceNumber: t.referenceNumber ?? fingerprint,
+                        status: matchingRule ? 'assigned' : 'pending',
+                        glAccountId: matchingRule?.glAccountId ?? null,
+                        appliedRuleId: matchingRule?.id ?? null,
+                        importBatchId: batchId,
+                        createdAt: new Date(),
+                    });
+                    imported++;
+                }
             }
-        }
+        });
 
         return { imported, duplicates };
     }
@@ -364,7 +368,8 @@ class StatementImportService {
         amtIdx: number
     ): ParsedTransaction[] {
         const txns: ParsedTransaction[] = [];
-        for (const line of dataLines) {
+        for (let i = 0; i < dataLines.length; i++) {
+            const line = dataLines[i];
             if (!line.trim()) continue;
             const cols = parseCSVLine(line);
             if (cols.length <= Math.max(dateIdx, descIdx, amtIdx)) continue;
@@ -372,8 +377,15 @@ class StatementImportService {
             const descStr = cols[descIdx];
             const amtStr = cols[amtIdx].replace(/[^0-9.-]+/g, '');
             if (!dateStr || !amtStr || isNaN(parseFloat(amtStr))) continue;
+            
+            const date = normalizeDate(dateStr);
+            if (!date) {
+                // Approximate row number (assumes 1 header row usually)
+                throw new Error(`Fila ${i + 2}: fecha inválida "${dateStr}". Formato esperado: YYYY-MM-DD, MM/DD/YYYY o DD/MM/YYYY.`);
+            }
+
             txns.push({
-                date: normalizeDate(dateStr),
+                date,
                 description: descStr || 'Desconocido',
                 amount: parseFloat(amtStr),
             });
@@ -406,11 +418,15 @@ class StatementImportService {
 
             if (!dtposted || !trnamt) continue;
 
-            let normalizedDate = '';
+            let normalizedDate: string | null = null;
             if (dtposted.length >= 8) {
                 normalizedDate = `${dtposted.substring(0, 4)}-${dtposted.substring(4, 6)}-${dtposted.substring(6, 8)}`;
             } else {
-                normalizedDate = new Date().toISOString().split('T')[0];
+                normalizedDate = normalizeDate(dtposted);
+            }
+
+            if (!normalizedDate) {
+                throw new Error(`OFX/QFX Error: fecha inválida en bloque ${i} ("${dtposted}")`);
             }
 
             // Use both NAME and MEMO when both are present and different

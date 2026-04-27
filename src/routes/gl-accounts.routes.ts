@@ -12,6 +12,7 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
 
   // GET /gl-accounts — returns all active accounts for the active company.
   // If the company has no accounts yet, seeds the full US GAAP chart automatically.
+  .use(requirePermission('accounts', 'read'))
   .get('/', async ({ companyId, set }) => {
     if (!companyId) {
       set.status = 403;
@@ -80,24 +81,32 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
   })
 
   // PATCH /gl-accounts/:id — edit name, code, or description
+  .use(requirePermission('accounts', 'update'))
   .patch('/:id', async ({ params, body, companyId, set }) => {
     if (!companyId) {
       set.status = 403;
       return { error: 'No active company in session.' };
     }
     const { id } = params;
-    const { name, description, code, parentCode } = body;
 
-    const [account] = await db
-      .select()
+    // Tenant Isolation Check
+    const [existingAccount] = await db
+      .select({ companyId: chartOfAccounts.companyId, code: chartOfAccounts.code })
       .from(chartOfAccounts)
-      .where(and(eq(chartOfAccounts.id, id), eq(chartOfAccounts.companyId, companyId)))
+      .where(eq(chartOfAccounts.id, id))
       .limit(1);
 
-    if (!account) {
+    if (!existingAccount) {
       set.status = 404;
       return { error: 'Cuenta no encontrada' };
     }
+
+    if (existingAccount.companyId !== companyId) {
+      set.status = 403;
+      return { error: 'Acceso denegado' };
+    }
+
+    const { name, description, code, parentCode } = body;
 
     const updates: Partial<typeof chartOfAccounts.$inferInsert> & { updatedAt: Date } = {
       updatedAt: new Date(),
@@ -106,7 +115,7 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
     if (name)                       updates.name        = name;
     if (description !== undefined)  updates.description = description;
 
-    if (code && code !== account.code) {
+    if (code && code !== existingAccount.code) {
       const [codeExists] = await db
         .select({ id: chartOfAccounts.id })
         .from(chartOfAccounts)
@@ -161,11 +170,30 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
   })
 
   // DELETE /gl-accounts/:id — soft-deactivate (system accounts are protected)
+  .use(requirePermission('accounts', 'delete'))
   .delete('/:id', async ({ params, companyId, set }) => {
     if (!companyId) {
       set.status = 403;
       return { error: 'No active company in session.' };
     }
+
+    // Tenant Isolation Check
+    const [existingAccount] = await db
+      .select({ companyId: chartOfAccounts.companyId })
+      .from(chartOfAccounts)
+      .where(eq(chartOfAccounts.id, params.id))
+      .limit(1);
+
+    if (!existingAccount) {
+      set.status = 404;
+      return { error: 'Cuenta no encontrada' };
+    }
+
+    if (existingAccount.companyId !== companyId) {
+      set.status = 403;
+      return { error: 'Acceso denegado' };
+    }
+
     try {
       await deactivateAccount(params.id, companyId);
       return { message: 'Cuenta desactivada' };

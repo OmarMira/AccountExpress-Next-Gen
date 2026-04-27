@@ -49,6 +49,11 @@ const ACCOUNTANT_PERMS = [
   permId("reports",  "read"),
   permId("reports",  "export"),
   permId("periods",  "close"),
+  permId("bank-rules",    "read"),
+  permId("bank-rules",    "write"),
+  permId("bank-accounts", "read"),
+  permId("bank-accounts", "write"),
+  permId("periods",       "read"),
 ];
 
 // ── AUDITOR: read + export only across all modules ───────────

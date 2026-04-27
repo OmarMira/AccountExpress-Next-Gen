@@ -1,3 +1,5 @@
+// DEPRECADO 2026-04-27: Parser migrado al backend (src/services/bank/pdf-parser.service.ts)
+// Mantener hasta verificación en producción. No importar en código nuevo.
 // ============================================================
 // PDF BANK PARSER — frontend/src/services/pdf-bank-parser.ts
 // Parses bank statement PDFs client-side using pdfjs-dist.

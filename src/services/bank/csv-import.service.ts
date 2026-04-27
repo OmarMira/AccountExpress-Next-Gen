@@ -23,8 +23,8 @@ export interface ParseResult {
 }
 
 // ── Date normalizer — handles all US bank date formats ───────
-export function normalizeDate(raw: string): string {
-  if (!raw) return new Date().toISOString().split("T")[0];
+export function normalizeDate(raw: string): string | null {
+  if (!raw) return null;
   const s = raw.trim();
 
   // Already ISO: YYYY-MM-DD
@@ -46,7 +46,7 @@ export function normalizeDate(raw: string): string {
   const d = new Date(s);
   if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
 
-  return new Date().toISOString().split("T")[0];
+  return null;
 }
 
 // ── CSV line splitter — respects quoted commas ───────────────
@@ -98,19 +98,27 @@ export function parseBankCsv(csvText: string): ParseResult {
       if (format === "chase" && row.length >= 4) {
         const amt = parseFloat(row[3].replace(/[^0-9.-]/g, "") || "0");
         if (isNaN(amt)) { failedRows++; continue; }
-        tx = { date: normalizeDate(row[1]), description: row[2] || "Unknown", amount: amt, reference: row[6] ?? null };
+        const date = normalizeDate(row[1]);
+        if (!date) throw new Error(`Fila ${i + 1}: fecha inválida "${row[1]}". Formato esperado: YYYY-MM-DD, MM/DD/YYYY o DD/MM/YYYY.`);
+        tx = { date, description: row[2] || "Unknown", amount: amt, reference: row[6] ?? null };
       } else if (format === "bofa" && row.length >= 3) {
         const amt = parseFloat(row[2].replace(/[^0-9.-]/g, "") || "0");
         if (isNaN(amt)) { failedRows++; continue; }
-        tx = { date: normalizeDate(row[0]), description: row[1] || "Unknown", amount: amt, reference: null };
+        const date = normalizeDate(row[0]);
+        if (!date) throw new Error(`Fila ${i + 1}: fecha inválida "${row[0]}". Formato esperado: YYYY-MM-DD, MM/DD/YYYY o DD/MM/YYYY.`);
+        tx = { date, description: row[1] || "Unknown", amount: amt, reference: null };
       } else if (format === "wellsfargo" && row.length >= 5) {
         const amt = parseFloat(row[1].replace(/[^0-9.-]/g, "") || "0");
         if (isNaN(amt)) { failedRows++; continue; }
-        tx = { date: normalizeDate(row[0]), description: row[4] || "Unknown", amount: amt, reference: null };
+        const date = normalizeDate(row[0]);
+        if (!date) throw new Error(`Fila ${i + 1}: fecha inválida "${row[0]}". Formato esperado: YYYY-MM-DD, MM/DD/YYYY o DD/MM/YYYY.`);
+        tx = { date, description: row[4] || "Unknown", amount: amt, reference: null };
       } else if (row.length >= 3) {
         const amt = parseFloat(row[2].replace(/[^0-9.-]/g, "") || "0");
         if (isNaN(amt)) { failedRows++; continue; }
-        tx = { date: normalizeDate(row[0]), description: row[1] || "Unknown", amount: amt, reference: null };
+        const date = normalizeDate(row[0]);
+        if (!date) throw new Error(`Fila ${i + 1}: fecha inválida "${row[0]}". Formato esperado: YYYY-MM-DD, MM/DD/YYYY o DD/MM/YYYY.`);
+        tx = { date, description: row[1] || "Unknown", amount: amt, reference: null };
       } else {
         failedRows++;
         continue;

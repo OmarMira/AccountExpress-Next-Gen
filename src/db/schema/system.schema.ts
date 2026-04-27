@@ -125,7 +125,9 @@ export const rolePermissions = pgTable("role_permissions", {
     .notNull()
     .references(() => permissions.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  rolePermissionUnique: uniqueIndex("uq_role_permission").on(table.roleId, table.permissionId),
+}));
 
 // ─────────────────────────────────────────────────────────────
 // 7. USER_COMPANY_ROLES

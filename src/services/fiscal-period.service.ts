@@ -6,7 +6,7 @@
 
 import { db, sql } from "../db/connection.ts";
 import { fiscalPeriods, bankTransactions, journalEntries } from "../db/schema/index.ts";
-import { eq, and, lte, gte, count } from "drizzle-orm";
+import { eq, and, or, isNull, lte, gte, count } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 
 export type PeriodStatus = "open" | "closed" | "locked";
@@ -87,7 +87,10 @@ export async function closePeriod(periodId: string, closedByUserId: string): Pro
       .where(
         and(
           eq(bankTransactions.companyId, period.companyId),
-          eq(bankTransactions.status, "pending"),
+          or(
+            eq(bankTransactions.status, "pending"),
+            isNull(bankTransactions.glAccountId)
+          ),
           gte(bankTransactions.transactionDate, period.startDate),
           lte(bankTransactions.transactionDate, period.endDate)
         )
@@ -95,7 +98,7 @@ export async function closePeriod(periodId: string, closedByUserId: string): Pro
 
     if ((pendingTxResult?.c ?? 0) > 0) {
       throw new Error(
-        `Cannot close period: ${pendingTxResult.c} bank transaction(s) still pending reconciliation`
+        `Cannot close period: ${pendingTxResult.c} bank transaction(s) are incomplete (pending status or missing GL account)`
       );
     }
 

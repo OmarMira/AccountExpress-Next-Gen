@@ -6,7 +6,7 @@ import { Elysia, t } from "elysia";
 
 import { db, sql } from "../db/connection.ts";
 import { bankAccounts, bankTransactions, fiscalPeriods, journalLines, journalEntries, chartOfAccounts } from "../db/schema/index.ts";
-import { eq, and, lte } from "drizzle-orm";
+import { eq, and, lte, isNull, or } from "drizzle-orm";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { verifyAuditChain } from "../services/audit.service.ts";
 import { getBalanceSheet } from "../services/reports/balance-sheet.service.ts";
@@ -32,7 +32,10 @@ export const dashboardRoutes = new Elysia({ prefix: "/dashboard" })
       .where(
         and(
           eq(bankTransactions.companyId, companyId),
-          eq(bankTransactions.status, "pending")
+          or(
+            eq(bankTransactions.status, "pending"),
+            isNull(bankTransactions.glAccountId)
+          )
         )
       )
       .limit(1);
@@ -85,6 +88,7 @@ export const dashboardRoutes = new Elysia({ prefix: "/dashboard" })
         pendingCount: pendingResult?.count || 0,
         totalAssets: bs.assets.total,
         totalLiabilities: bs.liabilities.total,
+        totalEquity: bs.equity.total,
         netIncome: inc - exp,
         income: inc,
         expenses: exp,

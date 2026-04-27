@@ -35,10 +35,10 @@ export function Dashboard() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   const navigate = useNavigate();
   
-  // Métricas contables (journal summary)
+  // Métricas contables (dashboard endpoint)
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-summary', activeCompany?.id],
-    queryFn: () => fetchApi(`/journal/summary?companyId=${activeCompany?.id}`),
+    queryFn: () => fetchApi(`/dashboard?companyId=${activeCompany?.id}`),
     enabled: !!activeCompany,
   });
 
@@ -146,7 +146,7 @@ export function Dashboard() {
             </div>
             <p className="text-sm font-medium text-gray-400 relative z-10">Activos Totales</p>
             <p className="text-3xl font-bold text-white mt-2 tracking-tight relative z-10">
-              ${data?.totalAssets?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}
+              ${data?.data?.totalAssets?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
             </p>
             <div className="mt-6 flex items-center gap-2 text-xs font-semibold text-emerald-400 relative z-10">
               <span className="bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-md">Bancos y Cuentas x Cobrar</span>
@@ -160,7 +160,7 @@ export function Dashboard() {
             </div>
             <p className="text-sm font-medium text-gray-400 relative z-10">Pasivos Totales</p>
             <p className="text-3xl font-bold text-white mt-2 tracking-tight relative z-10">
-              ${data?.totalLiabilities?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}
+              ${data?.data?.totalLiabilities?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
             </p>
             <div className="mt-6 flex items-center gap-2 text-xs font-semibold text-rose-400 relative z-10">
               <span className="bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-md">Cuentas x Pagar y Préstamos</span>
@@ -174,7 +174,7 @@ export function Dashboard() {
             </div>
             <p className="text-sm font-medium text-gray-400 relative z-10">Patrimonio Neto</p>
             <p className="text-3xl font-bold text-white mt-2 tracking-tight relative z-10">
-              ${data?.totalEquity?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}
+              ${data?.data?.totalEquity?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
             </p>
             <div className="mt-6 flex items-center gap-2 text-xs font-semibold text-amber-400 relative z-10">
               <span className="bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-md">Capital Social y Reservas</span>
@@ -188,7 +188,7 @@ export function Dashboard() {
             </div>
             <p className="text-sm font-medium text-gray-400 relative z-10">Utilidad Neta del Ejercicio</p>
             <p className="text-3xl font-bold text-white mt-2 tracking-tight relative z-10">
-              ${data?.netIncome?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || '0.00'}
+              ${data?.data?.netIncome?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
             </p>
             <div className="mt-6 flex items-center gap-2 text-xs font-semibold text-emerald-400 relative z-10">
               <span className="bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded-md">Ingresos - Gastos</span>
@@ -203,7 +203,7 @@ export function Dashboard() {
                 </div>
                 <div>
                    <h3 className="text-white font-bold">Resumen de Cuenta</h3>
-                   <p className="text-gray-400 text-sm">Flujo consolidado: +${data?.totalRevenue?.toLocaleString()} ingresos / -${data?.totalExpense?.toLocaleString()} gastos.</p>
+                   <p className="text-gray-400 text-sm">Flujo consolidado: +${data?.data?.income?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'} ingresos / -${data?.data?.expenses?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'} gastos.</p>
                 </div>
              </div>
           </div>

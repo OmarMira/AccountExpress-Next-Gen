@@ -12,6 +12,7 @@ import { runAutoMatch, runGroupMatch } from "../services/bank/auto-match.service
 import { createAuditEntry } from "../services/audit.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
+import { parseBankPdf } from "../services/bank/pdf-parser.service.ts";
 
 import { db, sql } from "../db/connection.ts";
 import { eq, and } from "drizzle-orm";
@@ -110,6 +111,105 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         // New: beginning balance and period start from the PDF statement header
         beginningBalance: t.Optional(t.Number()),
         periodStart: t.Optional(t.String()),
+      })
+    }
+  )
+
+  // ─────────────────────────────────────────────────────────────
+  // 1B. INSPECT PDF (DRY-RUN)
+  // ─────────────────────────────────────────────────────────────
+  .post(
+    "/inspect-pdf",
+    async ({ body, set }) => {
+      try {
+        const buffer = await body.file.arrayBuffer();
+        const result = await parseBankPdf(buffer, body.file.name);
+
+        return {
+          success: true,
+          data: {
+            bankName: result.bankName,
+            accountNumber: result.accountNumber,
+            accountHolder: result.accountHolder,
+            openingBalance: result.beginningBalance,
+            periodStart: result.periodStart,
+            periodEnd: result.periodEnd,
+            transactions: result.transactions,
+            totalRows: result.totalRows,
+            rejectedRows: result.rejectedRows,
+            rejectedReasons: result.rejectedReasons
+          }
+        };
+      } catch (error: any) {
+        set.status = 422;
+        return { success: false, error: error.message };
+      }
+    },
+    {
+      body: t.Object({
+        file: t.File({ type: 'application/pdf', maxSize: '10m' })
+      })
+    }
+  )
+
+  // ─────────────────────────────────────────────────────────────
+  // 1C. IMPORT PDF BINARY (SECURE BACKEND PARSE)
+  // ─────────────────────────────────────────────────────────────
+  .post(
+    "/import-pdf",
+    async ({ body, companyId, set }) => {
+      if (!companyId) {
+        set.status = 403;
+        return { error: "No active company in session." };
+      }
+
+      try {
+        const buffer = await body.file.arrayBuffer();
+        const parseResult = await parseBankPdf(buffer, body.file.name);
+
+        const importResult = await statementImportService.processParsedBatch(
+          companyId,
+          body.bankAccountId,
+          parseResult.transactions,
+          parseResult.bankName,
+          parseResult.accountNumber,
+          body.importBatchId
+        );
+
+        // Update initial balance if applicable
+        if (
+          importResult.bankAccountId &&
+          parseResult.beginningBalance !== undefined &&
+          parseResult.periodStart
+        ) {
+          await statementImportService.updateInitialBalanceIfEarlier(
+            companyId,
+            importResult.bankAccountId,
+            parseResult.beginningBalance,
+            parseResult.periodStart
+          );
+        }
+
+        return {
+          success: true,
+          data: {
+            imported: importResult.importedCount,
+            rejected: parseResult.rejectedRows,
+            reasons: parseResult.rejectedReasons,
+            transactions: parseResult.transactions,
+            bankAccountId: importResult.bankAccountId
+          }
+        };
+      } catch (error: any) {
+        set.status = 400;
+        return { success: false, error: error.message };
+      }
+    },
+    {
+      body: t.Object({
+        file: t.File({ type: 'application/pdf', maxSize: '10m' }),
+        bankAccountId: t.String(),
+        importBatchId: t.String()
       })
     }
   )
@@ -274,6 +374,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
 
         const updateData: any = {};
         if (body.glAccountId !== undefined) {
+          if (typeof body.glAccountId !== 'string' || body.glAccountId.trim() === '') {
+            set.status = 400;
+            return { success: false, error: "glAccountId debe ser un string no vacío" };
+          }
           updateData.glAccountId = body.glAccountId;
           updateData.status = "assigned";
         }

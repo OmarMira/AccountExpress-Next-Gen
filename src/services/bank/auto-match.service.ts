@@ -121,7 +121,8 @@ export async function runAutoMatch(
         periodId,
         userId,
         sessionId,
-        ipAddress
+        ipAddress,
+        matchingRule.id
       );
       result.matched++;
       result.pending--;
@@ -166,7 +167,8 @@ export async function runAutoMatch(
         periodId,
         userId,
         sessionId,
-        ipAddress
+        ipAddress,
+        tx.appliedRuleId ?? undefined
       );
       result.matched++;
     } catch (err: any) {

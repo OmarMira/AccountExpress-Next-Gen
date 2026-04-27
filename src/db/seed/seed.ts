@@ -51,11 +51,6 @@ async function seedSystemConfig(): Promise<void> {
 
 // ── 2. ROLES ─────────────────────────────────────────────────
 async function seedRoles(): Promise<void> {
-  const [result] = await db.select({ c: count() }).from(roles);
-  if (result && result.c > 0) {
-    console.log("[SEED] ✓ roles already seeded — skipping");
-    return;
-  }
   for (const r of ROLES_SEED) {
     await db.insert(roles).values({
       id:          r.id,
@@ -72,11 +67,6 @@ async function seedRoles(): Promise<void> {
 
 // ── 3. PERMISSIONS ───────────────────────────────────────────
 async function seedPermissions(): Promise<void> {
-  const [result] = await db.select({ c: count() }).from(permissions);
-  if (result && result.c > 0) {
-    console.log("[SEED] ✓ permissions already seeded — skipping");
-    return;
-  }
   for (const p of PERMISSIONS_SEED) {
     await db.insert(permissions).values({
       id:          p.id,
@@ -91,18 +81,13 @@ async function seedPermissions(): Promise<void> {
 
 // ── 4. ROLE_PERMISSIONS ──────────────────────────────────────
 async function seedRolePermissions(): Promise<void> {
-  const [result] = await db.select({ c: count() }).from(rolePermissions);
-  if (result && result.c > 0) {
-    console.log("[SEED] ✓ role_permissions already seeded — skipping");
-    return;
-  }
   for (const rp of ROLE_PERMISSIONS_SEED) {
     await db.insert(rolePermissions).values({
       id:           rp.id,
       roleId:       rp.roleId,
       permissionId: rp.permissionId,
       createdAt:    new Date(rp.createdAt),
-    }).onConflictDoNothing();
+    }).onConflictDoNothing({ target: [rolePermissions.roleId, rolePermissions.permissionId] });
   }
   console.log(`[SEED] ✓ ${ROLE_PERMISSIONS_SEED.length} role_permissions seeded`);
 }

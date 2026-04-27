@@ -13,28 +13,35 @@ import {
 } from "../services/fiscal-period.service.ts";
 import type { PeriodStatus } from "../services/fiscal-period.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { requireAuth } from "../middleware/auth.middleware.ts";
+import { authMiddleware, requireAuth } from "../middleware/auth.middleware.ts";
+import { db } from "../db/connection.ts";
+import { fiscalPeriods } from "../db/schema/index.ts";
+import { eq, and } from "drizzle-orm";
 
 export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
+  .use(authMiddleware)
   .guard({ beforeHandle: requireAuth })
 
-  // GET /fiscal-periods?companyId=&status=
-  .get("/", async ({ query }) => {
-    return await listPeriods(query.companyId, query.status as PeriodStatus);
+  // GET /fiscal-periods
+  .use(requirePermission("periods", "read"))
+  .get("/", async ({ query, companyId, set }) => {
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
+    return await listPeriods(companyId, query.status as PeriodStatus);
   }, {
     query: t.Object({
-      companyId: t.String(),
       status:    t.Optional(t.String()),
     })
   })
 
   // POST /fiscal-periods
+  .use(requirePermission("periods", "write"))
   .post(
     "/",
-    async ({ body, set }) => {
+    async ({ body, companyId, set }) => {
+      if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
       try {
         const id = await openPeriod({
-          companyId:  body.companyId,
+          companyId,
           name:       body.name,
           periodType: body.periodType as "monthly" | "quarterly" | "annual",
           startDate:  body.startDate,
@@ -49,7 +56,6 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
     },
     {
       body: t.Object({
-        companyId:  t.String(),
         name:       t.String({ minLength: 1 }),
         periodType: t.Union([t.Literal("monthly"), t.Literal("quarterly"), t.Literal("annual")]),
         startDate:  t.String(),
@@ -59,8 +65,15 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   )
 
   // GET /fiscal-periods/:id
-  .get("/:id", async ({ params, set }) => {
-    const period = await getPeriod(params.id);
+  .get("/:id", async ({ params, companyId, set }) => {
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
+
+    const [period] = await db
+      .select()
+      .from(fiscalPeriods)
+      .where(and(eq(fiscalPeriods.id, params.id), eq(fiscalPeriods.companyId, companyId)))
+      .limit(1);
+
     if (!period) { set.status = 404; return { error: "Fiscal period not found" }; }
     return period;
   }, {
@@ -71,7 +84,18 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
 
   // POST /fiscal-periods/:id/close
   .use(requirePermission("periods", "close"))
-  .post("/:id/close", async ({ params, user, set }) => {
+  .post("/:id/close", async ({ params, user, companyId, set }) => {
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
+    
+    // Ownership check
+    const [existing] = await db
+      .select({ id: fiscalPeriods.id })
+      .from(fiscalPeriods)
+      .where(and(eq(fiscalPeriods.id, params.id), eq(fiscalPeriods.companyId, companyId)))
+      .limit(1);
+
+    if (!existing) { set.status = 404; return { error: "Fiscal period not found" }; }
+
     const uid = user!;
     try {
       await closePeriod(params.id, uid);
@@ -87,7 +111,19 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   })
 
   // POST /fiscal-periods/:id/lock
-  .post("/:id/lock", async ({ params, set }) => {
+  .use(requirePermission("periods", "write"))
+  .post("/:id/lock", async ({ params, companyId, set }) => {
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
+
+    // Ownership check
+    const [existing] = await db
+      .select({ id: fiscalPeriods.id })
+      .from(fiscalPeriods)
+      .where(and(eq(fiscalPeriods.id, params.id), eq(fiscalPeriods.companyId, companyId)))
+      .limit(1);
+
+    if (!existing) { set.status = 404; return { error: "Fiscal period not found" }; }
+
     try {
       await lockPeriod(params.id);
       return { message: "Fiscal period locked permanently" };

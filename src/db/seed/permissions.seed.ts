@@ -62,5 +62,13 @@ export const PERMISSIONS_SEED: PermissionSeed[] = [
   // ── NEW PERMISSIONS (v1.0.1) ───────────────────────────────
   { id: "perm-journ-void--29", module: "journal", action: "void",  description: "Void posted journal entries (reversing)",    createdAt: NOW },
   { id: "perm-perio-close-30", module: "periods", action: "close", description: "Close/Open fiscal periods",                 createdAt: NOW },
+
+  // ── NEW PERMISSIONS (v1.0.2) ───────────────────────────────
+  { id: "perm-rules-read---31", module: "bank-rules",    action: "read",  description: "View bank rules",                        createdAt: NOW },
+  { id: "perm-rules-write--32", module: "bank-rules",    action: "write", description: "Create, edit and delete bank rules",      createdAt: NOW },
+  { id: "perm-bacct-read---33", module: "bank-accounts", action: "read",  description: "View bank accounts",                     createdAt: NOW },
+  { id: "perm-bacct-write--34", module: "bank-accounts", action: "write", description: "Create, edit and deactivate bank accounts", createdAt: NOW },
+  { id: "perm-perio-read---35", module: "periods",       action: "read",  description: "View fiscal periods",                    createdAt: NOW },
+  { id: "perm-perio-write--36", module: "periods",       action: "write", description: "Create and edit fiscal periods",          createdAt: NOW },
 ];
 

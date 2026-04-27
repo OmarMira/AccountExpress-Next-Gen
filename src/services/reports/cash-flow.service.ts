@@ -18,15 +18,6 @@ export interface CashFlowData {
 
 export async function getCashFlow(companyId: string, startDate: string, endDate: string): Promise<CashFlowData> {
   // We use actual reconciled bank transactions because they represent real cash movements
-  const query = sql`
-    SELECT
-      COALESCE(SUM(CASE WHEN ${bankTransactions.amount} > 0 THEN ${bankTransactions.amount} ELSE 0 END), 0) as "inflows",
-      COALESCE(SUM(CASE WHEN ${bankTransactions.amount} < 0 THEN ${bankTransactions.amount} ELSE 0 END), 0) as "outflows"
-    FROM bankTransactions
-    WHERE ${bankTransactions.companyId} = ${companyId} 
-      AND ${bankTransactions.status} = 'reconciled'
-      AND ${bankTransactions.transactionDate} >= ${startDate}::date AND ${bankTransactions.transactionDate} <= ${endDate}::date
-  `;
 
   // Actually, Drizzle allows a simpler pure ORM approach here, but sticking to execute for exact compatibility:
   const query2 = sql`

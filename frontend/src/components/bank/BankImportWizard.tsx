@@ -27,8 +27,20 @@ import {
 import { useAuthStore } from '../../store/authStore';
 import { useQuery } from '@tanstack/react-query';
 import { fetchApi } from '../../lib/api';
-import type { ParsedBankStatement } from '../../services/pdf-bank-parser';
 import { AutoMatchButton } from './AutoMatchButton';
+
+// Local interface for backend PDF inspection results
+interface ParsedBankStatement {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  openingBalance: number;
+  periodStart: string;
+  periodEnd: string;
+  transactions: any[];
+  rejectedRows: number;
+  rejectedReasons: string[];
+}
 
 // ── Sub-components ────────────────────────────────────────────
 
@@ -92,6 +104,7 @@ interface StatementGroup {
   accountHolder: string;
   accountType: string;
   statements: ParsedBankStatement[];
+  files: File[]; // Added to keep original binary references
   earliestBalance: number;
   totalTransactions: number;
 }
@@ -209,10 +222,29 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
 
       if (ext === 'pdf') {
         try {
-          const { parseBankPDF } = await import('../../services/pdf-bank-parser');
-          const statement = await parseBankPDF(fileToProcess);
+          const formData = new FormData();
+          formData.append('file', fileToProcess);
 
-          if (statement.transactions.length === 0) {
+          const inspectResponse = await fetchApi('/bank/inspect-pdf', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!inspectResponse.success) {
+            throw new Error(inspectResponse.error || 'Error al inspeccionar el PDF');
+          }
+
+          const statement: ParsedBankStatement = {
+            ...inspectResponse.data,
+            // Map openingBalance back to beginningBalance for UI consistency if needed
+            beginningBalance: inspectResponse.data.openingBalance,
+          };
+          
+          // Store the original file reference in a custom property on the statement object
+          // so we can recover it when grouping
+          (statement as any)._originalFile = fileToProcess;
+
+          if (statement.transactions.length === 0 && statement.rejectedRows === 0) {
             throw new Error(`No se encontraron transacciones en: ${fileToProcess.name}`);
           }
 
@@ -222,7 +254,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
 
           allStatements.push(statement);
         } catch (err: any) {
-          setError(`❌ Error parseando ${fileToProcess.name}: ${err.message}`);
+          setError(`❌ Error procesando ${fileToProcess.name}: ${err.message}`);
           setLoading(false);
           return;
         }
@@ -303,13 +335,15 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
             accountNumber: key,
             bankName: stmt.bankName,
             accountHolder: stmt.accountHolder,
-            accountType: stmt.accountType,
+            accountType: 'checking',
             statements: [],
+            files: [], // Array to store original files for this group
             earliestBalance: 0,
             totalTransactions: 0,
           });
         }
         groups.get(key)!.statements.push(stmt);
+        groups.get(key)!.files.push((stmt as any)._originalFile);
         groups.get(key)!.totalTransactions += stmt.transactions.length;
       }
 
@@ -390,48 +424,41 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
             return bankAccountData.id as string;
           })();
 
-      // 2. Import all transactions in chronological order
-      const allTransactions = group.statements
-        .flatMap(stmt => stmt.transactions)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      // 2. Import all files in the group sequentially to the backend
+      let totalImported = 0;
+      let totalDuplicates = 0;
+      const allRejectedReasons: string[] = [];
 
-      const importBatchId = crypto.randomUUID();
-      const importRes = await fetch('/api/bank/import-parsed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          transactions: allTransactions,
-          bankAccountId: createdBankAccountId,
-          bankName: group.bankName,
-          accountNumber: group.accountNumber,
-          fileName: `${group.bankName}-${group.accountNumber}`,
-          importBatchId,
-          companyId: activeCompany?.id ?? '',
-          // ── Initial balance: from the earliest statement (already sorted) ──
-          beginningBalance: group.earliestBalance,
-          periodStart: group.statements[0].periodStart,
-        }),
-      });
-      const importData = await importRes.json();
+      for (const file of group.files) {
+        const importBatchId = crypto.randomUUID();
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bankAccountId', createdBankAccountId);
+        formData.append('importBatchId', importBatchId);
 
-      if (!importRes.ok) {
-        try {
-          const parsed = JSON.parse(importData?.error ?? '{}');
-          if (parsed.code === 'UNKNOWN_BANK') {
-            throw new Error(buildUnknownBankMessage(parsed.bankName ?? 'Desconocido'));
+        const importData = await fetchApi('/bank/import-pdf', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (importData.success) {
+          totalImported += importData.data.imported || 0;
+          if (importData.data.reasons && importData.data.reasons.length > 0) {
+            allRejectedReasons.push(...importData.data.reasons);
           }
-        } catch (inner: any) {
-          if (inner.message.startsWith('El banco')) throw inner;
+        } else {
+          throw new Error(importData.error || 'Error al importar uno de los archivos');
         }
-        throw new Error(importData?.error ?? 'Error al importar transacciones');
       }
 
-      if (importData.duplicateCount > 0) {
+      if (totalImported > 0 || allRejectedReasons.length > 0) {
         setInfo(
-          `${importData.importedCount} transacciones importadas. ` +
-          `${importData.duplicateCount} ya existían y fueron omitidas.`
+          `${totalImported} transacciones importadas. ` +
+          (allRejectedReasons.length > 0 ? `${allRejectedReasons.length} filas rechazadas.` : '')
         );
+        if (allRejectedReasons.length > 0) {
+          setError(`Se rechazaron algunas filas: ${allRejectedReasons.slice(0, 3).join(', ')}${allRejectedReasons.length > 3 ? '...' : ''}`);
+        }
       }
 
       // 3. Fetch the real DB rows for preview

@@ -152,6 +152,7 @@ export async function reconcileGroup(input: {
         .set({
           status: "reconciled",
           journalEntryId: draftId,
+          glAccountId: group.glAccountId,
           matchedBy: input.userId,
           matchedAt: now
         })

@@ -21,7 +21,8 @@ export async function matchTransaction(
   periodId: string,
   userId: string,
   sessionId: string,
-  ipAddress: string
+  ipAddress: string,
+  appliedRuleId?: string
 ): Promise<string> {
   return await db.transaction(async (tx) => {
     // 1. Validate Transaction
@@ -83,7 +84,8 @@ export async function matchTransaction(
         glAccountId: accountId,
         journalEntryId: draftId,
         matchedBy: userId,
-        matchedAt: new Date()
+        matchedAt: new Date(),
+        ...(appliedRuleId ? { appliedRuleId } : {})
       })
       .where(eq(bankTransactions.id, transactionId));
 
