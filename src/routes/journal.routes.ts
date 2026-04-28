@@ -15,6 +15,9 @@ import { ValidationError } from "../lib/errors.ts";
 import { voidEntry } from "../services/journal-void.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
+import { db } from "../db/connection.ts";
+import { eq } from "drizzle-orm";
+import { journalEntries } from "../db/schema/index.ts";
 
 export const journalRoutes = new Elysia({ prefix: "/journal" })
   .use(authMiddleware)
@@ -141,7 +144,23 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
 
   // POST /journal/:id/post — validate + post
   .use(requirePermission("journal", "approve"))
-  .post("/:id/post", async ({ params, request, set, user, sessionId }) => {
+  .post("/:id/post", async ({ params, request, set, user, sessionId, companyId }) => {
+    if (!companyId) {
+      set.status = 403;
+      return { success: false, error: 'Acceso denegado' };
+    }
+
+    const [existing] = await db
+      .select({ companyId: journalEntries.companyId })
+      .from(journalEntries)
+      .where(eq(journalEntries.id, params.id))
+      .limit(1);
+
+    if (!existing || existing.companyId !== companyId) {
+      set.status = 403;
+      return { success: false, error: 'Acceso denegado' };
+    }
+
     const uid = user!;
     const sid = sessionId!;
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
@@ -163,7 +182,23 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
 
   // POST /journal/:id/void
   .use(requirePermission("journal", "void"))
-  .post("/:id/void", async ({ params, request, set, user, sessionId }) => {
+  .post("/:id/void", async ({ params, request, set, user, sessionId, companyId }) => {
+    if (!companyId) {
+      set.status = 403;
+      return { success: false, error: 'Acceso denegado' };
+    }
+
+    const [existing] = await db
+      .select({ companyId: journalEntries.companyId })
+      .from(journalEntries)
+      .where(eq(journalEntries.id, params.id))
+      .limit(1);
+
+    if (!existing || existing.companyId !== companyId) {
+      set.status = 403;
+      return { success: false, error: 'Acceso denegado' };
+    }
+
     const uid = user!;
     const sid = sessionId!;
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
