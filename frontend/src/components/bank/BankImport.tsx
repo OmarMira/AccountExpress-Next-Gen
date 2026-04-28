@@ -43,13 +43,13 @@ export const BankImport: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Importar Extractos</h1>
             <p className="text-sm text-gray-400 mt-1 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-indigo-400" /> Sincronización de libros bancarios
+              <Sparkles className="w-4 h-4 text-[#0071c5]" /> Sincronización de libros bancarios
             </p>
           </div>
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex gap-2 p-1.5 bg-gray-900/50 border border-gray-800 rounded-2xl">
+        <div className="flex gap-2 p-1.5 bg-[#0a1628]/80 border border-white/7 rounded-2xl">
           <TabButton
             active={activeTab === 'import'}
             onClick={() => setActiveTab('import')}
@@ -70,13 +70,13 @@ export const BankImport: React.FC = () => {
         {activeTab === 'import' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 border-slate-800 animate-in slide-in-from-bottom-6 duration-700">
             {/* Main Action Card */}
-            <div className="lg:col-span-2 p-8 bg-gray-900 border border-gray-800 rounded-3xl shadow-lg relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/5 blur-[100px] -mr-40 -mt-40 group-hover:bg-indigo-500/10 transition-all duration-700"></div>
+            <div className="lg:col-span-2 p-8 bg-[#0a1628] border border-white/7 rounded-3xl shadow-lg relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#0071c5]/5 blur-[100px] -mr-40 -mt-40 group-hover:bg-[#0071c5]/10 transition-all duration-700"></div>
 
               <div className="relative z-10 text-center py-4">
-                <div className="w-20 h-20 bg-gray-950 rounded-2xl border border-gray-800 flex items-center justify-center mx-auto mb-5 shadow-xl group-hover:scale-105 group-hover:border-indigo-500/50 transition-all duration-500 relative">
-                  <div className="absolute inset-0 bg-indigo-500/5 rounded-2xl animate-pulse"></div>
-                  <FileUp className="w-8 h-8 text-indigo-400 relative z-10" />
+                <div className="w-20 h-20 bg-[#0d1b2e] rounded-2xl border border-white/7 flex items-center justify-center mx-auto mb-5 shadow-xl group-hover:scale-105 group-hover:border-[#0071c5]/50 transition-all duration-500 relative">
+                  <div className="absolute inset-0 bg-[#0071c5]/5 rounded-2xl animate-pulse"></div>
+                  <FileUp className="w-8 h-8 text-[#0071c5] relative z-10" />
                 </div>
                 <h2 className="text-lg font-bold text-white tracking-tight mb-2">Sincroniza tus Activos</h2>
                 <p className="text-sm text-gray-400 max-w-lg mx-auto mb-6 leading-relaxed">
@@ -86,7 +86,7 @@ export const BankImport: React.FC = () => {
 
                 <button
                   onClick={() => setShowWizard(true)}
-                  className="flex justify-center items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 mx-auto group/btn"
+                  className="flex justify-center items-center gap-2 px-6 py-2.5 bg-[#0071c5] hover:bg-[#005fa3] text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-[#0071c5]/20 mx-auto group/btn"
                 >
                   <Zap className="w-4 h-4" />
                   Importar Extracto Bancario
@@ -119,10 +119,10 @@ export const BankImport: React.FC = () => {
                 color="indigo"
               />
 
-              <div className="p-5 bg-gray-900 border border-gray-800 rounded-xl shadow-inner">
+              <div className="p-5 bg-[#0a1628] border border-white/7 rounded-xl shadow-inner">
                 <div className="space-y-2.5">
                   <p className="text-xs font-medium text-gray-400 flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-indigo-400" /> Security Layer: AES-256
+                    <Shield className="w-3.5 h-3.5 text-[#0071c5]" /> Security Layer: AES-256
                   </p>
                   <p className="text-xs font-medium text-gray-400 flex items-center gap-2">
                     <Activity className="w-3.5 h-3.5 text-emerald-400" /> Sync Rate: Real-Time
@@ -157,9 +157,9 @@ const TabButton = ({ active, onClick, label, icon: Icon }: { active: boolean, on
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-300 ${active ? 'bg-gray-800 text-white shadow-md' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
+      className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-sm transition-all duration-300 ${active ? 'bg-[#0f2240] text-white shadow-md' : 'text-gray-400 hover:text-white hover:bg-[#0f2240]/50'}`}
     >
-      <Icon className={`w-4 h-4 ${active ? 'text-indigo-400' : 'text-gray-500'}`} />
+      <Icon className={`w-4 h-4 ${active ? 'text-[#0071c5]' : 'text-gray-500'}`} />
       {label}
     </button>
   );
@@ -173,7 +173,7 @@ const GuidelineCard = ({ step, title, desc, icon: Icon, color }: { step: string,
   };
 
   return (
-    <div className="p-4 bg-gray-800/40 border border-gray-700/50 rounded-xl flex items-start gap-4 group hover:bg-gray-800 transition-all duration-300 shadow-sm">
+    <div className="p-4 bg-[#0f2240]/40 border border-white/7 rounded-xl flex items-start gap-4 group hover:bg-[#0f2240] transition-all duration-300 shadow-sm">
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${themes[color]}`}>
         <Icon className="w-4 h-4" />
       </div>

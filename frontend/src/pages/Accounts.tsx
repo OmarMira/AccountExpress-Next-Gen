@@ -198,11 +198,11 @@ export function Accounts() {
       <div key={type} className="mb-8">
         <h3 className="text-lg font-bold text-white mb-4 border-b border-gray-800 pb-2 flex items-center gap-2">
           <span>{title}</span>
-          <span className="text-xs font-normal text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">{filtered.length}</span>
+          <span className="text-xs font-normal text-gray-500 bg-white/10 px-2 py-0.5 rounded-full">{filtered.length}</span>
         </h3>
-        <div className="bg-gray-800/50 rounded-lg overflow-hidden border border-gray-700/50">
+        <div className="bg-[#0f2240] rounded-lg overflow-hidden border border-white/7">
           <table className="w-full text-left text-sm">
-            <thead className="bg-gray-800 text-gray-400">
+            <thead className="bg-[#0a1628] text-gray-400">
               <tr>
                 <th className="px-4 py-3 font-medium w-24">Código</th>
                 <th className="px-4 py-3 font-medium">Nombre de Cuenta</th>
@@ -215,7 +215,7 @@ export function Accounts() {
                 <tr 
                   key={acc.id} 
                   onDoubleClick={() => handleEditOpen(acc)}
-                  className="hover:bg-gray-700/30 transition-colors group cursor-pointer select-none"
+                  className="hover:bg-white/5 transition-colors group cursor-pointer select-none"
                 >
                   <td className="px-4 py-2.5 text-gray-300 font-mono text-xs">{acc.code}</td>
                   <td className="px-4 py-2.5 text-white">
@@ -226,7 +226,7 @@ export function Accounts() {
                       }
                       <span className="truncate">{acc.name}</span>
                       {acc.isSystem === 1 && (
-                        <span className="text-[10px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Sistema</span>
+                        <span className="text-[10px] bg-white/10 text-gray-400 px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Sistema</span>
                       )}
                     </div>
                   </td>
@@ -237,7 +237,7 @@ export function Accounts() {
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleEditOpen(acc)} className="text-gray-500 hover:text-indigo-400 transition-colors p-1.5 rounded hover:bg-indigo-500/10" title="Editar cuenta">
+                      <button onClick={() => handleEditOpen(acc)} className="text-gray-500 hover:text-[#0071c5] transition-colors p-1.5 rounded hover:bg-[#0071c5]/10" title="Editar cuenta">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button onClick={() => handleDelete(acc.id, acc.name)} className="text-gray-500 hover:text-rose-400 transition-colors p-1.5 rounded hover:bg-rose-500/10" title="Desactivar cuenta">
@@ -277,19 +277,19 @@ export function Accounts() {
             <input
               type="text" placeholder="Buscar cuenta..." value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full sm:w-64 pl-9 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors placeholder:text-gray-500"
+              className="w-full sm:w-64 pl-9 pr-4 py-2 bg-[#0a1628] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-[#0071c5] focus:ring-1 focus:ring-[#0071c5] transition-colors placeholder:text-gray-500"
             />
           </div>
           <button
             onClick={() => setShowPrintModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors border border-gray-700"
+            className="flex items-center gap-2 px-4 py-2 bg-[#0f2240] hover:bg-[#0f2240]/70 text-white rounded-lg text-sm font-medium transition-colors border border-white/10"
           >
             <Printer className="w-4 h-4" /> Imprimir Plan
           </button>
           <PermissionGate module="accounts" action="create">
             <button
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 whitespace-nowrap"
+              className="flex items-center gap-2 px-4 py-2 bg-[#0071c5] hover:bg-[#005fa3] text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-[#0071c5]/20 whitespace-nowrap"
             >
               <Plus className="w-4 h-4" /> Nueva cuenta
             </button>
@@ -300,7 +300,7 @@ export function Accounts() {
       {/* List */}
       {isLoading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map(i => <div key={i} className="animate-pulse bg-gray-800/50 h-32 rounded-lg border border-gray-700/50 w-full" />)}
+          {[1, 2, 3].map(i => <div key={i} className="animate-pulse bg-[#0f2240]/50 h-32 rounded-lg border border-white/5 w-full" />)}
         </div>
       ) : (
         <div className="pt-2">
@@ -310,7 +310,7 @@ export function Accounts() {
           {renderAccountGroup('Ingresos', 'revenue')}
           {renderAccountGroup('Gastos', 'expense')}
           {accounts.length === 0 && (
-            <div className="text-center py-12 bg-gray-800/30 rounded-2xl border border-gray-700/50 border-dashed">
+            <div className="text-center py-12 bg-[#0f2240]/30 rounded-2xl border border-white/7 border-dashed">
               <FolderTree className="w-12 h-12 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-400 font-medium">No se encontraron cuentas.</p>
             </div>

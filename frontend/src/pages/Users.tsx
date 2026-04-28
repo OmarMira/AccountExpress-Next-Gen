@@ -156,14 +156,14 @@ export function Users() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowPrintModal(true)}
-            className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-gray-700 shadow-lg"
+            className="flex items-center gap-2 bg-[#0f2240] hover:bg-[#0f2240]/70 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-white/10 shadow-lg"
           >
             <Printer size={16} />
             Imprimir Lista
           </button>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-blue-500/50 shadow-lg shadow-blue-500/10"
+            className="flex items-center gap-2 bg-[#0071c5] hover:bg-[#005fa3] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-[#0071c5]/50 shadow-lg shadow-[#0071c5]/10"
           >
             <UserPlus size={16} />
             Nuevo Usuario
@@ -173,7 +173,7 @@ export function Users() {
 
       {/* Formulario de creación */}
       {showForm && (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 space-y-4">
+        <div className="bg-[#0f2240] border border-white/7 rounded-xl p-5 space-y-4">
           <h2 className="text-white font-semibold">Crear Usuario</h2>
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -189,13 +189,13 @@ export function Users() {
                 placeholder={label}
                 value={form[key as keyof typeof form]}
                 onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                className="bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                className="bg-[#0a1628] border border-white/10 text-white rounded-lg px-3 py-2 text-sm placeholder-gray-400 focus:outline-none focus:border-[#0071c5]"
               />
             ))}
             <select
               value={form.roleId}
               onChange={(e) => setForm({ ...form, roleId: e.target.value })}
-              className="bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              className="bg-[#0a1628] border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0071c5]"
             >
               <option value="">Seleccionar Rol</option>
               {roles.map((r) => (
@@ -207,13 +207,13 @@ export function Users() {
             <button
               onClick={handleCreate}
               disabled={createMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              className="bg-[#0071c5] hover:bg-[#005fa3] disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
               {createMutation.isPending ? 'Creando...' : 'Crear Usuario'}
             </button>
             <button
               onClick={() => setShowForm(false)}
-              className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+              className="bg-white/10 hover:bg-white/15 text-white px-4 py-2 rounded-lg text-sm transition-colors"
             >
               Cancelar
             </button>
@@ -225,7 +225,7 @@ export function Users() {
       )}
 
       {/* Tabla de usuarios */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
+      <div className="bg-[#0f2240] border border-white/7 rounded-xl overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-gray-400">Cargando usuarios...</div>
         ) : users.length === 0 ? (
@@ -233,7 +233,7 @@ export function Users() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-700 text-gray-400 text-left">
+              <tr className="border-b border-white/7 text-gray-400 text-left">
                 <th className="px-4 py-3 font-medium">Usuario</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Rol</th>
@@ -244,7 +244,7 @@ export function Users() {
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                <tr key={u.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                   <td className="px-4 py-3 text-white font-medium">
                     {u.firstName} {u.lastName}
                     <span className="block text-gray-400 text-xs">@{u.username}</span>
@@ -278,7 +278,7 @@ export function Users() {
                       <button
                         onClick={() => { setRoleModal({ userId: u.id, currentRoleId: u.roleName }); setNewRoleId(''); }}
                         title="Cambiar rol"
-                        className="text-gray-400 hover:text-blue-400 transition-colors"
+                        className="text-gray-400 hover:text-[#0071c5] transition-colors"
                       >
                         <RefreshCw size={15} />
                       </button>
@@ -294,12 +294,12 @@ export function Users() {
       {/* Modal cambio de rol */}
       {roleModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 w-full max-w-sm space-y-4">
+          <div className="bg-[#0f2240] border border-white/7 rounded-xl p-6 w-full max-w-sm space-y-4">
             <h3 className="text-white font-semibold">Cambiar Rol</h3>
             <select
               value={newRoleId}
               onChange={(e) => setNewRoleId(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full bg-[#0a1628] border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#0071c5]"
             >
               <option value="">Seleccionar nuevo rol</option>
               {roles.map((r) => (
@@ -310,13 +310,13 @@ export function Users() {
               <button
                 onClick={handleAssignRole}
                 disabled={!newRoleId || assignRoleMutation.isPending}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+                className="flex-1 bg-[#0071c5] hover:bg-[#005fa3] disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium transition-colors"
               >
                 {assignRoleMutation.isPending ? 'Guardando...' : 'Confirmar'}
               </button>
               <button
                 onClick={() => setRoleModal(null)}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm transition-colors"
+                className="flex-1 bg-white/10 hover:bg-white/15 text-white py-2 rounded-lg text-sm transition-colors"
               >
                 Cancelar
               </button>

@@ -66,8 +66,8 @@ export function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-2xl bg-gray-800 rounded-2xl shadow-2xl border border-gray-700/50 p-8">
+    <div className="min-h-screen bg-[#0d1b2e] text-white flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-2xl bg-[#0f2240] rounded-2xl shadow-2xl border border-white/7 p-8">
         
         {/* Header / Stepper UI */}
         <div className="mb-10">
@@ -80,12 +80,12 @@ export function Onboarding() {
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                  step === s ? 'bg-indigo-600 text-white' : 
-                  step > s ? 'bg-green-500 text-white' : 'bg-gray-700 text-gray-500'
+                  step === s ? 'bg-[#0071c5] text-white' : 
+                  step > s ? 'bg-green-500 text-white' : 'bg-white/10 text-gray-500'
                 }`}>
                   {step > s ? '✓' : s}
                 </div>
-                {s < 3 && <div className={`w-12 h-1 ${step > s ? 'bg-green-500' : 'bg-gray-700'} mx-2`} />}
+                {s < 3 && <div className={`w-12 h-1 ${step > s ? 'bg-green-500' : 'bg-white/10'} mx-2`} />}
               </div>
             ))}
           </div>
@@ -100,7 +100,7 @@ export function Onboarding() {
         {/* Step 1: Company Data */}
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <h2 className="text-xl font-semibold border-l-4 border-indigo-500 pl-4">Paso 1: Datos de la Empresa</h2>
+            <h2 className="text-xl font-semibold border-l-4 border-[#0071c5] pl-4">Paso 1: Datos de la Empresa</h2>
             
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div className="col-span-2">
@@ -110,7 +110,7 @@ export function Onboarding() {
                   name="legalName"
                   value={formData.legalName}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                   placeholder="Ej: AccountExpress S.A."
                   required
                 />
@@ -123,7 +123,7 @@ export function Onboarding() {
                   name="tradeName"
                   value={formData.tradeName}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                   placeholder="Ej: AE Biz"
                 />
               </div>
@@ -135,7 +135,7 @@ export function Onboarding() {
                   name="ein"
                   value={formData.ein}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                 />
               </div>
 
@@ -145,7 +145,7 @@ export function Onboarding() {
                   name="currency"
                   value={formData.currency}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                 >
                   <option value="USD">USD - Dólar Estadounidense</option>
                   <option value="EUR">EUR - Euro</option>
@@ -159,7 +159,7 @@ export function Onboarding() {
                   name="fiscalYearStart"
                   value={formData.fiscalYearStart}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                 >
                   <option value="01-01">01 de Enero</option>
                   <option value="04-01">01 de Abril</option>
@@ -173,7 +173,7 @@ export function Onboarding() {
               <button
                 onClick={handleNext}
                 disabled={!formData.legalName}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-2 px-8 rounded-lg transition-all"
+                className="bg-[#0071c5] hover:bg-[#005fa3] disabled:opacity-50 text-white font-bold py-2 px-8 rounded-lg transition-all"
               >
                 Siguiente
               </button>
@@ -184,7 +184,7 @@ export function Onboarding() {
         {/* Step 2: Contact Data */}
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <h2 className="text-xl font-semibold border-l-4 border-indigo-500 pl-4">Paso 2: Datos de Contacto</h2>
+            <h2 className="text-xl font-semibold border-l-4 border-[#0071c5] pl-4">Paso 2: Datos de Contacto</h2>
             
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <div>
@@ -194,7 +194,7 @@ export function Onboarding() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                 />
               </div>
 
@@ -205,7 +205,7 @@ export function Onboarding() {
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                 />
               </div>
 
@@ -216,7 +216,7 @@ export function Onboarding() {
                   name="address"
                   value={formData.address}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                 />
               </div>
 
@@ -227,7 +227,7 @@ export function Onboarding() {
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                 />
               </div>
 
@@ -238,7 +238,7 @@ export function Onboarding() {
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full bg-[#0a1628] border border-white/10 rounded-lg px-4 py-2 focus:ring-2 focus:ring-[#0071c5] outline-none"
                 />
               </div>
             </div>
@@ -246,13 +246,13 @@ export function Onboarding() {
             <div className="flex justify-between mt-10">
               <button
                 onClick={handleBack}
-                className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-8 rounded-lg transition-all"
+                className="bg-white/10 hover:bg-white/15 text-white font-bold py-2 px-8 rounded-lg transition-all"
               >
                 Atrás
               </button>
               <button
                 onClick={handleNext}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-8 rounded-lg transition-all"
+                className="bg-[#0071c5] hover:bg-[#005fa3] text-white font-bold py-2 px-8 rounded-lg transition-all"
               >
                 Siguiente
               </button>
@@ -263,9 +263,9 @@ export function Onboarding() {
         {/* Step 3: Confirmation */}
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-            <h2 className="text-xl font-semibold border-l-4 border-indigo-500 pl-4">Paso 3: Confirmación</h2>
+            <h2 className="text-xl font-semibold border-l-4 border-[#0071c5] pl-4">Paso 3: Confirmación</h2>
             
-            <div className="bg-gray-900/50 rounded-xl p-6 border border-gray-700 space-y-4">
+            <div className="bg-[#0d1b2e]/60 rounded-xl p-6 border border-white/7 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <p className="text-sm text-gray-500">Empresa:</p>
                 <p className="text-sm font-medium">{formData.legalName}</p>
@@ -288,7 +288,7 @@ export function Onboarding() {
               <button
                 onClick={handleBack}
                 disabled={loading}
-                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-bold py-2 px-8 rounded-lg transition-all"
+                className="bg-white/10 hover:bg-white/15 disabled:opacity-50 text-white font-bold py-2 px-8 rounded-lg transition-all"
               >
                 Atrás
               </button>

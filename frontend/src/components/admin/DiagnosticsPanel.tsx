@@ -239,7 +239,7 @@ const DiagnosticsPanel: React.FC = () => {
       {/* Confirmation Modal */}
       {showConfirm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#1a1c2e] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl relative overflow-hidden">
+          <div className="bg-[#0f2240] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-rose-500" />
             <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
               <AlertTriangle className="text-rose-500" />
@@ -278,7 +278,7 @@ const DiagnosticsPanel: React.FC = () => {
       {/* Notification Modal */}
       {notification && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#111827] rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl border border-gray-800 transform animate-in zoom-in-95 duration-200">
+          <div className="bg-[#0f2240] rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl border border-white/10 transform animate-in zoom-in-95 duration-200">
             <div className="flex flex-col items-center text-center">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${notification.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-500'}`}>
                 {notification.type === 'success' ? <CheckCircle2 className="w-8 h-8" /> : <AlertCircle className="w-8 h-8" />}

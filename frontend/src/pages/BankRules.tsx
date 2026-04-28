@@ -102,12 +102,12 @@ function AccountSelector({ accounts, value, onChange, required }: AccountSelecto
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full bg-slate-950 border border-slate-800 p-3 rounded-xl text-white outline-none focus:border-indigo-500 flex items-center justify-between text-left transition-all"
+        className="w-full bg-[#0a1628] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#0071c5] flex items-center justify-between text-left transition-all"
       >
         <div className="flex items-center gap-2 flex-1 truncate">
           {selected ? (
             <>
-              <span className="font-mono text-indigo-400 whitespace-nowrap">{selected.code}</span>
+              <span className="font-mono text-[#0071c5] whitespace-nowrap">{selected.code}</span>
               <span className="truncate text-slate-200">{selected.name}</span>
               <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full whitespace-nowrap ${getNormalBalanceBadge(selected.normalBalance).className}`}>
                 {getNormalBalanceBadge(selected.normalBalance).label}
@@ -119,7 +119,7 @@ function AccountSelector({ accounts, value, onChange, required }: AccountSelecto
         </div>
         <div className="flex items-center gap-2 ml-2">
           {selected && (
-            <div onClick={handleClear} className="p-1 hover:bg-slate-800 rounded-md transition-colors">
+            <div onClick={handleClear} className="p-1 hover:bg-white/5 rounded-md transition-colors">
               <X className="w-3.5 h-3.5 text-slate-500 hover:text-rose-400" />
             </div>
           )}
@@ -135,8 +135,8 @@ function AccountSelector({ accounts, value, onChange, required }: AccountSelecto
       />
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="p-2 border-b border-slate-800 bg-slate-900/50 flex items-center gap-2">
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0f2240] border border-white/7 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="p-2 border-b border-white/10 bg-[#0a1628]/50 flex items-center gap-2">
             <Search className="w-4 h-4 text-slate-500 ml-2" />
             <input
               ref={inputRef}
@@ -156,10 +156,10 @@ function AccountSelector({ accounts, value, onChange, required }: AccountSelecto
                   onClick={() => handleSelect(acc)}
                   className={`
                     flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all
-                    ${value === acc.id ? 'bg-indigo-600/20 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}
+                    ${value === acc.id ? 'bg-[#0071c5]/20 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}
                   `}
                 >
-                  <span className="font-mono text-indigo-400 w-12 text-xs font-bold">{acc.code}</span>
+                  <span className="font-mono text-[#0071c5] w-12 text-xs font-bold">{acc.code}</span>
                   <span className="flex-1 truncate text-sm">{acc.name}</span>
                   <div className="flex items-center gap-1.5 whitespace-nowrap">
                     <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${getAccountTypeBadge(acc.accountType).className}`}>
@@ -320,8 +320,8 @@ export function BankRules() {
   const SortIcon = ({ column }: { column: string }) => {
     if (!sortConfig || sortConfig.key !== column) return <ChevronDown className="w-3 h-3 opacity-20" />;
     return sortConfig.direction === 'asc' 
-      ? <ChevronDown className="w-3 h-3 text-indigo-400 rotate-180 transition-transform" /> 
-      : <ChevronDown className="w-3 h-3 text-indigo-400 transition-transform" />;
+      ? <ChevronDown className="w-3 h-3 text-[#0071c5] rotate-180 transition-transform" /> 
+      : <ChevronDown className="w-3 h-3 text-[#0071c5] transition-transform" />;
   };
 
   const handleEditRule = (rule: any) => {
@@ -344,18 +344,18 @@ export function BankRules() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
-      <div className="flex justify-between items-center bg-slate-900/50 p-8 rounded-3xl border border-slate-800">
+      <div className="flex justify-between items-center bg-[#0f2240] p-8 rounded-3xl border border-white/7">
         <div>
           <h1 className="text-3xl font-black text-white">Reglas Bancarias</h1>
           <p className="text-slate-400">Automatiza la categorización de transacciones.</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-[#0071c5] transition-colors" />
             <input
               type="text"
               placeholder="Buscar regla, condición o cuenta..."
-              className="bg-slate-950 border border-slate-800 pl-11 pr-4 py-3 rounded-xl text-sm text-white w-72 outline-none focus:border-indigo-500 transition-all shadow-inner"
+              className="bg-[#0a1628] border border-white/10 pl-11 pr-4 py-3 rounded-xl text-sm text-white w-72 outline-none focus:border-[#0071c5] transition-all shadow-inner"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -364,7 +364,7 @@ export function BankRules() {
           <button
             onClick={() => setShowPrintModal(true)}
             disabled={isLoading || rules.length === 0}
-            className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all border border-slate-700 tracking-widest"
+            className="flex items-center gap-2 px-6 py-3 bg-[#0a1628] hover:bg-white/5 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all border border-white/10 tracking-widest"
           >
             <Printer className="w-4 h-4 text-slate-400" />
             Imprimir Reglas
@@ -372,7 +372,7 @@ export function BankRules() {
           <PermissionGate module="bank-rules" action="create">
             <button 
               onClick={() => setShowForm(!showForm)}
-              className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-500 transition-all flex items-center gap-2"
+              className="bg-[#0071c5] text-white px-6 py-3 rounded-xl font-bold hover:bg-[#005fa3] transition-all flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               {showForm ? 'Cancelar' : 'Nueva Regla'}
@@ -384,16 +384,16 @@ export function BankRules() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-slate-900 border border-slate-700/60 rounded-3xl shadow-2xl w-full max-w-2xl relative flex flex-col">
+          <div className="bg-[#0f2240] border border-white/10 rounded-3xl shadow-2xl w-full max-w-2xl relative flex flex-col">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-800">
+            <div className="flex items-center justify-between px-8 py-6 border-b border-white/10">
               <h2 className="text-xl font-bold text-white">
                 {editingId ? 'Editar Regla Bancaria' : 'Nueva Regla Bancaria'}
               </h2>
               <button
                 type="button"
                 onClick={resetForm}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -413,7 +413,7 @@ export function BankRules() {
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Nombre de la regla</label>
                 <input
                   required
-                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors"
+                  className="bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors"
                   placeholder="Ej: Pagos de Lyft - Ingresos de transporte"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
@@ -425,7 +425,7 @@ export function BankRules() {
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Condición</label>
                 <div className="flex gap-3">
                   <select
-                    className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors w-40 shrink-0 [&>option]:bg-slate-950"
+                    className="bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors w-40 shrink-0 [&>option]:bg-[#0f2240]"
                     value={formData.conditionType}
                     onChange={e => setFormData({ ...formData, conditionType: e.target.value as any })}
                   >
@@ -435,7 +435,7 @@ export function BankRules() {
                   </select>
                   <input
                     required
-                    className="flex-1 bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors"
+                    className="flex-1 bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors"
                     placeholder="Ej: LYFT, UBER, AMAZON..."
                     value={formData.conditionValue}
                     onChange={e => setFormData({ ...formData, conditionValue: e.target.value })}
@@ -447,7 +447,7 @@ export function BankRules() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Dirección de la transacción</label>
                 <select
-                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors [&>option]:bg-slate-950"
+                  className="bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors [&>option]:bg-[#0f2240]"
                   value={formData.transactionDirection}
                   onChange={e => setFormData({ ...formData, transactionDirection: e.target.value as any })}
                 >
@@ -472,7 +472,7 @@ export function BankRules() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Prioridad</label>
                 <select
-                  className="bg-slate-950 border border-slate-800 px-4 py-3 rounded-xl text-white outline-none focus:border-indigo-500 transition-colors [&>option]:bg-slate-950"
+                  className="bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors [&>option]:bg-[#0f2240]"
                   value={formData.priority}
                   onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
                 >
@@ -485,11 +485,11 @@ export function BankRules() {
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800 mt-1">
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10 mt-1">
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="px-6 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors text-sm font-medium"
+                  className="px-6 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm font-medium"
                 >
                   Cancelar
                 </button>
@@ -505,15 +505,15 @@ export function BankRules() {
         </div>
       )}
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+      <div className="bg-[#0f2240] border border-white/7 rounded-3xl overflow-hidden">
         {isLoading ? (
           <div className="p-10 text-center text-slate-500">Cargando...</div>
         ) : (
           <table className="w-full text-left text-white">
-            <thead className="bg-slate-800/50">
+            <thead className="bg-[#0a1628]">
               <tr>
                 <th 
-                  className="p-4 cursor-pointer hover:bg-slate-800 transition-colors group"
+                  className="p-4 cursor-pointer hover:bg-white/5 transition-colors group"
                   onClick={() => handleSort('priority')}
                 >
                   <div className="flex items-center gap-2">
@@ -521,7 +521,7 @@ export function BankRules() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 cursor-pointer hover:bg-slate-800 transition-colors group"
+                  className="p-4 cursor-pointer hover:bg-white/5 transition-colors group"
                   onClick={() => handleSort('name')}
                 >
                   <div className="flex items-center gap-2">
@@ -529,7 +529,7 @@ export function BankRules() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 cursor-pointer hover:bg-slate-800 transition-colors group"
+                  className="p-4 cursor-pointer hover:bg-white/5 transition-colors group"
                   onClick={() => handleSort('conditionValue')}
                 >
                   <div className="flex items-center gap-2">
@@ -537,7 +537,7 @@ export function BankRules() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 cursor-pointer hover:bg-slate-800 transition-colors group"
+                  className="p-4 cursor-pointer hover:bg-white/5 transition-colors group"
                   onClick={() => handleSort('glAccountId')}
                 >
                   <div className="flex items-center gap-2">
@@ -551,15 +551,15 @@ export function BankRules() {
               {filteredRules.map((rule: any) => (
                 <tr 
                   key={rule.id} 
-                  className="border-t border-slate-800 hover:bg-slate-800/30 transition-colors cursor-pointer select-none group/row"
+                  className="border-t border-white/5 hover:bg-white/5 transition-colors cursor-pointer select-none group/row"
                   onDoubleClick={() => handleEditRule(rule)}
                 >
                   <td className="p-4">
-                    <span className="w-7 h-7 flex items-center justify-center bg-slate-800 rounded-lg text-[10px] font-black">{rule.priority}</span>
+                    <span className="w-7 h-7 flex items-center justify-center bg-[#0a1628] border border-white/5 rounded-lg text-[10px] font-black">{rule.priority}</span>
                   </td>
                   <td className="p-4 font-bold">{rule.name}</td>
                   <td className="p-4 text-slate-400">
-                    <span className="text-[9px] font-black uppercase bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 mr-2">
+                    <span className="text-[9px] font-black uppercase bg-[#0071c5]/10 px-1.5 py-0.5 rounded border border-[#0071c5]/30 mr-2">
                        {rule.conditionType === 'contains' ? 'Contiene' : rule.conditionType === 'starts_with' ? 'Empieza' : 'Igual'}
                     </span>
                     "{rule.conditionValue}"
@@ -567,7 +567,7 @@ export function BankRules() {
                   <td className="p-4">
                     {Array.isArray(glAccounts) ? (
                       <div className="flex items-center gap-2">
-                         <span className="font-mono text-indigo-400">{(glAccounts.find((a: any) => a.id === rule.glAccountId) as GlAccount)?.code}</span>
+                         <span className="font-mono text-[#0071c5]">{(glAccounts.find((a: any) => a.id === rule.glAccountId) as GlAccount)?.code}</span>
                          <span className="text-slate-300">· {(glAccounts.find((a: any) => a.id === rule.glAccountId) as GlAccount)?.name || 'Cuenta no encontrada'}</span>
                          {(glAccounts.find((a: any) => a.id === rule.glAccountId) as GlAccount)?.normalBalance && (
                             <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full ${getNormalBalanceBadge((glAccounts.find((a: any) => a.id === rule.glAccountId) as GlAccount).normalBalance).className}`}>
@@ -580,7 +580,7 @@ export function BankRules() {
                   <td className="p-4 text-right">
                     <button 
                       onClick={() => handleEditRule(rule)}
-                      className="text-indigo-400 hover:text-white mr-4"
+                      className="text-[#0071c5] hover:text-[#005fa3] mr-4"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>

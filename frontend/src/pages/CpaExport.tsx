@@ -75,7 +75,7 @@ export function CpaExport() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-3">
-            <ShieldCheck className="w-7 h-7 text-indigo-500" />
+            <ShieldCheck className="w-7 h-7 text-[#0071c5]" />
             Certificaci&oacute;n y Exportación CPA
           </h1>
           <p className="text-sm text-gray-400 mt-1">
@@ -87,7 +87,7 @@ export function CpaExport() {
           <select 
             value={periodId}
             onChange={(e) => setPeriodId(e.target.value)}
-            className="w-full sm:w-64 py-2 px-3 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 appearance-none"
+            className="w-full sm:w-64 py-2 px-3 bg-[#0a1628] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-[#0071c5] appearance-none"
           >
             <option value="">Seleccione Periodo Cerrado</option>
             {closedPeriods.map(p => (
@@ -98,7 +98,7 @@ export function CpaExport() {
           <button 
             onClick={handleAnalizar}
             disabled={!periodId || cpaMutation.isPending}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 whitespace-nowrap disabled:opacity-50"
+            className="px-4 py-2 bg-[#0071c5] hover:bg-[#005fa3] text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-[#0071c5]/20 whitespace-nowrap disabled:opacity-50"
           >
             {cpaMutation.isPending ? 'Validando...' : 'Generar Exportación'}
           </button>
@@ -106,7 +106,7 @@ export function CpaExport() {
           {summaryData && (
             <button 
               onClick={handleDownload}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors shadow-lg whitespace-nowrap flex items-center gap-2"
+              className="px-4 py-2 bg-[#0f2240] hover:bg-[#0f2240]/70 text-white text-sm font-medium rounded-lg transition-colors shadow-lg whitespace-nowrap flex items-center gap-2"
             >
               <Printer className="w-4 h-4" /> Download PDF
             </button>

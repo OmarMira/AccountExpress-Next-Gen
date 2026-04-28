@@ -184,8 +184,8 @@ export function CompanyDetail() {
           Volver a Empresas
         </button>
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-indigo-500/10 rounded-lg">
-            <Building2 className="h-8 w-8 text-indigo-400" />
+          <div className="p-3 bg-[#0071c5]/10 rounded-lg">
+            <Building2 className="h-8 w-8 text-[#0071c5]" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">{company?.legalName}</h1>
@@ -200,7 +200,7 @@ export function CompanyDetail() {
       </div>
 
       {/* Company Info */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-8">
+      <div className="bg-[#0f2240] rounded-lg border border-white/7 p-6 mb-8">
         <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">Datos de la Empresa</h2>
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {company?.ein && (
@@ -256,7 +256,7 @@ export function CompanyDetail() {
           <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
             <button
               onClick={openAssignModal}
-              className="flex items-center gap-2 rounded-md bg-indigo-500 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-400"
+              className="flex items-center gap-2 rounded-md bg-[#0071c5] px-3 py-2 text-sm font-semibold text-white hover:bg-[#005fa3]"
             >
               <UserPlus className="h-4 w-4" />
               Asignar Usuario
@@ -274,8 +274,8 @@ export function CompanyDetail() {
           <div className="text-gray-400 text-sm py-4">Cargando usuarios...</div>
         ) : (
           <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-            <table className="min-w-full divide-y divide-gray-700">
-              <thead className="bg-gray-800">
+            <table className="min-w-full divide-y divide-white/7">
+              <thead className="bg-[#0a1628]">
                 <tr>
                   <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-6">Usuario</th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">Email</th>
@@ -285,7 +285,7 @@ export function CompanyDetail() {
                   <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700 bg-gray-900">
+              <tbody className="divide-y divide-white/7 bg-[#0f2240]">
                 {companyUsers.map((u) => (
                   <tr key={u.id}>
                     <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">
@@ -333,7 +333,7 @@ export function CompanyDetail() {
       {/* Assign User Modal */}
       {modal.open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 sm:p-0 backdrop-blur-sm">
-          <div className="relative w-full max-w-md transform rounded-xl bg-slate-800 p-6 text-left shadow-2xl transition-all border border-slate-700">
+          <div className="relative w-full max-w-md transform rounded-xl bg-[#0f2240] p-6 text-left shadow-2xl transition-all border border-white/7">
             <button 
               onClick={() => setModal(prev => ({ ...prev, open: false }))} 
               className="absolute right-4 top-4 text-slate-400 hover:text-white"
@@ -359,7 +359,7 @@ export function CompanyDetail() {
                     <select
                       value={modal.userId}
                       onChange={(e) => setModal(prev => ({ ...prev, userId: e.target.value }))}
-                      className="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 outline-none"
+                      className="block w-full rounded-md border-white/10 bg-[#0a1628] text-white shadow-sm focus:border-[#0071c5] focus:ring-[#0071c5] sm:text-sm p-2 outline-none"
                     >
                       <option value="">Seleccionar un usuario</option>
                       {modal.allUsers.map((user) => (
@@ -379,7 +379,7 @@ export function CompanyDetail() {
                     <select
                       value={modal.roleId}
                       onChange={(e) => setModal(prev => ({ ...prev, roleId: e.target.value }))}
-                      className="block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 outline-none"
+                      className="block w-full rounded-md border-white/10 bg-[#0a1628] text-white shadow-sm focus:border-[#0071c5] focus:ring-[#0071c5] sm:text-sm p-2 outline-none"
                     >
                       <option value="">Seleccionar rol</option>
                       {modal.roles.map((role) => (
@@ -394,7 +394,7 @@ export function CompanyDetail() {
                 <button
                   type="button"
                   onClick={() => setModal(prev => ({ ...prev, open: false }))}
-                  className="rounded-md border border-gray-600 bg-transparent py-2 px-4 text-sm font-medium text-gray-300 hover:bg-gray-700"
+                  className="rounded-md border border-white/10 bg-transparent py-2 px-4 text-sm font-medium text-gray-300 hover:bg-white/10"
                 >
                   Cancelar
                 </button>
@@ -402,7 +402,7 @@ export function CompanyDetail() {
                   type="button"
                   onClick={handleAssign}
                   disabled={modal.loading || !modal.userId || !modal.roleId}
-                  className="rounded-md bg-indigo-600 py-2 px-4 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="rounded-md bg-[#0071c5] py-2 px-4 text-sm font-medium text-white hover:bg-[#005fa3] disabled:opacity-50"
                 >
                   {modal.loading ? 'Asignando...' : 'Asignar'}
                 </button>

@@ -95,7 +95,7 @@ export function Login() {
               disabled={!!lockedUntil || loading}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 placeholder-gray-400 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50"
+              className="appearance-none block w-full px-3 py-2 border border-[#0071c5]/40 rounded-md shadow-sm bg-[#0d2137] placeholder-gray-500 text-white focus:outline-none focus:ring-[#0071c5] focus:border-[#0071c5] sm:text-sm disabled:opacity-50"
             />
           </div>
         </div>
@@ -109,7 +109,7 @@ export function Login() {
               disabled={!!lockedUntil || loading}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="appearance-none block w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 placeholder-gray-400 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:opacity-50"
+              className="appearance-none block w-full px-3 py-2 border border-[#0071c5]/40 rounded-md shadow-sm bg-[#0d2137] placeholder-gray-500 text-white focus:outline-none focus:ring-[#0071c5] focus:border-[#0071c5] sm:text-sm disabled:opacity-50"
             />
           </div>
         </div>
@@ -118,7 +118,7 @@ export function Login() {
           <button
             type="submit"
             disabled={!!lockedUntil || loading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900 disabled:opacity-50 transition-colors"
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#0071c5] hover:bg-[#005fa3] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0071c5] focus:ring-offset-[#0d1b2e] disabled:opacity-50 transition-colors"
           >
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>

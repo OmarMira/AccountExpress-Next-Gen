@@ -86,7 +86,7 @@ function MetricCard({
   icon: React.ElementType;
 }) {
   return (
-    <div className={`bg-gray-800 border ${color} rounded-2xl p-6 shadow-lg flex flex-col gap-3`}>
+    <div className={`bg-[#0f2240] border ${color} rounded-2xl p-6 shadow-lg flex flex-col gap-3`}>
       <div className="flex items-center gap-2">
         <Icon className="w-4 h-4 opacity-60" />
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">{label}</span>
@@ -99,25 +99,25 @@ function MetricCard({
 // ── Grand Total row ───────────────────────────────────────────
 function GrandTotalRow({ grandTotal }: { grandTotal: MovementSummaryData['grandTotal'] }) {
   return (
-    <div className="bg-slate-900 border border-indigo-500/30 rounded-2xl p-6 shadow-xl">
+    <div className="bg-[#0a1628] border border-[#0071c5]/30 rounded-2xl p-6 shadow-xl">
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-8 h-8 bg-indigo-600/20 rounded-xl border border-indigo-500/30 flex items-center justify-center">
+        <div className="w-8 h-8 bg-[#0071c5]/20 rounded-xl border border-[#0071c5]/30 flex items-center justify-center">
           <BarChart3 className="w-4 h-4 text-indigo-400" />
         </div>
-        <span className="text-sm font-black text-indigo-300 uppercase tracking-widest">
+        <span className="text-sm font-black text-[#4db3ff] uppercase tracking-widest">
           Gran Total — Las 3 fuentes combinadas
         </span>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[#0f2240] rounded-xl p-4 border border-white/7">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Debe</p>
           <p className="text-xl font-bold text-white">${fmt(grandTotal.totalDebit)}</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[#0f2240] rounded-xl p-4 border border-white/7">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Haber</p>
           <p className="text-xl font-bold text-white">${fmt(grandTotal.totalCredit)}</p>
         </div>
-        <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <div className="bg-[#0f2240] rounded-xl p-4 border border-white/7">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Diferencia Neta</p>
           <p className="text-xl font-bold"><DiffBadge value={grandTotal.difference} /></p>
         </div>
@@ -170,7 +170,7 @@ export function MovementSummary() {
       key: 'manualEntries',
       label: 'Asientos Manuales',
       icon: BookOpen,
-      color: 'border-indigo-500/40 text-indigo-400',
+      color: 'border-[#0071c5]/40 text-[#0071c5]',
       block: summary?.manualEntries,
     },
   ];
@@ -181,7 +181,7 @@ export function MovementSummary() {
   const cardColorMap: Record<ViewTab, { border: string; icon: string }> = {
     bankPending:   { border: 'border-amber-500/20',   icon: 'text-amber-400' },
     bankAssigned:  { border: 'border-emerald-500/20', icon: 'text-emerald-400' },
-    manualEntries: { border: 'border-indigo-500/20',  icon: 'text-indigo-400' },
+    manualEntries: { border: 'border-[#0071c5]/20',  icon: 'text-[#0071c5]' },
   };
   const cc = cardColorMap[activeTab];
 
@@ -197,7 +197,7 @@ export function MovementSummary() {
       </div>
 
       {/* ── Filter bar ── */}
-      <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-5 flex flex-wrap gap-4 items-end">
+      <div className="bg-[#0f2240] border border-white/7 rounded-2xl p-5 flex flex-wrap gap-4 items-end">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Desde</label>
           <input
@@ -205,7 +205,7 @@ export function MovementSummary() {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 transition-colors"
+            className="bg-[#0a1628] border border-white/10 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-[#0071c5] transition-colors"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -215,20 +215,20 @@ export function MovementSummary() {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-indigo-500 transition-colors"
+            className="bg-[#0a1628] border border-white/10 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-[#0071c5] transition-colors"
           />
         </div>
         <button
           id="movement-clear-dates"
           onClick={() => { setStartDate(''); setEndDate(''); }}
-          className="text-xs font-bold text-slate-400 hover:text-white uppercase tracking-widest px-4 py-2 rounded-xl border border-slate-700 hover:border-slate-500 transition-colors"
+          className="text-xs font-bold text-slate-400 hover:text-white uppercase tracking-widest px-4 py-2 rounded-xl border border-white/10 hover:border-white/30 transition-colors"
         >
           Todo el período
         </button>
         <button
           id="movement-refresh"
           onClick={() => refetch()}
-          className="ml-auto text-xs font-bold text-indigo-400 hover:text-indigo-300 uppercase tracking-widest px-4 py-2 rounded-xl border border-indigo-500/30 hover:border-indigo-500/60 bg-indigo-500/5 transition-colors"
+          className="ml-auto text-xs font-bold text-[#0071c5] hover:text-[#4db3ff] uppercase tracking-widest px-4 py-2 rounded-xl border border-[#0071c5]/30 hover:border-[#0071c5]/60 bg-[#0071c5]/5 transition-colors"
         >
           Actualizar
         </button>
@@ -236,7 +236,7 @@ export function MovementSummary() {
 
       {/* ── Saldo Inicial de Cuentas Bancarias ── */}
       {summary?.bankAccountsBalance && (
-        <div className="bg-gray-800 border border-emerald-500/20 rounded-2xl p-5 flex flex-wrap items-center gap-6 shadow-lg">
+        <div className="bg-[#0f2240] border border-emerald-500/20 rounded-2xl p-5 flex flex-wrap items-center gap-6 shadow-lg">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-emerald-500/10 rounded-xl border border-emerald-500/20 flex items-center justify-center shrink-0">
               <Landmark className="w-4 h-4 text-emerald-400" />
@@ -271,7 +271,7 @@ export function MovementSummary() {
               className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all border ${
                 isActive
                   ? `${tab.color} bg-slate-800 border-current shadow-lg`
-                  : 'text-gray-500 border-gray-700 hover:border-gray-500 hover:text-gray-300'
+                  : 'text-gray-500 border-white/10 hover:border-white/30 hover:text-gray-300'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -284,7 +284,7 @@ export function MovementSummary() {
       {/* ── Main block ── */}
       {isLoading ? (
         <div className="h-48 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500" />
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#0071c5]" />
         </div>
       ) : error ? (
         <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-8 text-center">
@@ -294,7 +294,7 @@ export function MovementSummary() {
           <p className="text-slate-500 text-xs mt-2">{(error as Error).message}</p>
         </div>
       ) : block ? (
-        <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-6 shadow-lg">
+        <div className="bg-[#0f2240] border border-white/7 rounded-2xl p-6 shadow-lg">
           <div className="flex items-center gap-3 mb-6">
             <activeTabDef.icon className={`w-5 h-5 ${cc.icon}`} />
             <span className="text-sm font-black text-white uppercase tracking-widest">

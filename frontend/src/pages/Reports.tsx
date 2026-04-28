@@ -132,11 +132,11 @@ export function Reports() {
 
   const renderSection = (title: string, items: any[], total: number) => (
     <div className="mb-8">
-      <h3 className="text-lg font-bold text-white mb-3 bg-gray-800/80 p-3 rounded-lg border border-gray-700">{title}</h3>
+      <h3 className="text-lg font-bold text-white mb-3 bg-[#0a1628]/80 p-3 rounded-lg border border-white/7">{title}</h3>
       <table className="w-full text-left text-sm whitespace-nowrap">
-        <tbody className="divide-y divide-gray-800/50">
+        <tbody className="divide-y divide-white/5">
           {items.map((item, i) => (
-            <tr key={i} className="hover:bg-gray-800/30 transition-colors">
+            <tr key={i} className="hover:bg-white/5 transition-colors">
               <td className="py-2 pl-4 text-gray-400 w-24 font-mono">{item.code}</td>
               <td className="py-2 text-gray-200">{item.name || item.description}</td>
               <td className="py-2 pr-4 text-right font-mono text-gray-300">
@@ -146,7 +146,7 @@ export function Reports() {
           ))}
         </tbody>
         <tfoot>
-          <tr className="border-t-2 border-gray-700/80 font-bold bg-gray-900/40">
+          <tr className="border-t-2 border-white/10 font-bold bg-[#0f2240]/40">
             <td colSpan={2} className="py-3 pl-4 text-gray-300">Total {title}</td>
             <td className="py-3 pr-4 text-right font-mono text-indigo-400">
               {total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -174,14 +174,14 @@ export function Reports() {
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button 
             onClick={() => setShowPrintModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors border border-gray-700 shadow-lg"
+            className="flex items-center gap-2 px-4 py-2 bg-[#0f2240] hover:bg-[#0f2240]/70 text-white text-sm font-medium rounded-lg transition-colors border border-white/10 shadow-lg"
           >
             <Printer className="w-4 h-4 text-gray-400" />
             Imprimir Reporte
           </button>
           <button 
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-500/20 whitespace-nowrap"
+            className="flex items-center gap-2 px-4 py-2 bg-[#0071c5] hover:bg-[#005fa3] text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-[#0071c5]/20 whitespace-nowrap"
           >
             <Download className="w-4 h-4" />
             Exportar a Excel
@@ -190,9 +190,9 @@ export function Reports() {
       </div>
 
       {/* Tabs and Controls */}
-      <div className="bg-gray-800/80 rounded-xl border border-gray-700 shadow-lg overflow-hidden flex flex-col lg:flex-row">
+      <div className="bg-[#0f2240] rounded-xl border border-white/7 shadow-lg overflow-hidden flex flex-col lg:flex-row">
         {/* Tab Sidebar */}
-        <div className="w-full lg:w-64 bg-gray-900/50 border-r border-gray-700 p-4 space-y-2">
+        <div className="w-full lg:w-64 bg-[#0a1628]/50 border-r border-white/7 p-4 space-y-2">
           {[
             { id: 'balance-sheet', name: 'Balance General' },
             { id: 'income-statement', name: 'Estado de Resultados' },
@@ -203,7 +203,7 @@ export function Reports() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'}`}
+              className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-[#0071c5]/20 text-[#0071c5] border border-[#0071c5]/30 shadow-inner' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'}`}
             >
               {tab.name}
             </button>
@@ -211,8 +211,8 @@ export function Reports() {
         </div>
 
         {/* Date Controls & Report Content */}
-        <div className="flex-1 flex flex-col h-full bg-gray-800/20">
-          <div className="p-4 border-b border-gray-700/80 bg-gray-900/30 flex items-center gap-4">
+        <div className="flex-1 flex flex-col h-full bg-[#0d1b2e]">
+          <div className="p-4 border-b border-white/7 bg-[#0a1628]/30 flex items-center gap-4">
             <Calendar className="w-5 h-5 text-gray-500" />
             {(activeTab === 'balance-sheet' || activeTab === 'trial-balance' || activeTab === 'aging') ? (
               <div className="flex items-center gap-2">
@@ -221,7 +221,7 @@ export function Reports() {
                   type="date"
                   value={asOfDate}
                   onChange={(e) => setAsOfDate(e.target.value)}
-                  className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-white text-sm focus:border-indigo-500"
+                  className="bg-[#0a1628] border border-white/10 rounded-md px-3 py-1.5 text-white text-sm focus:border-[#0071c5]"
                 />
               </div>
             ) : (
@@ -232,7 +232,7 @@ export function Reports() {
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-white text-sm focus:border-indigo-500"
+                    className="bg-[#0a1628] border border-white/10 rounded-md px-3 py-1.5 text-white text-sm focus:border-[#0071c5]"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -241,14 +241,14 @@ export function Reports() {
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="bg-gray-800 border border-gray-700 rounded-md px-3 py-1.5 text-white text-sm focus:border-indigo-500"
+                    className="bg-[#0a1628] border border-white/10 rounded-md px-3 py-1.5 text-white text-sm focus:border-[#0071c5]"
                   />
                 </div>
               </div>
             )}
           </div>
 
-          <div className="p-6 md:p-8 flex-1 overflow-auto bg-gray-900/20">
+          <div className="p-6 md:p-8 flex-1 overflow-auto bg-[#0d1b2e]">
             
             {/* Loading State */}
             {(loadBS || loadCF || loadIS || loadTB || loadAging) && (
@@ -260,8 +260,8 @@ export function Reports() {
 
             {/* BALANCE SHEET RENDER */}
             {!loadBS && activeTab === 'balance-sheet' && balanceSheet?.data && (
-              <div className="max-w-4xl mx-auto bg-gray-900 border border-gray-800 p-8 rounded-xl shadow-2xl">
-                <div className="text-center mb-10 border-b border-gray-800 pb-6">
+              <div className="max-w-4xl mx-auto bg-[#0f2240] border border-white/7 p-8 rounded-xl shadow-2xl">
+                <div className="text-center mb-10 border-b border-white/10 pb-6">
                   <h2 className="text-2xl font-black text-white uppercase tracking-widest">{activeCompany?.legalName}</h2>
                   <h3 className="text-lg text-gray-400 mt-1">Balance General</h3>
                   <p className="text-sm text-gray-500">A la fecha: {balanceSheet.data.date}</p>
@@ -282,8 +282,8 @@ export function Reports() {
 
             {/* INCOME STATEMENT RENDER */}
             {!loadIS && activeTab === 'income-statement' && incomeStatement?.data && (
-              <div className="max-w-4xl mx-auto bg-gray-900 border border-gray-800 p-8 rounded-xl shadow-2xl">
-                <div className="text-center mb-10 border-b border-gray-800 pb-6">
+              <div className="max-w-4xl mx-auto bg-[#0f2240] border border-white/7 p-8 rounded-xl shadow-2xl">
+                <div className="text-center mb-10 border-b border-white/10 pb-6">
                   <h2 className="text-2xl font-black text-white uppercase tracking-widest">{activeCompany?.legalName}</h2>
                   <h3 className="text-lg text-gray-400 mt-1">Estado de Resultados (P&L)</h3>
                   <p className="text-sm text-gray-500">Periodo: {incomeStatement.data.startDate} a {incomeStatement.data.endDate}</p>
@@ -303,15 +303,15 @@ export function Reports() {
 
             {/* TRIAL BALANCE RENDER */}
             {!loadTB && activeTab === 'trial-balance' && trialBalance?.data && (
-              <div className="max-w-5xl mx-auto bg-gray-900 border border-gray-800 p-8 rounded-xl shadow-2xl">
-                <div className="text-center mb-10 border-b border-gray-800 pb-6">
+              <div className="max-w-5xl mx-auto bg-[#0f2240] border border-white/7 p-8 rounded-xl shadow-2xl">
+                <div className="text-center mb-10 border-b border-white/10 pb-6">
                   <h2 className="text-2xl font-black text-white uppercase tracking-widest">{activeCompany?.legalName}</h2>
                   <h3 className="text-lg text-gray-400 mt-1">Balance de Comprobación</h3>
                   <p className="text-sm text-gray-500">A la fecha: {trialBalance.data.date}</p>
                 </div>
                 
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead className="border-b border-gray-700 bg-gray-800/80">
+                  <thead className="border-b border-white/10 bg-[#0a1628]">
                     <tr>
                       <th className="py-3 px-4 text-gray-400">Código</th>
                       <th className="py-3 px-4 text-gray-400">Cuenta</th>
@@ -319,9 +319,9 @@ export function Reports() {
                       <th className="py-3 px-4 text-right text-gray-400">Créditos</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-800/50">
+                  <tbody className="divide-y divide-white/5">
                     {trialBalance.data.items.map((i: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-gray-800/30">
+                      <tr key={idx} className="hover:bg-white/5">
                         <td className="py-2 px-4 text-gray-500 font-mono">{i.code}</td>
                         <td className="py-2 px-4 text-gray-300">{i.name}</td>
                         <td className="py-2 px-4 text-right font-mono text-gray-400">
@@ -334,7 +334,7 @@ export function Reports() {
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t-4 border-gray-700 bg-gray-900 font-bold">
+                    <tr className="border-t-4 border-white/10 bg-[#0f2240] font-bold">
                       <td colSpan={2} className="py-4 px-4 text-gray-300 text-right">TOTALES</td>
                       <td className="py-4 px-4 text-right font-mono text-indigo-400">
                         {trialBalance.data.totalDebits.toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -350,8 +350,8 @@ export function Reports() {
 
             {/* CASH FLOW RENDER */}
             {!loadCF && activeTab === 'cash-flow' && cashFlow?.data && (
-              <div className="max-w-4xl mx-auto bg-gray-900 border border-gray-800 p-8 rounded-xl shadow-2xl">
-                <div className="text-center mb-10 border-b border-gray-800 pb-6">
+              <div className="max-w-4xl mx-auto bg-[#0f2240] border border-white/7 p-8 rounded-xl shadow-2xl">
+                <div className="text-center mb-10 border-b border-white/10 pb-6">
                   <h2 className="text-2xl font-black text-white uppercase tracking-widest">{activeCompany?.legalName}</h2>
                   <h3 className="text-lg text-gray-400 mt-1">Estado de Flujo de Efectivo</h3>
                   <p className="text-sm text-gray-500">Periodo: {cashFlow.data.startDate} a {cashFlow.data.endDate}</p>
@@ -359,18 +359,18 @@ export function Reports() {
                 
                 {/* Operating */}
                 <div className="mb-8">
-                  <h3 className="text-lg font-bold text-indigo-400 mb-3 border-b border-gray-800 pb-2">Actividades de Operación</h3>
-                  <div className="flex justify-between py-2 pl-4 text-gray-300 border-b border-gray-800/50 hover:bg-gray-800/20">
+                  <h3 className="text-lg font-bold text-[#0071c5] mb-3 border-b border-white/10 pb-2">Actividades de Operación</h3>
+                  <div className="flex justify-between py-2 pl-4 text-gray-300 border-b border-white/5 hover:bg-white/5">
                     <span>Utilidad Neta</span>
                     <span className="font-mono">{cashFlow.data.operating.netIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                   {cashFlow.data.operating.adjustments.map((adj: any, idx: number) => (
-                    <div key={idx} className="flex justify-between py-2 pl-8 text-gray-400 hover:bg-gray-800/20">
+                    <div key={idx} className="flex justify-between py-2 pl-8 text-gray-400 hover:bg-white/5">
                       <span>{adj.description}</span>
                       <span className="font-mono">{adj.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                   ))}
-                  <div className="flex justify-between py-3 pl-4 font-bold text-gray-200 border-t border-gray-700 mt-2 bg-gray-800/30">
+                  <div className="flex justify-between py-3 pl-4 font-bold text-gray-200 border-t border-white/10 mt-2 bg-white/5">
                     <span>Efectivo Neto (Operación)</span>
                     <span className="font-mono text-indigo-400">{cashFlow.data.operating.netCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
@@ -378,15 +378,15 @@ export function Reports() {
 
                 {/* Investing */}
                 <div className="mb-8">
-                  <h3 className="text-lg font-bold text-indigo-400 mb-3 border-b border-gray-800 pb-2">Actividades de Inversión</h3>
+                  <h3 className="text-lg font-bold text-[#0071c5] mb-3 border-b border-white/10 pb-2">Actividades de Inversión</h3>
                   {cashFlow.data.investing.items.length === 0 && <p className="text-gray-600 pl-4 py-2 italic">Sin movimientos en este periodo</p>}
                   {cashFlow.data.investing.items.map((inv: any, idx: number) => (
-                    <div key={idx} className="flex justify-between py-2 pl-4 text-gray-400 hover:bg-gray-800/20">
+                    <div key={idx} className="flex justify-between py-2 pl-4 text-gray-400 hover:bg-white/5">
                       <span>{inv.description}</span>
                       <span className="font-mono">{inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                   ))}
-                  <div className="flex justify-between py-3 pl-4 font-bold text-gray-200 border-t border-gray-700 mt-2 bg-gray-800/30">
+                  <div className="flex justify-between py-3 pl-4 font-bold text-gray-200 border-t border-white/10 mt-2 bg-white/5">
                     <span>Efectivo Neto (Inversión)</span>
                     <span className="font-mono text-indigo-400">{cashFlow.data.investing.netCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
@@ -394,15 +394,15 @@ export function Reports() {
 
                 {/* Financing */}
                 <div className="mb-8">
-                  <h3 className="text-lg font-bold text-indigo-400 mb-3 border-b border-gray-800 pb-2">Actividades de Financiación</h3>
+                  <h3 className="text-lg font-bold text-[#0071c5] mb-3 border-b border-white/10 pb-2">Actividades de Financiación</h3>
                   {cashFlow.data.financing.items.length === 0 && <p className="text-gray-600 pl-4 py-2 italic">Sin movimientos en este periodo</p>}
                   {cashFlow.data.financing.items.map((fin: any, idx: number) => (
-                    <div key={idx} className="flex justify-between py-2 pl-4 text-gray-400 hover:bg-gray-800/20">
+                    <div key={idx} className="flex justify-between py-2 pl-4 text-gray-400 hover:bg-white/5">
                       <span>{fin.description}</span>
                       <span className="font-mono">{fin.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                   ))}
-                  <div className="flex justify-between py-3 pl-4 font-bold text-gray-200 border-t border-gray-700 mt-2 bg-gray-800/30">
+                  <div className="flex justify-between py-3 pl-4 font-bold text-gray-200 border-t border-white/10 mt-2 bg-white/5">
                     <span>Efectivo Neto (Financiación)</span>
                     <span className="font-mono text-indigo-400">{cashFlow.data.financing.netCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
@@ -420,8 +420,8 @@ export function Reports() {
 
             {/* AGING REPORT RENDER */}
             {!loadAging && activeTab === 'aging' && agingReport?.data && (
-              <div className="max-w-5xl mx-auto bg-gray-900 border border-gray-800 p-8 rounded-xl shadow-2xl">
-                <div className="text-center mb-8 border-b border-gray-800 pb-6">
+              <div className="max-w-5xl mx-auto bg-[#0f2240] border border-white/7 p-8 rounded-xl shadow-2xl">
+                <div className="text-center mb-8 border-b border-white/10 pb-6">
                   <h2 className="text-2xl font-black text-white uppercase tracking-widest">{activeCompany?.legalName}</h2>
                   <h3 className="text-lg text-gray-400 mt-1">Reporte de Antigüedad — Transacciones Pendientes</h3>
                   <p className="text-sm text-gray-500">A la fecha: {asOfDate}</p>
@@ -432,7 +432,7 @@ export function Reports() {
                 </div>
                 {agingReport.data.buckets.map((bucket: any) => (
                   <div key={bucket.label} className="mb-6">
-                    <div className={`flex justify-between items-center p-3 rounded-lg mb-2 ${bucket.minDays >= 91 ? 'bg-red-900/30 border border-red-800/50' : bucket.minDays >= 61 ? 'bg-orange-900/30 border border-orange-800/50' : bucket.minDays >= 31 ? 'bg-yellow-900/30 border border-yellow-800/50' : 'bg-gray-800/50 border border-gray-700/50'}`}>
+                    <div className={`flex justify-between items-center p-3 rounded-lg mb-2 ${bucket.minDays >= 91 ? 'bg-red-900/30 border border-red-800/50' : bucket.minDays >= 61 ? 'bg-orange-900/30 border border-orange-800/50' : bucket.minDays >= 31 ? 'bg-yellow-900/30 border border-yellow-800/50' : 'bg-[#0a1628] border border-white/5'}`}>
                       <span className={`font-bold text-sm ${bucket.minDays >= 91 ? 'text-red-400' : bucket.minDays >= 61 ? 'text-orange-400' : bucket.minDays >= 31 ? 'text-yellow-400' : 'text-gray-300'}`}>{bucket.label}</span>
                       <div className="flex gap-4 text-sm">
                         <span className="text-gray-400">{bucket.count} transacciones</span>
@@ -441,9 +441,9 @@ export function Reports() {
                     </div>
                     {bucket.transactions.length > 0 && (
                       <table className="w-full text-sm">
-                        <tbody className="divide-y divide-gray-800/30">
+                        <tbody className="divide-y divide-white/5">
                           {bucket.transactions.map((tx: any) => (
-                            <tr key={tx.id} className="hover:bg-gray-800/20">
+                            <tr key={tx.id} className="hover:bg-white/5">
                               <td className="py-2 pl-4 text-gray-500 font-mono w-28">{tx.transactionDate}</td>
                               <td className="py-2 text-gray-300">{tx.description}</td>
                               <td className="py-2 pr-4 text-right font-mono text-gray-400">{tx.daysPending}d</td>

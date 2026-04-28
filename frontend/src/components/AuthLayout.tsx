@@ -27,7 +27,7 @@ export function AuthLayout() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-[#0f2240] py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-white/7">
+        <div className="bg-[#112d4e] py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-[#0071c5]/40 shadow-[0_0_40px_rgba(0,113,197,0.15)]">
           <Outlet />
         </div>
       </div>

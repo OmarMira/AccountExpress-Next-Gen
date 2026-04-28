@@ -51,13 +51,13 @@ export function SelectCompany() {
       )}
 
       {companies.length === 0 ? (
-        <div className="text-center py-10 bg-gray-800/30 rounded-2xl border border-gray-700/50 shadow-inner">
+        <div className="text-center py-10 bg-[#0f2240]/40 rounded-2xl border border-white/7 shadow-inner">
           <h2 className="text-lg font-bold text-white mb-2">No tienes empresas asignadas</h2>
           <p className="text-sm text-gray-400 mb-6">Contacta al administrador del sistema</p>
           {user?.isSuperAdmin && (
             <button 
               onClick={() => navigate('/onboarding')}
-              className="inline-flex items-center justify-center py-2 px-5 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-gray-900"
+              className="inline-flex items-center justify-center py-2 px-5 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-[#0071c5] hover:bg-[#005fa3] transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-[#0071c5] focus:ring-offset-[#0d1b2e]"
             >
               Crear primera empresa
             </button>
@@ -72,12 +72,12 @@ export function SelectCompany() {
               disabled={!!loadingId}
               className={`w-full text-left group flex items-center justify-between p-4 rounded-xl border transition-all ${
                 loadingId === company.id 
-                  ? 'bg-indigo-900/50 border-indigo-500 cursor-wait' 
-                  : 'bg-gray-800 border-gray-700 hover:border-indigo-500 hover:bg-gray-700/50 disabled:opacity-50'
+                  ? 'bg-[#0071c5]/10 border-[#0071c5] cursor-wait' 
+                  : 'bg-[#0f2240] border-white/10 hover:border-[#0071c5]/60 hover:bg-[#0f2240]/80 disabled:opacity-50'
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${loadingId === company.id ? 'bg-indigo-500 text-white' : 'bg-gray-700 text-gray-300 group-hover:bg-indigo-500 group-hover:text-white transition-colors'}`}>
+                <div className={`p-2 rounded-lg ${loadingId === company.id ? 'bg-[#0071c5] text-white' : 'bg-white/5 text-gray-300 group-hover:bg-[#0071c5] group-hover:text-white transition-colors'}`}>
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div>
@@ -85,24 +85,24 @@ export function SelectCompany() {
 
                 </div>
               </div>
-              <ChevronRight className={`w-5 h-5 text-gray-500 group-hover:text-white transition-colors ${loadingId === company.id ? 'animate-pulse text-indigo-400' : ''}`} />
+              <ChevronRight className={`w-5 h-5 text-gray-500 group-hover:text-white transition-colors ${loadingId === company.id ? 'animate-pulse text-[#0071c5]' : ''}`} />
             </button>
           ))}
         </div>
       )}
 
-      <div className="mt-8 pt-6 border-t border-gray-700 space-y-3">
+      <div className="mt-8 pt-6 border-t border-white/7 space-y-3">
         {user?.isSuperAdmin && (
           <button
             onClick={() => navigate('/admin/companies')}
-            className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#0071c5] hover:bg-[#005fa3] focus:outline-none transition-colors"
           >
             Administración del Sistema
           </button>
         )}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-transparent hover:bg-gray-700 focus:outline-none transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2 px-4 border border-white/10 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-transparent hover:bg-white/5 focus:outline-none transition-colors"
         >
           <LogOut className="w-4 h-4" />
           Cerrar sesión

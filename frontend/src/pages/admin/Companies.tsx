@@ -80,7 +80,7 @@ export function Companies() {
               setEditingCompany(null);
               setIsModalOpen(true);
             }}
-            className="block rounded-md bg-indigo-500 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+            className="block rounded-md bg-[#0071c5] px-3 py-2 text-center text-sm font-semibold text-white hover:bg-[#005fa3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0071c5]"
           >
             Crear Empresa
           </button>
@@ -90,8 +90,8 @@ export function Companies() {
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
             <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-              <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-800">
+              <table className="min-w-full divide-y divide-white/7">
+                <thead className="bg-[#0a1628]">
                   <tr>
                     <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-6">Nombre Legal</th>
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-white">EIN</th>
@@ -100,7 +100,7 @@ export function Companies() {
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6"><span className="sr-only">Acciones</span></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-700 bg-gray-900">
+                <tbody className="divide-y divide-white/7 bg-[#0f2240]">
                   {companies.map((company) => (
                     <tr key={company.id}>
                       <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">
@@ -135,7 +135,7 @@ export function Companies() {
                             <Trash2 className="h-5 w-5" />
                           </button>
                           <button 
-                            className="text-gray-400 hover:text-indigo-400" 
+                            className="text-gray-400 hover:text-[#0071c5]" 
                             title="Ver Usuarios"
                             onClick={() => navigate(`/admin/companies/${company.id}`)}
                           >
@@ -166,7 +166,7 @@ export function Companies() {
       {/* Delete Confirmation Modal */}
       {deleteDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 sm:p-0 backdrop-blur-sm">
-          <div className="relative w-full max-w-md transform rounded-xl bg-slate-800 p-6 text-left shadow-2xl transition-all border border-slate-700">
+          <div className="relative w-full max-w-md transform rounded-xl bg-[#0f2240] p-6 text-left shadow-2xl transition-all border border-white/7">
             <div className="flex items-center gap-4 mb-4">
               <div className="p-3 bg-red-500/10 rounded-full">
                 <Trash2 className="w-6 h-6 text-red-500" />
@@ -179,7 +179,7 @@ export function Companies() {
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setDeleteDialog(null)}
-                className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700 transition"
+                className="px-4 py-2 border border-white/10 rounded-lg text-slate-300 hover:bg-white/10 transition"
               >
                 Cancelar
               </button>
