@@ -140,7 +140,7 @@ export function Dashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Total Assets */}
-          <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-6 shadow-lg relative overflow-hidden group hover:border-indigo-500/50 transition-colors">
+          <div className="bg-[#0f2240] border border-white/7 rounded-2xl p-6 shadow-lg relative overflow-hidden group hover:border-[#0071c5]/50 transition-colors">
             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
               <Building2 className="w-24 h-24 text-indigo-400 -mt-6 -mr-6" />
             </div>
@@ -154,7 +154,7 @@ export function Dashboard() {
           </div>
 
           {/* Total Liabilities */}
-          <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-6 shadow-lg relative overflow-hidden group hover:border-rose-500/50 transition-colors">
+          <div className="bg-[#0f2240] border border-white/7 rounded-2xl p-6 shadow-lg relative overflow-hidden group hover:border-rose-500/50 transition-colors">
             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
               <ArrowDownRight className="w-24 h-24 text-rose-400 -mt-6 -mr-6" />
             </div>
@@ -168,7 +168,7 @@ export function Dashboard() {
           </div>
 
           {/* Total Equity */}
-          <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-6 shadow-lg relative overflow-hidden group hover:border-amber-500/50 transition-colors">
+          <div className="bg-[#0f2240] border border-white/7 rounded-2xl p-6 shadow-lg relative overflow-hidden group hover:border-amber-500/50 transition-colors">
             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
               <ShieldCheck className="w-24 h-24 text-amber-400 -mt-6 -mr-6" />
             </div>
@@ -182,7 +182,7 @@ export function Dashboard() {
           </div>
 
           {/* Net Income */}
-          <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-6 shadow-lg relative overflow-hidden group hover:border-emerald-500/50 transition-colors">
+          <div className="bg-[#0f2240] border border-white/7 rounded-2xl p-6 shadow-lg relative overflow-hidden group hover:border-emerald-500/50 transition-colors">
             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
               <ArrowUpRight className="w-24 h-24 text-emerald-400 -mt-6 -mr-6" />
             </div>
@@ -196,7 +196,7 @@ export function Dashboard() {
           </div>
 
           {/* Financial Breakdown Info */}
-          <div className="bg-gray-900/50 border border-gray-700/30 rounded-2xl p-6 shadow-lg md:col-span-2 lg:col-span-2 flex flex-col justify-center">
+          <div className="bg-[#0d1b2e]/80 border border-white/5 rounded-2xl p-6 shadow-lg md:col-span-2 lg:col-span-2 flex flex-col justify-center">
              <div className="flex items-center gap-4">
                 <div className="p-3 bg-indigo-500/10 rounded-xl">
                    <Activity className="w-6 h-6 text-indigo-400" />
@@ -209,7 +209,7 @@ export function Dashboard() {
           </div>
 
           {/* Período Activo */}
-          <div className="bg-gray-800 border border-gray-700/50 rounded-2xl p-6 shadow-lg flex flex-col justify-center items-center text-center relative overflow-hidden group md:col-span-2 lg:col-span-2">
+          <div className="bg-[#0f2240] border border-white/7 rounded-2xl p-6 shadow-lg flex flex-col justify-center items-center text-center relative overflow-hidden group md:col-span-2 lg:col-span-2">
             {alerts?.activePeriod?.name && alerts.activePeriod.name !== 'No open period' ? (
               <>
                 <div className="w-12 h-12 bg-indigo-500/10 rounded-full flex items-center justify-center mb-3 border border-indigo-500/20">

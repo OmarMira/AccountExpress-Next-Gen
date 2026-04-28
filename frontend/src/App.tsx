@@ -33,9 +33,9 @@ export default function App() {
         
         {/* Semi-authenticated Routes (Needs Company Selection) */}
         <Route path="/select-company" element={
-          <div className="min-h-screen bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+          <div className="min-h-screen bg-[#0d1b2e] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
             <div className="sm:mx-auto sm:w-full sm:max-w-md">
-              <div className="bg-gray-800 py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-gray-700/50">
+              <div className="bg-[#0f2240] py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-white/7">
                 <SelectCompany />
               </div>
             </div>

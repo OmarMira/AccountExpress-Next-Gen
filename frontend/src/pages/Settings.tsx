@@ -453,25 +453,25 @@ export function Settings() {
       <div className="flex flex-col md:flex-row gap-6">
         {/* Sidebar Nav */}
         <div className="w-full md:w-64 space-y-2">
-          <button onClick={() => setActiveTab('company')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'company' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
+          <button onClick={() => setActiveTab('company')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'company' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}>
             <Building className="w-5 h-5" /> Datos de la Empresa
           </button>
-          <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'users' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
+          <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'users' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}>
             <Users className="w-5 h-5" /> Gestión de Usuarios
           </button>
-          <button onClick={() => setActiveTab('roles')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'roles' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
+          <button onClick={() => setActiveTab('roles')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'roles' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}>
             <Shield className="w-5 h-5" /> Roles y Permisos
           </button>
-          <button onClick={() => setActiveTab('periods')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'periods' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
+          <button onClick={() => setActiveTab('periods')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'periods' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}>
             <Calendar className="w-5 h-5" /> Periodos Fiscales
           </button>
-          <button onClick={() => setActiveTab('backups')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'backups' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}>
+          <button onClick={() => setActiveTab('backups')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'backups' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}>
             <Database className="w-5 h-5" /> Respaldos del Sistema
           </button>
           {user?.isSuperAdmin && (
             <button 
               onClick={() => setActiveTab('diagnostics')} 
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'diagnostics' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-gray-800 border border-transparent'}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'diagnostics' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}
             >
               <ShieldCheck className="w-5 h-5" /> Diagnóstico
             </button>
@@ -479,7 +479,7 @@ export function Settings() {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-6 md:p-8 min-h-[500px]">
+        <div className="flex-1 bg-[#0d1b2e] border border-white/5 rounded-xl shadow-2xl p-6 md:p-8 min-h-[500px]">
           
           {/* TAB: COMPANY */}
           {activeTab === 'company' && (
@@ -771,7 +771,7 @@ export function Settings() {
 
               {/* Formulario de alta */}
               {showCreateForm && (
-                <form onSubmit={handleCreateUser} className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5 space-y-4">
+                <form onSubmit={handleCreateUser} className="bg-[#0f2240]/40 border border-white/7 rounded-xl p-5 space-y-4">
                   <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
                     <UserPlus className="w-4 h-4 text-emerald-400" /> Crear Nuevo Usuario
                   </h3>
@@ -1010,7 +1010,7 @@ export function Settings() {
                     permissions: ['Ver plan de cuentas', 'Ver diario contable', 'Ver reportes', 'Sin escritura', 'Sin acceso bancario'],
                   },
                 ].map((role) => (
-                  <div key={role.id} className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-5 hover:border-gray-600 transition-colors">
+                  <div key={role.id} className="bg-[#0f2240]/60 border border-white/7 rounded-xl p-5 hover:border-white/20 transition-colors">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <Shield className="w-4 h-4 text-gray-400" />
@@ -1046,7 +1046,7 @@ export function Settings() {
                 </button>
               </div>
               {showNewPeriod && (
-                <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-5 space-y-4">
+                <div className="bg-[#0f2240]/60 border border-white/7 rounded-xl p-5 space-y-4">
                   <h3 className="text-sm font-semibold text-gray-300">Crear Nuevo Per\u00edodo Fiscal</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -1108,7 +1108,7 @@ export function Settings() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
                 {periods.map((p: any) => (
-                  <div key={p.id} className="bg-gray-800/40 border border-gray-700 rounded-xl p-5 hover:border-gray-600 transition-colors">
+                  <div key={p.id} className="bg-[#0f2240]/60 border border-white/7 rounded-xl p-5 hover:border-white/20 transition-colors">
                     <div className="flex justify-between items-start mb-4">
                       <h4 className="font-bold text-gray-100">{p.name}</h4>
                       {p.status === 'open' ? (
@@ -1196,7 +1196,7 @@ export function Settings() {
               </div>
 
               {/* Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-gray-800/40 p-4 rounded-xl border border-gray-700/50">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-[#0f2240]/40 p-4 rounded-xl border border-white/7">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5 flex items-center gap-1">
                     <Users className="w-3 h-3" /> Usuario
@@ -1252,7 +1252,7 @@ export function Settings() {
               {/* Table */}
               <div className="overflow-x-auto rounded-xl border border-gray-800">
                 <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead className="bg-gray-800/50 text-gray-400 text-xs uppercase font-bold">
+                  <thead className="bg-[#0a1628] text-gray-400 text-xs uppercase font-bold">
                     <tr>
                       <th className="py-3 px-4">Fecha y Hora</th>
                       <th className="py-3 px-4">Usuario</th>
@@ -1300,7 +1300,7 @@ export function Settings() {
       {/* Modal: Editar Usuario (Paridad Total con Formulario de Creación) */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-2xl space-y-6 animate-in zoom-in duration-200">
+          <div className="bg-[#0f2240] border border-white/10 rounded-2xl shadow-2xl p-8 w-full max-w-2xl space-y-6 animate-in zoom-in duration-200">
             <div className="flex items-center gap-3 border-b border-gray-800 pb-4">
               <UserPlus className="w-6 h-6 text-indigo-400" />
               <div>
@@ -1419,7 +1419,7 @@ export function Settings() {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-2xl transition-all border border-gray-700"
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-2xl transition-all border border-white/10"
                 >
                   Cancelar
                 </button>
@@ -1432,7 +1432,7 @@ export function Settings() {
       {/* --- Notification Modal --- */}
       {notification && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#111827] rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl border border-gray-800 transform animate-in zoom-in-95 duration-200">
+          <div className="bg-[#0f2240] rounded-3xl p-6 sm:p-8 w-full max-w-sm shadow-2xl border border-white/10 transform animate-in zoom-in-95 duration-200">
             <div className="flex flex-col items-center text-center">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${notification.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-500'}`}>
                 {notification.type === 'success' ? <CheckCircle className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
@@ -1453,7 +1453,7 @@ export function Settings() {
       {/* --- Confirm Dialog Modal --- */}
       {confirmDialog && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#111827] rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-gray-800 transform animate-in zoom-in-95 duration-200">
+          <div className="bg-[#0f2240] rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl border border-white/10 transform animate-in zoom-in-95 duration-200">
             <div className="flex flex-col items-center text-center">
               <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-amber-500/20 text-amber-500">
                 <ShieldAlert className="w-8 h-8" />
@@ -1464,7 +1464,7 @@ export function Settings() {
               <div className="flex flex-col sm:flex-row gap-3 w-full">
                 <button
                   onClick={() => setConfirmDialog(null)}
-                  className="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors duration-200 border border-gray-700 border-b-gray-800"
+                  className="flex-1 bg-white/5 hover:bg-white/10 text-white font-semibold py-3 px-6 rounded-xl transition-colors duration-200 border border-white/10"
                 >
                   Cancelar
                 </button>
@@ -1486,8 +1486,8 @@ export function Settings() {
       {/* --- Audit Log Detail Modal --- */}
       {selectedLog && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="bg-[#0f172a] rounded-3xl w-full max-w-2xl shadow-2xl border border-gray-800 overflow-hidden transform animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-            <div className="p-6 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between">
+          <div className="bg-[#0a1628] rounded-3xl w-full max-w-2xl shadow-2xl border border-white/10 overflow-hidden transform animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="p-6 bg-[#0d1b2e]/80 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-500/10 rounded-lg">
                   <FileText className="w-6 h-6 text-indigo-400" />
@@ -1507,11 +1507,11 @@ export function Settings() {
 
             <div className="p-6 overflow-y-auto space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-900/40 p-3 rounded-xl border border-gray-800">
+                <div className="bg-[#0d1b2e]/60 p-3 rounded-xl border border-white/5">
                   <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Usuario</p>
                   <p className="text-white font-medium">{users.find(u => u.id === selectedLog.userId)?.username || selectedLog.userId || 'Sistema'}</p>
                 </div>
-                <div className="bg-gray-900/40 p-3 rounded-xl border border-gray-800">
+                <div className="bg-[#0d1b2e]/60 p-3 rounded-xl border border-white/5">
                   <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Fecha y Hora</p>
                   <p className="text-white font-medium">{new Date(selectedLog.createdAt).toLocaleString()}</p>
                 </div>
@@ -1558,7 +1558,7 @@ export function Settings() {
               </div>
             </div>
 
-            <div className="p-6 bg-gray-900/50 border-t border-gray-800 flex justify-end">
+            <div className="p-6 bg-[#0d1b2e]/80 border-t border-white/5 flex justify-end">
               <button 
                 onClick={() => setSelectedLog(null)}
                 className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl transition-colors"
