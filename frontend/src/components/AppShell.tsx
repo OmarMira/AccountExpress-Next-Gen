@@ -50,10 +50,10 @@ export function AppShell() {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100 font-sans">
+    <div className="flex h-screen bg-[#0d1b2e] text-gray-100 font-sans">
       {/* Sidebar */}
-      <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-screen">
-        <div className="h-16 flex items-center px-6 border-b border-gray-800 shrink-0">
+      <div className="w-64 bg-[#0a1628] border-r border-white/5 flex flex-col h-screen">
+        <div className="h-16 flex items-center px-6 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
               <span className="text-white font-bold text-sm">AE</span>
@@ -72,7 +72,7 @@ export function AppShell() {
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     location.pathname === item.path
                       ? 'bg-indigo-500/10 text-indigo-400'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   <Icon className="w-5 h-5 shrink-0" />
@@ -95,7 +95,7 @@ export function AppShell() {
           </ul>
         </nav>
 
-        <div className="border-t border-slate-800 pt-4 pb-4 px-3 space-y-1 flex-shrink-0">
+        <div className="border-t border-white/5 pt-4 pb-4 px-3 space-y-1 flex-shrink-0">
           <button
             onClick={() => setAiPanelOpen(true)}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-indigo-400 hover:text-white hover:bg-indigo-500/10 transition-colors text-sm"
@@ -124,7 +124,7 @@ export function AppShell() {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-gray-900/50 backdrop-blur-md border-b border-gray-800 flex items-center justify-between px-8 shrink-0 z-10 sticky top-0">
+        <header className="h-16 bg-[#0a1628]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-8 shrink-0 z-10 sticky top-0">
           <div className="flex items-center gap-4">
             <div className="flex flex-col">
               <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Empresa Activa</span>
@@ -143,7 +143,7 @@ export function AppShell() {
               Cifrado AES
             </div>
 
-            <div className="flex items-center gap-3 pl-5 border-l border-gray-800">
+            <div className="flex items-center gap-3 pl-5 border-l border-white/5">
               <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-sm font-bold text-white shadow-lg shadow-indigo-500/20">
                 {user?.firstName?.charAt(0) || user?.username?.charAt(0) || 'U'}
               </div>
@@ -155,7 +155,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto bg-[#0a0a0f] p-8">
+        <main className="flex-1 overflow-auto bg-[#0d1b2e] p-8">
           <Outlet />
         </main>
       </div>

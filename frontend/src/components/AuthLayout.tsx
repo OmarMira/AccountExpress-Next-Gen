@@ -11,10 +11,10 @@ export function AuthLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#0d1b2e] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <div className="w-12 h-12 bg-[#0071c5] rounded-xl flex items-center justify-center shadow-lg shadow-[#0071c5]/30">
             <span className="text-white font-bold text-2xl">AE</span>
           </div>
         </div>
@@ -27,7 +27,7 @@ export function AuthLayout() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-gray-800 py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-gray-700/50">
+        <div className="bg-[#0f2240] py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-white/7">
           <Outlet />
         </div>
       </div>
