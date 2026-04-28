@@ -30,16 +30,6 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   .use(authMiddleware)
   .guard({ beforeHandle: requireAuth })
 
-  // ── GET /users?companyId=xxx ──────────────────────────────
-  .get("/", async ({ query }) => {
-    const users = await listUsers(query.companyId);
-    return { success: true, data: users };
-  }, {
-    query: t.Object({
-      companyId: t.String()
-    })
-  })
-
   // ── GET /users/roles ──────────────────────────────────────
   .get("/roles", async () => {
     return { success: true, data: await listRoles() };
@@ -56,10 +46,28 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
     return { success: true, data: await listAllUsers() };
   })
 
+  // ── GET /users ──────────────────────────────
+  .use(requirePermission("users", "read"))
+  .get("/", async ({ companyId, set }) => {
+    if (!companyId) {
+      set.status = 403;
+      return { success: false, error: "No active company" };
+    }
+    const usersData = await listUsers(companyId);
+    return { success: true, data: usersData };
+  })
+
+  .use(requirePermission("users", "write"))
+
   // ── POST /users ───────────────────────────────────────────
-  .post("/", async ({ body, set, user }) => {
+  .post("/", async ({ body, set, user, companyId }) => {
+    if (!companyId) {
+      set.status = 403;
+      return { success: false, error: "No active company" };
+    }
+
     const uid = user!;
-    const { username, email, password, firstName, lastName, companyId, roleId } = body;
+    const { username, email, password, firstName, lastName, roleId } = body;
 
     let actualRoleId = roleId;
     if (actualRoleId === 'admin') actualRoleId = 'role-company-admin-00-000000000002';
@@ -69,7 +77,8 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       const result = await createUser({
         username, email, password,
         firstName, lastName,
-        companyId, roleId: actualRoleId,
+        companyId: companyId, 
+        roleId: actualRoleId,
         grantedBy: uid,
       });
       set.status = 201;
@@ -90,9 +99,8 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       password:  t.String({ minLength: 8 }),
       firstName: t.String({ minLength: 1 }),
       lastName:  t.String({ minLength: 1 }),
-      companyId: t.String(),
       roleId:    t.String(),
-    }),
+    }, { additionalProperties: false }),
   })
 
   // ── PATCH /users/:userId ──────────────────────────────────
@@ -105,22 +113,41 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       .limit(1);
 
     if (!callerUser?.isSuperAdmin) {
-      const payload = body;
-      const companyId = payload.companyId ?? sessionCompanyId;
-      if (!companyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
+      if (!sessionCompanyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
+      
       const [adminRole] = await db
         .select({ roleId: userCompanyRoles.roleId })
         .from(userCompanyRoles)
         .where(
           and(
             eq(userCompanyRoles.userId, uid),
-            eq(userCompanyRoles.companyId, companyId),
+            eq(userCompanyRoles.companyId, sessionCompanyId),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
           )
         )
         .limit(1);
+      
       if (!adminRole) { set.status = 403; return { success: false, error: "Forbidden: admin role required" }; }
+
+      // Verify that the target user belongs to the sessionCompanyId
+      const [membership] = await db
+        .select({ userId: userCompanyRoles.userId })
+        .from(userCompanyRoles)
+        .where(
+          and(
+            eq(userCompanyRoles.userId, params.userId),
+            eq(userCompanyRoles.companyId, sessionCompanyId),
+            eq(userCompanyRoles.isActive, true),
+            isNull(userCompanyRoles.revokedAt)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        set.status = 403;
+        return { success: false, error: 'Acceso denegado' };
+      }
     }
 
     const payload = body;
@@ -135,14 +162,6 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       });
       return { success: true, data: result };
     } catch (err: any) {
-      require("fs").writeFileSync("crash_log.json", JSON.stringify({
-        message: err?.message,
-        code: err?.code,
-        cause: err?.cause ? String(err.cause) : null,
-        stack: err?.stack,
-        payload: payload,
-      }, null, 2));
-      
       const isUnique = err?.code === '23505' || String(err).includes('23505') || String(err).includes('unique constraint');
       if (isUnique) {
         set.status = 409;
@@ -154,7 +173,7 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   }, {
     params: t.Object({
       userId: t.String()
-    }),
+    }, { additionalProperties: false }),
     body: t.Object({
       isActive:  t.Optional(t.Boolean()),
       firstName: t.Optional(t.String({ minLength: 1 })),
@@ -162,43 +181,12 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
       username:  t.Optional(t.String({ minLength: 1 })),
       email:     t.Optional(t.String()),
       password:  t.Optional(t.String({ minLength: 8 })),
-      companyId: t.Optional(t.String()),
       roleId:    t.Optional(t.String()),
-    }),
-  })
-
-  // ── DELETE /users/:userId ─────────────────────────────────
-  .delete("/:userId", async ({ params, set, user }) => {
-    const callerId = user!;
-    
-    // 1. Solo un Super Admin puede borrar físicamente.
-    const [caller] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, callerId)).limit(1);
-    if (!caller?.isSuperAdmin) {
-      set.status = 403;
-      return { success: false, error: "Privilegios de Súper Administrador requeridos para el borrado físico." };
-    }
-
-    // 2. Un Super Admin no se puede borrar a sí mismo.
-    if (params.userId === callerId) {
-      set.status = 400;
-      return { success: false, error: "No puedes eliminar tu propia cuenta." };
-    }
-
-    try {
-      await deleteUser(params.userId);
-      return { success: true, message: "Usuario eliminado permanentemente." };
-    } catch (err) {
-      set.status = 400;
-      return { success: false, error: errMsg(err) };
-    }
-  }, {
-    params: t.Object({
-      userId: t.String()
-    })
+    }, { additionalProperties: false }),
   })
 
   // ── PUT /users/:userId/role ───────────────────────────────
-  .put("/:userId/role", async ({ params, body, set, user }) => {
+  .put("/:userId/role", async ({ params, body, set, user, companyId: sessionCompanyId }) => {
     const uid = user!;
     const [callerUser] = await db
       .select({ isSuperAdmin: users.isSuperAdmin })
@@ -208,14 +196,14 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
 
     const { companyId, roleId } = body;
     if (!callerUser?.isSuperAdmin) {
-      if (!companyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
+      if (!sessionCompanyId) { set.status = 403; return { success: false, error: "Forbidden" }; }
       const [adminRole] = await db
         .select({ roleId: userCompanyRoles.roleId })
         .from(userCompanyRoles)
         .where(
           and(
             eq(userCompanyRoles.userId, uid),
-            eq(userCompanyRoles.companyId, companyId),
+            eq(userCompanyRoles.companyId, sessionCompanyId),
             eq(userCompanyRoles.isActive, true),
             isNull(userCompanyRoles.revokedAt)
           )
@@ -243,11 +231,11 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   }, {
     params: t.Object({
       userId: t.String()
-    }),
+    }, { additionalProperties: false }),
     body: t.Object({
       companyId: t.String(),
       roleId:    t.String(),
-    }),
+    }, { additionalProperties: false }),
   })
 
   // ── POST /users/:userId/reset-password ────────────────────
@@ -282,23 +270,27 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   }, {
     params: t.Object({
       userId: t.String()
-    }),
+    }, { additionalProperties: false }),
     body: t.Object({
       newPassword: t.String({ minLength: 8 }),
-    }),
+    }, { additionalProperties: false }),
   })
+  
   // ── DELETE /users/:userId ────────────────────────────────
   .delete("/:userId", async ({ params, set, user }) => {
-    const uid = user!;
-    const [callerUser] = await db
-      .select({ isSuperAdmin: users.isSuperAdmin })
-      .from(users)
-      .where(eq(users.id, uid))
-      .limit(1);
-
-    if (!callerUser?.isSuperAdmin) {
+    const callerId = user!;
+    
+    // 1. Solo un Super Admin puede borrar físicamente.
+    const [caller] = await db.select({ isSuperAdmin: users.isSuperAdmin }).from(users).where(eq(users.id, callerId)).limit(1);
+    if (!caller?.isSuperAdmin) {
       set.status = 403;
-      return { success: false, error: "Forbidden: super_admin only" };
+      return { success: false, error: "Privilegios de Súper Administrador requeridos para el borrado físico." };
+    }
+
+    // 2. Un Super Admin no se puede borrar a sí mismo.
+    if (params.userId === callerId) {
+      set.status = 400;
+      return { success: false, error: "No puedes eliminar tu propia cuenta." };
     }
 
     try {
@@ -311,5 +303,5 @@ export const usersRoutes = new Elysia({ prefix: "/users" })
   }, {
     params: t.Object({
       userId: t.String()
-    })
+    }, { additionalProperties: false })
   });

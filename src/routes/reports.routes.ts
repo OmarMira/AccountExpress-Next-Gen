@@ -17,66 +17,82 @@ import { buildCpaPdf } from "../services/reports/pdf-builder.service.ts";
 import { getAgingReport } from "../services/reports/aging.service.ts";
 
 import { requirePermission } from "../middleware/rbac.middleware.ts";
-import { requireAuth } from "../middleware/auth.middleware.ts";
+import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
 
 export const reportsRoutes = new Elysia()
+  .use(authMiddleware)
   // ── Reports Group ──────────────────────────────────────────
   .group("/reports", (app) =>
     app
       .guard({ beforeHandle: requireAuth })
       .use(requirePermission("reports", "read"))
 
-      .get("/balance-sheet", async ({ query }) => {
-        return { success: true, data: await getBalanceSheet(query.companyId, query.asOfDate) };
+      .get("/balance-sheet", async ({ query, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { success: false, error: 'No active company in session.' };
+        }
+        return { success: true, data: await getBalanceSheet(companyId, query.asOfDate) };
       }, {
         query: t.Object({
-          companyId: t.String(),
           asOfDate: t.String(),
-        })
+        }, { additionalProperties: false })
       })
 
-      .get("/income-statement", async ({ query }) => {
-        return { success: true, data: await getIncomeStatement(query.companyId, query.startDate, query.endDate) };
+      .get("/income-statement", async ({ query, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { success: false, error: 'No active company in session.' };
+        }
+        return { success: true, data: await getIncomeStatement(companyId, query.startDate, query.endDate) };
       }, {
         query: t.Object({
-          companyId: t.String(),
           startDate: t.String(),
           endDate: t.String(),
-        })
+        }, { additionalProperties: false })
       })
 
-      .get("/trial-balance", async ({ query }) => {
-        return { success: true, data: await getTrialBalance(query.companyId, query.asOfDate) };
+      .get("/trial-balance", async ({ query, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { success: false, error: 'No active company in session.' };
+        }
+        return { success: true, data: await getTrialBalance(companyId, query.asOfDate) };
       }, {
         query: t.Object({
-          companyId: t.String(),
           asOfDate: t.String(),
-        })
+        }, { additionalProperties: false })
       })
 
-      .get("/cash-flow", async ({ query }) => {
-        return { success: true, data: await getCashFlow(query.companyId, query.startDate, query.endDate) };
+      .get("/cash-flow", async ({ query, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { success: false, error: 'No active company in session.' };
+        }
+        return { success: true, data: await getCashFlow(companyId, query.startDate, query.endDate) };
       }, {
         query: t.Object({
-          companyId: t.String(),
           startDate: t.String(),
           endDate: t.String(),
-        })
+        }, { additionalProperties: false })
       })
 
-      .get("/aging", async ({ query, set }) => {
+      .get("/aging", async ({ query, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { success: false, error: 'No active company in session.' };
+        }
         try {
           const asOfDate = query.asOfDate ?? new Date().toISOString().split("T")[0];
-          return { success: true, data: await getAgingReport(query.companyId, asOfDate) };
+          return { success: true, data: await getAgingReport(companyId, asOfDate) };
         } catch (err: unknown) {
           set.status = 400;
           return { success: false, error: errMsg(err) };
         }
       }, {
         query: t.Object({
-          companyId: t.String(),
           asOfDate: t.Optional(t.String()),
-        })
+        }, { additionalProperties: false })
       })
   )
 
@@ -86,17 +102,23 @@ export const reportsRoutes = new Elysia()
       .guard({ beforeHandle: requireAuth })
       .use(requirePermission("reports", "export"))
 
-      .post("/cpa-summary", async ({ body }) => {
-        return { success: true, data: await generateCpaSummary(body.companyId, body.periodId) };
+      .post("/cpa-summary", async ({ body, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { success: false, error: 'No active company in session.' };
+        }
+        return { success: true, data: await generateCpaSummary(companyId, body.periodId) };
       }, {
         body: t.Object({
-          companyId: t.String(),
           periodId: t.String(),
-        })
+        }, { additionalProperties: false })
       })
 
-      .get("/cpa-summary/download", async ({ query }) => {
-        const companyId = query.companyId;
+      .get("/cpa-summary/download", async ({ query, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { success: false, error: 'No active company in session.' };
+        }
         const periodId  = query.periodId;
 
         const summary = await generateCpaSummary(companyId, periodId);
@@ -110,24 +132,26 @@ export const reportsRoutes = new Elysia()
         });
       }, {
         query: t.Object({
-          companyId: t.String(),
           periodId: t.String(),
-        })
+        }, { additionalProperties: false })
       })
 
-      .get("/aging", async ({ query, set }) => {
+      .get("/aging", async ({ query, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { success: false, error: 'No active company in session.' };
+        }
         try {
           const asOfDate = query.asOfDate ?? new Date().toISOString().split("T")[0];
-          return { success: true, data: await getAgingReport(query.companyId, asOfDate) };
+          return { success: true, data: await getAgingReport(companyId, asOfDate) };
         } catch (err: unknown) {
           set.status = 400;
           return { success: false, error: errMsg(err) };
         }
       }, {
         query: t.Object({
-          companyId: t.String(),
           asOfDate: t.Optional(t.String()),
-        })
+        }, { additionalProperties: false })
       })
   );
 
