@@ -51,7 +51,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
       periodId:  t.Optional(t.String()),
       limit:     t.Optional(t.String()),
       offset:    t.Optional(t.String()),
-    })
+    }, { additionalProperties: false })
   })
 
   // GET /journal/:id
@@ -72,7 +72,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   }, {
     params: t.Object({
       id: t.String()
-    })
+    }, { additionalProperties: false })
   })
 
   // POST /journal — create draft
@@ -135,7 +135,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
           }),
           { minItems: 2 }
         ),
-      }),
+      }, { additionalProperties: false }),
     }
   )
 
@@ -158,7 +158,7 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   }, {
     params: t.Object({
       id: t.String()
-    })
+    }, { additionalProperties: false })
   })
 
   // POST /journal/:id/void
@@ -180,5 +180,5 @@ export const journalRoutes = new Elysia({ prefix: "/journal" })
   }, {
     params: t.Object({
       id: t.String()
-    })
+    }, { additionalProperties: false })
   });

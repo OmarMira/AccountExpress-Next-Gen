@@ -30,7 +30,7 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   }, {
     query: t.Object({
       status:    t.Optional(t.String()),
-    })
+    }, { additionalProperties: false })
   })
 
   // POST /fiscal-periods
@@ -60,7 +60,7 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
         periodType: t.Union([t.Literal("monthly"), t.Literal("quarterly"), t.Literal("annual")]),
         startDate:  t.String(),
         endDate:    t.String(),
-      }),
+      }, { additionalProperties: false }),
     }
   )
 
@@ -79,7 +79,7 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   }, {
     params: t.Object({
       id: t.String()
-    })
+    }, { additionalProperties: false })
   })
 
   // POST /fiscal-periods/:id/close
@@ -107,7 +107,7 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   }, {
     params: t.Object({
       id: t.String()
-    })
+    }, { additionalProperties: false })
   })
 
   // POST /fiscal-periods/:id/lock
@@ -134,5 +134,5 @@ export const fiscalPeriodsRoutes = new Elysia({ prefix: "/fiscal-periods" })
   }, {
     params: t.Object({
       id: t.String()
-    })
+    }, { additionalProperties: false })
   });

@@ -35,7 +35,7 @@ export const reconciliationGroupRoutes = new Elysia({ prefix: "/bank/groups" })
         description: t.String(),
         transactionIds: t.Array(t.String()),
         glAccountId: t.String(),
-      }),
+      }, { additionalProperties: false }),
     }
   )
 
@@ -70,11 +70,11 @@ export const reconciliationGroupRoutes = new Elysia({ prefix: "/bank/groups" })
     {
       params: t.Object({
         groupId: t.String()
-      }),
+      }, { additionalProperties: false }),
       body: t.Object({
         companyId: t.String(),
         periodId: t.String(),
         bankAccountGlId: t.String()
-      })
+      }, { additionalProperties: false })
     }
   );

@@ -54,64 +54,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       body: t.Object({
         file: t.File(),
         bankAccountId: t.Optional(t.String()),
-      })
-    }
-  )
-
-  // ─────────────────────────────────────────────────────────────
-  // 1B. IMPORT JSON PARSED TRANSACTIONS (bank:create)
-  // ─────────────────────────────────────────────────────────────
-  .post(
-    "/import-parsed",
-    async ({ body, companyId, set }) => {
-      if (!companyId) {
-        set.status = 403;
-        return { error: "No active company in session." };
-      }
-
-      const result = await statementImportService.processParsedBatch(
-        companyId,
-        body.bankAccountId ?? undefined,
-        body.transactions,
-        body.bankName ?? undefined,
-        body.accountNumber ?? undefined,
-        body.importBatchId
-      );
-
-      // ── Update initial balance if this statement is the earliest ─
-      if (
-        result.bankAccountId &&
-        body.beginningBalance !== undefined &&
-        body.beginningBalance !== null &&
-        body.periodStart
-      ) {
-        await statementImportService.updateInitialBalanceIfEarlier(
-          companyId,
-          result.bankAccountId,
-          body.beginningBalance,
-          body.periodStart
-        );
-      }
-
-      return { success: true, ...result };
-    },
-    {
-      body: t.Object({
-        transactions: t.Array(t.Object({
-          date: t.String(),
-          description: t.String(),
-          amount: t.Number(),
-          balance: t.Optional(t.Number())
-        })),
-        bankAccountId: t.Optional(t.String()),
-        bankName: t.Optional(t.String()),
-        accountNumber: t.Optional(t.String()),
-        fileName: t.String(),
-        importBatchId: t.String(),
-        // New: beginning balance and period start from the PDF statement header
-        beginningBalance: t.Optional(t.Number()),
-        periodStart: t.Optional(t.String()),
-      })
+      }, { additionalProperties: false })
     }
   )
 
@@ -148,7 +91,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     {
       body: t.Object({
         file: t.File({ type: 'application/pdf', maxSize: '10m' })
-      })
+      }, { additionalProperties: false })
     }
   )
 
@@ -210,7 +153,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         file: t.File({ type: 'application/pdf', maxSize: '10m' }),
         bankAccountId: t.String(),
         importBatchId: t.String()
-      })
+      }, { additionalProperties: false })
     }
   )
 
@@ -256,7 +199,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     {
       query: t.Object({
         status: t.Optional(t.String())
-      })
+      }, { additionalProperties: false })
     }
   )
 
@@ -278,7 +221,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     {
       query: t.Object({
         description: t.String()
-      })
+      }, { additionalProperties: false })
     }
   )
 
@@ -314,12 +257,12 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
     {
       params: t.Object({
         id: t.String()
-      }),
+      }, { additionalProperties: false }),
       body: t.Object({
         targetAccountId: t.String(),
         bankAccountId: t.String(),
         periodId: t.String()
-      })
+      }, { additionalProperties: false })
     }
   )
 
@@ -343,8 +286,8 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         return { success: true };
       },
       {
-        params: t.Object({ id: t.String() }),
-        body: t.Object({})
+        params: t.Object({ id: t.String() }, { additionalProperties: false }),
+        body: t.Object({}, { additionalProperties: false })
       }
     )
 
@@ -392,13 +335,13 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         return { success: true, message: "Transacción actualizada" };
       },
       {
-        params: t.Object({ id: t.String() }),
+        params: t.Object({ id: t.String() }, { additionalProperties: false }),
         body: t.Object({
           glAccountId: t.Optional(t.String()),
           transactionDate: t.Optional(t.String()),
           description: t.Optional(t.String()),
           amount: t.Optional(t.Number())
-        })
+        }, { additionalProperties: false })
       }
     )
 
@@ -447,7 +390,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         body: t.Object({
           bankAccountId: t.String(),
           periodId:      t.String(),
-        })
+        }, { additionalProperties: false })
       }
     )
   );

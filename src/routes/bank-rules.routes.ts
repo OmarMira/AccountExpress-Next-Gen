@@ -41,7 +41,7 @@ export const bankRulesRouter = new Elysia({ prefix: "/bank-rules" })
       autoAdd: t.Boolean(),
       priority: t.Number(),
       isActive: t.Optional(t.Boolean()),
-    })
+    }, { additionalProperties: false })
   })
 
   .patch("/:id", async ({ params: { id }, body, companyId, set }) => {
@@ -66,7 +66,7 @@ export const bankRulesRouter = new Elysia({ prefix: "/bank-rules" })
 
     return await BankRulesService.updateRule(id, body as any);
   }, {
-    params: t.Object({ id: t.String() }),
+    params: t.Object({ id: t.String() }, { additionalProperties: false }),
     body: t.Partial(t.Object({
       name: t.String(),
       conditionType: t.Enum({ contains: "contains", starts_with: "starts_with", equals: "equals" }),
@@ -76,7 +76,7 @@ export const bankRulesRouter = new Elysia({ prefix: "/bank-rules" })
       autoAdd: t.Boolean(),
       priority: t.Number(),
       isActive: t.Boolean(),
-    }))
+    }, { additionalProperties: false }))
   })
 
   .delete("/:id", async ({ params: { id }, companyId, set }) => {
@@ -101,5 +101,5 @@ export const bankRulesRouter = new Elysia({ prefix: "/bank-rules" })
 
     return await BankRulesService.deleteRule(id);
   }, {
-    params: t.Object({ id: t.String() })
+    params: t.Object({ id: t.String() }, { additionalProperties: false })
   });

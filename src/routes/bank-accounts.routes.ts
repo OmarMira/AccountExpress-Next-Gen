@@ -90,7 +90,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       routingNumber: t.Optional(t.String()),
       notes: t.Optional(t.String()),
       glAccountId: t.Optional(t.String())
-    })
+    }, { additionalProperties: false })
   })
 
   .put('/:id', async ({ params, body, companyId, set }) => {
@@ -162,7 +162,7 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       balance: t.Optional(t.Number()),
       glAccountId: t.Optional(t.String()),
       isActive: t.Optional(t.Boolean())
-    })
+    }, { additionalProperties: false })
   })
 
   .delete('/:id', async ({ params, companyId, set }) => {

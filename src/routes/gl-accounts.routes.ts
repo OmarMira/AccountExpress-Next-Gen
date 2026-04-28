@@ -77,7 +77,7 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
       normalBalance: t.Union([t.Literal('debit'), t.Literal('credit')]),
       description:   t.Optional(t.String()),
       parentCode:    t.Optional(t.String()),
-    })
+    }, { additionalProperties: false })
   })
 
   // PATCH /gl-accounts/:id — edit name, code, or description
@@ -160,13 +160,13 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
 
     return { message: 'Cuenta actualizada' };
   }, {
-    params: t.Object({ id: t.String() }),
+    params: t.Object({ id: t.String() }, { additionalProperties: false }),
     body: t.Object({
       name:        t.Optional(t.String()),
       description: t.Optional(t.String()),
       code:        t.Optional(t.String()),
       parentCode:  t.Optional(t.Nullable(t.String())),
-    })
+    }, { additionalProperties: false })
   })
 
   // DELETE /gl-accounts/:id — soft-deactivate (system accounts are protected)
@@ -202,5 +202,5 @@ export const glAccountsRoutes = new Elysia({ prefix: '/gl-accounts' })
       return { error: err instanceof Error ? err.message : 'Unknown error' };
     }
   }, {
-    params: t.Object({ id: t.String() })
+    params: t.Object({ id: t.String() }, { additionalProperties: false })
   });
