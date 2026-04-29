@@ -48,7 +48,8 @@ export const movementSummaryRoutes = new Elysia({ prefix: "/movement-summary" })
         return { error: "No active company in session." };
       }
 
-      const { startDate, endDate } = query;
+      const { startDate, endDate, bankAccountId } = query;
+
 
       // ── 1. BANK PENDING (no GL account assigned, status = pending) ────
       const bankPendingRaw = await db.execute(sql`
@@ -61,6 +62,8 @@ export const movementSummaryRoutes = new Elysia({ prefix: "/movement-summary" })
           AND status     = 'pending'
           ${startDate ? sql`AND transaction_date >= ${startDate}` : sql``}
           ${endDate   ? sql`AND transaction_date <= ${endDate}`   : sql``}
+          ${bankAccountId ? sql`AND bank_account = ${bankAccountId}` : sql``}
+
       `) as unknown as SummaryRow[];
 
       // ── 2. BANK ASSIGNED (gl_account_id IS NOT NULL) ──────────────────
@@ -74,6 +77,8 @@ export const movementSummaryRoutes = new Elysia({ prefix: "/movement-summary" })
           AND gl_account_id IS NOT NULL
           ${startDate ? sql`AND transaction_date >= ${startDate}` : sql``}
           ${endDate   ? sql`AND transaction_date <= ${endDate}`   : sql``}
+          ${bankAccountId ? sql`AND bank_account = ${bankAccountId}` : sql``}
+
       `) as unknown as SummaryRow[];
 
       // ── 3. MANUAL JOURNAL ENTRIES (sum via journal_lines) ─────────────
@@ -105,7 +110,9 @@ export const movementSummaryRoutes = new Elysia({ prefix: "/movement-summary" })
         FROM bank_accounts
         WHERE company_id = ${companyId}
           AND is_active  = true
+          ${bankAccountId ? sql`AND id = ${bankAccountId}` : sql``}
       `) as unknown as BankBalanceRow[];
+
 
       const bankBalanceRow = bankBalanceRaw[0] ?? { totalBalance: "0", accountCount: "0" };
       const bankAccountsBalance = {
@@ -130,6 +137,8 @@ export const movementSummaryRoutes = new Elysia({ prefix: "/movement-summary" })
       query: t.Object({
         startDate: t.Optional(t.String()),
         endDate:   t.Optional(t.String()),
+        bankAccountId: t.Optional(t.String()),
       }),
+
     }
   );

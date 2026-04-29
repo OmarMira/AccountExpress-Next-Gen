@@ -6,20 +6,32 @@
 // ============================================================
 
 import { db } from "../../db/connection.ts";
-import { bankTransactions, bankAccounts, bankRules } from "../../db/schema/index.ts";
-import { eq, and, or, isNull } from "drizzle-orm";
-import { matchTransaction } from "./reconciliation.service.ts";
+import { 
+  bankTransactions, 
+  bankAccounts, 
+  bankRules, 
+  fiscalPeriods,
+  journalLines,
+  journalEntries
+} from "../../db/schema/index.ts";
+import { and, eq, or, isNull, sql, between, inArray } from "drizzle-orm";
+import { matchTransaction, matchAgainstJournal } from "./reconciliation.service.ts";
 import { suggestAccountBatch } from "./smart-match.service.ts";
 import { createGroup, reconcileGroup } from "./reconciliation-group.service.ts";
 
+
+
 const AUTO_MATCH_CONFIDENCE_THRESHOLD = 0.70;
 const MAX_SUGGESTIONS_FOR_GROUP       = 3;
+const DEFAULT_BATCH_LIMIT             = 100;
 
 export interface AutoMatchResult {
   matched: number;
+  crossed: number;
   pending: number;
   errors: { transactionId: string; reason: string }[];
 }
+
 
 // ── Helper: resolve GL account ID from bank_accounts.id ─────
 async function resolveGlAccountId(
@@ -40,6 +52,37 @@ async function resolveGlAccountId(
   return account?.glAccountId ?? null;
 }
 
+// ── Helper: Verify Period Status ─────────────────────────────
+async function checkPeriodOpen(companyId: string, periodId: string) {
+  const [period] = await db
+    .select({ status: fiscalPeriods.status })
+    .from(fiscalPeriods)
+    .where(and(eq(fiscalPeriods.id, periodId), eq(fiscalPeriods.companyId, companyId)))
+    .limit(1);
+
+  if (!period) {
+    throw new Error("El periodo fiscal especificado no existe.");
+  }
+  if (period.status !== "open") {
+    throw new Error(`No se puede ejecutar conciliación automática en un periodo ${period.status}.`);
+  }
+}
+
+// ── Helper: Get Closed Periods ────────────────────────────────
+async function getClosedPeriodFilter(companyId: string) {
+  const closed = await db
+    .select({ startDate: fiscalPeriods.startDate, endDate: fiscalPeriods.endDate })
+    .from(fiscalPeriods)
+    .where(
+      and(
+        eq(fiscalPeriods.companyId, companyId),
+        inArray(fiscalPeriods.status, ["closed", "locked"])
+      )
+    );
+  
+  return (date: string) => closed.some(p => date >= p.startDate && date <= p.endDate);
+}
+
 // ── Level 1: Auto-reconcile via high-confidence smart-match ─
 export async function runAutoMatch(
   companyId: string,
@@ -47,9 +90,14 @@ export async function runAutoMatch(
   periodId: string,
   userId: string,
   sessionId: string,
-  ipAddress: string
+  ipAddress: string,
+  limit: number = DEFAULT_BATCH_LIMIT
 ): Promise<AutoMatchResult> {
-  const result: AutoMatchResult = { matched: 0, pending: 0, errors: [] };
+  const result: AutoMatchResult = { matched: 0, crossed: 0, pending: 0, errors: [] };
+
+  // 0. Security: Verify target period is OPEN
+  await checkPeriodOpen(companyId, periodId);
+  const isDateClosed = await getClosedPeriodFilter(companyId);
 
   // 1. Resolve the bank's GL account (e.g., 1010 - Cash Checking)
   const bankGlAccountId = await resolveGlAccountId(bankAccountId, companyId);
@@ -63,8 +111,6 @@ export async function runAutoMatch(
   }
 
   // 1.6. Rule-based match: apply active bank rules to ALL pending transactions
-  // This runs regardless of autoAdd — rules defined by the user should always
-  // be applied during auto-match, not only at import time.
   const activeRules = await db
     .select()
     .from(bankRules)
@@ -76,7 +122,7 @@ export async function runAutoMatch(
     )
     .orderBy(bankRules.priority);
 
-  const pendingForRules = await db
+  const allPendingForRules = await db
     .select()
     .from(bankTransactions)
     .where(
@@ -88,15 +134,75 @@ export async function runAutoMatch(
           isNull(bankTransactions.glAccountId)
         )
       )
-    );
+    )
+    .limit(limit);
+
+  // UX Requirement: Ignore transactions in closed periods
+  const pendingForRules = allPendingForRules.filter(tx => !isDateClosed(tx.transactionDate));
 
   // Set initial pending count to the total found
   result.pending = pendingForRules.length;
 
   for (const tx of pendingForRules) {
+    const txAmountNum = Number(tx.amount);
+    const absAmountStr = Math.abs(txAmountNum).toFixed(2);
+
+    // --- LEVEL 0: Exact Ledger Match (Cross-match existing JE) ---
+    // Rule: Same amount, same account, posted status, not reconciled, date within +/- 7 days
+    const txDateObj = new Date(tx.transactionDate + 'T12:00:00Z');
+    const dStart = new Date(txDateObj);
+    dStart.setDate(dStart.getDate() - 7);
+    const dEnd = new Date(txDateObj);
+    dEnd.setDate(dEnd.getDate() + 7);
+    
+    const dateStart = dStart.toISOString().split('T')[0];
+    const dateEnd = dEnd.toISOString().split('T')[0];
+
+
+    const existingMatch = await db
+      .select({
+        lineId: journalLines.id,
+        entryId: journalLines.journalEntryId
+      })
+      .from(journalLines)
+      .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+      .where(
+        and(
+          eq(journalLines.companyId, companyId),
+          eq(journalLines.accountId, bankGlAccountId),
+          eq(journalLines.isReconciled, false),
+          eq(journalEntries.status, 'posted'),
+          txAmountNum > 0 
+            ? eq(journalLines.debitAmount, absAmountStr)
+            : eq(journalLines.creditAmount, absAmountStr),
+          between(journalEntries.entryDate, dateStart, dateEnd)
+        )
+      )
+      .limit(1);
+
+    if (existingMatch.length > 0) {
+      try {
+        await matchAgainstJournal({
+          companyId,
+          transactionId: tx.id,
+          lineIds: [existingMatch[0].lineId],
+          userId,
+          sessionId,
+          ipAddress
+        });
+        result.crossed++;
+        continue; // Successfully crossed, skip rule matching
+      } catch (err: any) {
+
+        // Log error but continue to try rules if cross-match failed for some reason
+        console.error(`Ledger match failed for tx ${tx.id}: ${err.message}`);
+      }
+    }
+
     const desc = (tx.description ?? "").toUpperCase();
 
     // Find first matching rule by priority
+
     const matchingRule = activeRules.find(rule => {
       const val = rule.conditionValue.toUpperCase();
       const dirMatch =
@@ -122,7 +228,8 @@ export async function runAutoMatch(
         userId,
         sessionId,
         ipAddress,
-        matchingRule.id
+        matchingRule.id,
+        'auto_matched'
       );
       result.matched++;
       result.pending--;
@@ -131,12 +238,11 @@ export async function runAutoMatch(
         transactionId: tx.id,
         reason: err instanceof Error ? err.message : String(err),
       });
-      result.pending++;
     }
   }
 
   // 1.5. Deterministic Rules: Process transactions marked as 'autoAdd'
-  const autoAddTxs = await db
+  const allAutoAddTxs = await db
     .select({
       transaction: bankTransactions
     })
@@ -150,7 +256,10 @@ export async function runAutoMatch(
         eq(bankRules.autoAdd, true),
         eq(bankRules.isActive, true)
       )
-    );
+    )
+    .limit(limit);
+
+  const autoAddTxs = allAutoAddTxs.filter(item => !isDateClosed(item.transaction.transactionDate));
 
   for (const item of autoAddTxs) {
     const tx = item.transaction;
@@ -168,7 +277,8 @@ export async function runAutoMatch(
         userId,
         sessionId,
         ipAddress,
-        tx.appliedRuleId ?? undefined
+        tx.appliedRuleId ?? undefined,
+        'auto_matched'
       );
       result.matched++;
     } catch (err: any) {
@@ -177,7 +287,7 @@ export async function runAutoMatch(
   }
 
   // 2. Get all pending transactions for this bank account
-  const pendingTxs = await db
+  const allPendingTxs = await db
     .select()
     .from(bankTransactions)
     .where(
@@ -186,7 +296,10 @@ export async function runAutoMatch(
         eq(bankTransactions.bankAccount, bankAccountId),
         eq(bankTransactions.status, "pending")
       )
-    );
+    )
+    .limit(limit);
+
+  const pendingTxs = allPendingTxs.filter(tx => !isDateClosed(tx.transactionDate));
 
   if (pendingTxs.length === 0) return result;
 
@@ -221,15 +334,17 @@ export async function runAutoMatch(
         periodId,
         userId,
         sessionId,
-        ipAddress
+        ipAddress,
+        undefined,
+        'auto_matched'
       );
       result.matched++;
+      result.pending--;
     } catch (err: unknown) {
       result.errors.push({
         transactionId: tx.id,
         reason: err instanceof Error ? err.message : String(err),
       });
-      result.pending++;
     }
   }
 
@@ -237,17 +352,20 @@ export async function runAutoMatch(
 }
 
 // ── Level 2: Group transactions sharing the same GL suggestion ─
-// Targets transactions Level 1 left pending due to ambiguous
-// confidence, grouping those that share a dominant suggestion.
 export async function runGroupMatch(
   companyId: string,
   bankAccountId: string,
   periodId: string,
   userId: string,
   sessionId: string,
-  ipAddress: string
+  ipAddress: string,
+  limit: number = DEFAULT_BATCH_LIMIT
 ): Promise<AutoMatchResult> {
   const result: AutoMatchResult = { matched: 0, pending: 0, errors: [] };
+
+  // 0. Security & UX: Verify target period and closed periods
+  await checkPeriodOpen(companyId, periodId);
+  const isDateClosed = await getClosedPeriodFilter(companyId);
 
   // 1. Resolve bank GL account
   const bankGlAccountId = await resolveGlAccountId(bankAccountId, companyId);
@@ -260,7 +378,7 @@ export async function runGroupMatch(
   }
 
   // 2. Get transactions still pending after Level 1
-  const pendingTxs = await db
+  const allPendingTxs = await db
     .select()
     .from(bankTransactions)
     .where(
@@ -272,7 +390,10 @@ export async function runGroupMatch(
           isNull(bankTransactions.glAccountId)
         )
       )
-    );
+    )
+    .limit(limit);
+
+  const pendingTxs = allPendingTxs.filter(tx => !isDateClosed(tx.transactionDate));
 
   if (pendingTxs.length === 0) return result;
 
@@ -288,21 +409,18 @@ export async function runGroupMatch(
     const txSuggestions = (suggestions.get(desc) ?? []).slice(0, MAX_SUGGESTIONS_FOR_GROUP);
 
     if (txSuggestions.length === 0) {
-      // It will remain in result.pending
       continue;
     }
 
-    // Use the highest-confidence suggestion as the grouping key
     const topAccountId = txSuggestions[0].accountId;
     const existing     = groups.get(topAccountId) ?? [];
     existing.push(tx);
     groups.set(topAccountId, existing);
   }
 
-  // 5. Reconcile each group (minimum 2 transactions to justify grouping)
+  // 5. Reconcile each group
   for (const [glAccountId, txGroup] of groups.entries()) {
     if (txGroup.length < 2) {
-      // They remain in result.pending
       continue;
     }
 
@@ -322,10 +440,10 @@ export async function runGroupMatch(
         sessionId,
         ipAddress,
         bankAccountGlId: bankGlAccountId,
+        source: 'auto_matched'
       });
 
       result.matched += txGroup.length;
-      result.pending -= txGroup.length;
     } catch (err: unknown) {
       for (const tx of txGroup) {
         result.errors.push({
@@ -333,7 +451,6 @@ export async function runGroupMatch(
           reason: err instanceof Error ? err.message : String(err),
         });
       }
-      // They remain in result.pending
     }
   }
 

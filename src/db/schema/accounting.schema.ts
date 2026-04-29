@@ -13,6 +13,7 @@ import {
   timestamp,
   check,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
@@ -77,8 +78,8 @@ export const journalEntries = pgTable("journal_entries", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 }, (table) => ({
-  idxJeCompanyDate:   index("idx_je_company_date").on(table.companyId, table.entryDate),
-  idxJeStatus:        index("idx_je_status").on(table.status),
+  idxJeCompanyDate: index("idx_je_company_date").on(table.companyId, table.entryDate),
+  idxJeStatus: index("idx_je_status").on(table.status),
 }));
 
 // ─────────────────────────────────────────────────────────────
@@ -106,6 +107,8 @@ export const journalLines = pgTable(
     creditAmount: numeric("credit_amount", { precision: 15, scale: 2 }).default("0").notNull(),
     description: text("description"),
     lineNumber: integer("line_number").notNull(),
+    isReconciled: boolean("is_reconciled").default(false).notNull(),
+    clearedAt: timestamp("cleared_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (table) => ({
@@ -151,10 +154,13 @@ export const bankTransactions = pgTable("bank_transactions", {
   matchedBy: text("matched_by")
     .references(() => users.id),
   matchedAt: timestamp("matched_at", { withTimezone: true }),
+  reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
   importBatchId: text("import_batch_id"),
   appliedRuleId: text("applied_rule_id"),
+  matchSource: text("match_source"), // 'auto_matched' | 'manual' | 'new_entry'
+  reconciliationSplits: jsonb("reconciliation_splits"), // [{ glAccountId: string, amount: number }]
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => ({
   idxBtCompanyStatus: index("idx_bt_company_status").on(table.companyId, table.status),
-  idxBtDate:          index("idx_bt_date").on(table.transactionDate),
+  idxBtDate: index("idx_bt_date").on(table.transactionDate),
 }));

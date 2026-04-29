@@ -62,6 +62,7 @@ export const ImportHistory: React.FC = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [isFixingAll, setIsFixingAll] = useState(false);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [splits, setSplits] = useState<{ glAccountId: string; amount: number }[]>([]);
 
   useEffect(() => {
     if (validationMessage) {
@@ -73,6 +74,18 @@ export const ImportHistory: React.FC = () => {
   useEffect(() => {
     if (editingTransaction) {
       updateMutation.reset();
+      // Initialize splits: if transaction has splits (future) use them, otherwise create one split with full amount
+      if (editingTransaction.splits && editingTransaction.splits.length > 0) {
+        setSplits(editingTransaction.splits.map((s: any) => ({
+          glAccountId: s.glAccountId,
+          amount: Math.abs(Number(s.amount))
+        })));
+      } else {
+        setSplits([{ 
+          glAccountId: editingTransaction.glAccountId || '', 
+          amount: Math.abs(Number(editingTransaction.amount)) 
+        }]);
+      }
     }
   }, [editingTransaction?.id]);
 
@@ -646,23 +659,82 @@ export const ImportHistory: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Asignación Contable</label>
-                <div className="relative">
-                  <select
-                    value={editingTransaction.glAccountId || ''}
-                    onChange={(e) => {
-                      setEditingTransaction((prev: any) => prev ? { ...prev, glAccountId: e.target.value } : null);
-                      updateMutation.reset();
-                    }}
-                    className="w-full bg-slate-950 border border-slate-800 text-white text-sm rounded-2xl px-4 py-3 appearance-none focus:border-indigo-500 transition-colors cursor-pointer"
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Distribución de Cuentas (Splits)</label>
+                  <button
+                    onClick={() => setSplits([...splits, { glAccountId: '', amount: 0 }])}
+                    className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 uppercase tracking-widest bg-indigo-500/10 px-3 py-1 rounded-lg border border-indigo-500/20 transition-all"
                   >
-                    <option value="">— Sin asignar —</option>
-                    {glAccounts.map((a: any) => (
-                      <option key={a.id} value={a.id}>{a.code} · {a.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-slate-500 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    + Añadir Línea
+                  </button>
+                </div>
+                
+                <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                  {splits.map((split, idx) => (
+                    <div key={idx} className="flex gap-3 items-start animate-in slide-in-from-right-4 duration-200">
+                      <div className="flex-1 relative">
+                        <select
+                          value={split.glAccountId}
+                          onChange={(e) => {
+                            const newSplits = [...splits];
+                            newSplits[idx].glAccountId = e.target.value;
+                            setSplits(newSplits);
+                            updateMutation.reset();
+                          }}
+                          className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-xl px-3 py-2.5 appearance-none focus:border-indigo-500 transition-colors cursor-pointer"
+                        >
+                          <option value="">— Seleccionar cuenta —</option>
+                          {glAccounts.map((a: any) => (
+                            <option key={a.id} value={a.id}>{a.code} · {a.name}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-3 h-3 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                      <div className="w-32 relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={split.amount || ''}
+                          onChange={(e) => {
+                            const newSplits = [...splits];
+                            newSplits[idx].amount = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                            setSplits(newSplits);
+                            updateMutation.reset();
+                          }}
+                          className="w-full bg-slate-950 border border-slate-800 text-white text-xs font-black rounded-xl px-3 py-2.5 outline-none focus:border-indigo-500 transition-colors"
+                          placeholder="Monto"
+                        />
+                      </div>
+                      {splits.length > 1 && (
+                        <button
+                          onClick={() => {
+                            const newSplits = splits.filter((_, i) => i !== idx);
+                            setSplits(newSplits);
+                            updateMutation.reset();
+                          }}
+                          className="p-2.5 hover:bg-rose-500/10 text-rose-500 rounded-xl transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Validation Summary */}
+                <div className="pt-2 border-t border-slate-800/50">
+                  <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-tight">
+                    <span className="text-slate-500">Total Distribuido:</span>
+                    <span className={Math.abs(splits.reduce((acc, s) => acc + s.amount, 0) - Math.abs(Number(editingTransaction.amount))) < 0.001 ? 'text-emerald-400' : 'text-rose-400'}>
+                      ${splits.reduce((acc, s) => acc + s.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} / ${Math.abs(Number(editingTransaction.amount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {Math.abs(splits.reduce((acc, s) => acc + s.amount, 0) - Math.abs(Number(editingTransaction.amount))) >= 0.01 && (
+                    <p className="text-[9px] text-rose-500/80 mt-1 italic font-bold">
+                      * El total distribuido debe coincidir con el monto de la transacción.
+                    </p>
+                  )}
                 </div>
 
                 {editingTransaction.status === 'reconciled' && (
@@ -684,25 +756,43 @@ export const ImportHistory: React.FC = () => {
               <button 
                 onClick={() => {
                   const amount = typeof editingTransaction.amount === 'string' ? parseFloat(editingTransaction.amount) : editingTransaction.amount;
+                  const totalSplits = splits.reduce((acc, s) => acc + s.amount, 0);
+                  
                   if (isNaN(amount)) {
                     alert('Por favor ingrese un monto válido');
                     return;
                   }
+                  
+                  if (Math.abs(totalSplits - Math.abs(amount)) >= 0.01) {
+                    alert('El total de los splits debe coincidir con el monto de la transacción.');
+                    return;
+                  }
+
+                  if (splits.some(s => !s.glAccountId)) {
+                    alert('Todas las líneas de distribución deben tener una cuenta contable.');
+                    return;
+                  }
+
                   updateMutation.mutate({
                     id: editingTransaction.id,
                     data: {
-                      glAccountId: editingTransaction.glAccountId,
+                      glAccountId: splits.length === 1 ? splits[0].glAccountId : undefined, // Keep backward compatibility
+                      splits: splits, // New logic for backend
                       transactionDate: editingTransaction.transactionDate?.substring(0, 10),
                       description: editingTransaction.description,
                       amount: amount
                     }
                   });
                 }}
-                disabled={updateMutation.isPending}
+                disabled={
+                  updateMutation.isPending || 
+                  Math.abs(splits.reduce((acc, s) => acc + s.amount, 0) - Math.abs(Number(editingTransaction.amount))) >= 0.01 ||
+                  splits.some(s => !s.glAccountId)
+                }
                 className={`flex items-center gap-2 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg 
                   ${updateMutation.isSuccess 
                     ? 'bg-emerald-600 text-white shadow-emerald-600/20' 
-                    : (!editingTransaction.glAccountId)
+                    : (updateMutation.isPending || Math.abs(splits.reduce((acc, s) => acc + s.amount, 0) - Math.abs(Number(editingTransaction.amount))) >= 0.01 || splits.some(s => !s.glAccountId))
                       ? 'bg-slate-800 text-slate-500 cursor-not-allowed border-slate-700'
                       : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
                   } ${updateMutation.isPending ? 'opacity-70 cursor-not-allowed' : ''}`}

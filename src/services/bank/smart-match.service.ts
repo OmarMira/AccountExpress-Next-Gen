@@ -33,25 +33,26 @@ export async function suggestAccountBatch(
     }
 
     const rows = await db.execute(sql`
-      SELECT * FROM (
+      SELECT "accountId", "score", "source" FROM (
+        -- 1. Historical patterns: What was this description matched to before?
+        -- We use gl_account_id directly from reconciled bank transactions.
         SELECT
-          jl.account_id          AS "accountId",
+          bt.gl_account_id          AS "accountId",
           similarity(bt.description, ${description})::text AS "score",
-          'history'::text        AS "source"
+          'history'::text           AS "source"
         FROM bank_transactions bt
-        JOIN journal_entries je ON bt.journal_entry_id = je.id
-        JOIN journal_lines   jl ON je.id = jl.journal_entry_id
         WHERE bt.company_id = ${companyId}
           AND bt.status     = 'reconciled'
+          AND bt.gl_account_id IS NOT NULL
           AND similarity(bt.description, ${description}) >= ${FUZZY_SIMILARITY_THRESHOLD}
-          AND jl.debit_amount > 0
 
         UNION ALL
 
+        -- 2. Catalog matches: Does the description look like a COA name?
         SELECT
-          ca.id                   AS "accountId",
+          ca.id                     AS "accountId",
           similarity(ca.name, ${description})::text AS "score",
-          'catalog'::text         AS "source"
+          'catalog'::text           AS "source"
         FROM chart_of_accounts ca
         WHERE ca.company_id = ${companyId}
           AND ca.is_active  = true

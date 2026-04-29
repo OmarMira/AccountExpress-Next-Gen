@@ -13,7 +13,12 @@ export const bankAccounts = pgTable("bank_accounts", {
   bankName: text("bank_name").notNull(),
   accountNumber: text("account_number"),
   accountType: text("account_type").notNull().default("checking"),
-  // balance stored as integer cents to avoid floating point issues
+  // balance: Current recalculated balance (stored as integer cents).
+  // STRATEGY: Option A — Service-based recalculation.
+  // The balance is NOT updated via database triggers or views.
+  // Instead, it is recalculated by a dedicated service (reconciliation.service.ts)
+  // after discrete events: imports, reconciliation, or unreconciliation.
+  // Formula: initial_balance + SUM(reconciled bank_transactions).
   balance: integer("balance").notNull().default(0),
   // initialBalance: the "Beginning balance" from the EARLIEST imported statement
   // Stored in integer cents (same convention as balance).

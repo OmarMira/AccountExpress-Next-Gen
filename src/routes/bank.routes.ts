@@ -7,11 +7,18 @@
 import { Elysia, t } from "elysia";
 import { statementImportService } from "../services/bank/statement-import.service.ts";
 import { suggestAccountBatch } from "../services/bank/smart-match.service.ts";
-import { matchTransaction, ignoreTransaction } from "../services/bank/reconciliation.service.ts";
+import { 
+  matchTransaction, 
+  ignoreTransaction, 
+  matchAgainstJournal,
+  unreconcileTransaction,
+  getBankAccountBalanceSummary
+} from "../services/bank/reconciliation.service.ts";
 import { runAutoMatch, runGroupMatch } from "../services/bank/auto-match.service.ts";
 import { createAuditEntry } from "../services/audit.service.ts";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
+import { getReconciliationReport, getOpenItemsReport } from "../services/bank/reconciliation-report.service.ts";
 import { parseBankPdf } from "../services/bank/pdf-parser.service.ts";
 
 import { db, sql } from "../db/connection.ts";
@@ -244,12 +251,15 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
       const draftId = await matchTransaction(
         companyId,
         params.id,
-        body.targetAccountId,
+        body.targetAccountId || null,
         body.bankAccountId,
         body.periodId,
         uid,
         sid,
-        ip
+        ip,
+        undefined,
+        'new_entry',
+        body.splits
       );
 
       return { success: true, journalEntryId: draftId };
@@ -259,9 +269,13 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         id: t.String()
       }, { additionalProperties: false }),
       body: t.Object({
-        targetAccountId: t.String(),
+        targetAccountId: t.Optional(t.String()),
         bankAccountId: t.String(),
-        periodId: t.String()
+        periodId: t.String(),
+        splits: t.Optional(t.Array(t.Object({
+          glAccountId: t.String(),
+          amount: t.Number()
+        })))
       }, { additionalProperties: false })
     }
   )
@@ -317,11 +331,11 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
 
         const updateData: any = {};
         if (body.glAccountId !== undefined) {
-          if (typeof body.glAccountId !== 'string' || body.glAccountId.trim() === '') {
-            set.status = 400;
-            return { success: false, error: "glAccountId debe ser un string no vacío" };
-          }
-          updateData.glAccountId = body.glAccountId;
+          updateData.glAccountId = body.glAccountId === "" ? null : body.glAccountId;
+          updateData.status = "assigned";
+        }
+        if (body.splits !== undefined) {
+          updateData.reconciliationSplits = body.splits;
           updateData.status = "assigned";
         }
         if (body.transactionDate !== undefined) updateData.transactionDate = body.transactionDate;
@@ -338,6 +352,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         params: t.Object({ id: t.String() }, { additionalProperties: false }),
         body: t.Object({
           glAccountId: t.Optional(t.String()),
+          splits: t.Optional(t.Array(t.Object({
+            glAccountId: t.String(),
+            amount: t.Number()
+          }))),
           transactionDate: t.Optional(t.String()),
           description: t.Optional(t.String()),
           amount: t.Optional(t.Number())
@@ -360,8 +378,8 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         const sid = sessionId!;
         const ip  = request.headers.get("x-forwarded-for") ?? "unknown";
 
-        const l1 = await runAutoMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip);
-        const l2 = await runGroupMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip);
+        const l1 = await runAutoMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip, body.limit);
+        const l2 = await runGroupMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip, body.limit);
 
         await createAuditEntry({
           companyId,
@@ -390,7 +408,175 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         body: t.Object({
           bankAccountId: t.String(),
           periodId:      t.String(),
+          limit:         t.Optional(t.Number({ default: 100 })),
         }, { additionalProperties: false })
+      }
+    )
+    // ─────────────────────────────────────────────────────────
+    // UNRECONCILE
+    // ─────────────────────────────────────────────────────────
+    .post(
+      "/unreconcile",
+      async ({ body, companyId, user, sessionId, request, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
+
+        try {
+          await unreconcileTransaction({
+            companyId,
+            transactionId: body.transactionId,
+            userId: user!,
+            sessionId: sessionId!,
+            ipAddress: request.headers.get("x-forwarded-for") ?? "unknown"
+          });
+          return { success: true };
+        } catch (err: any) {
+          set.status = 400;
+          return { error: err.message };
+        }
+      },
+      {
+        body: t.Object({
+          transactionId: t.String()
+        }, { additionalProperties: false })
+      }
+    )
+    // ─────────────────────────────────────────────────────────
+    // 8. MATCH AGAINST JOURNAL (bank:approve)
+    // ─────────────────────────────────────────────────────────
+    .post(
+      "/match-journal",
+      async ({ body, companyId, user, sessionId, request, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
+
+        try {
+          await matchAgainstJournal({
+            companyId,
+            transactionId: body.transactionId,
+            lineIds: body.lineIds,
+            userId: user!,
+            sessionId: sessionId!,
+            ipAddress: request.headers.get("x-forwarded-for") ?? "unknown"
+          });
+          return { success: true };
+        } catch (err: any) {
+          set.status = 400;
+          return { error: err.message };
+        }
+      },
+      {
+        body: t.Object({
+          transactionId: t.String(),
+          lineIds:       t.Array(t.String())
+        }, { additionalProperties: false })
+      }
+    )
+    // ─────────────────────────────────────────────────────────
+    // 9. UNRECONCILE (bank:approve)
+    // ─────────────────────────────────────────────────────────
+    .post(
+      "/unreconcile",
+      async ({ body, companyId, user, sessionId, request, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
+
+        try {
+          await unreconcileTransaction({
+            companyId,
+            transactionId: body.transactionId,
+            userId: user!,
+            sessionId: sessionId!,
+            ipAddress: request.headers.get("x-forwarded-for") ?? "unknown"
+          });
+          return { success: true };
+        } catch (err: any) {
+          set.status = 400;
+          return { error: err.message };
+        }
+      },
+      {
+        body: t.Object({
+          transactionId: t.String()
+        }, { additionalProperties: false })
+      }
+    )
+    // ─────────────────────────────────────────────────────────
+    // 10. BALANCE SUMMARY (bank:read)
+    // ─────────────────────────────────────────────────────────
+    .get(
+      "/accounts/:id/balance",
+      async ({ params, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
+
+        try {
+          const summary = await getBankAccountBalanceSummary(companyId, params.id);
+          return summary;
+        } catch (err: any) {
+          set.status = 400;
+          return { error: err.message };
+        }
+      },
+      {
+        params: t.Object({ id: t.String() })
+      }
+    )
+    // ─────────────────────────────────────────────────────────
+    // 11. RECONCILIATION REPORT (bank:read)
+    // ─────────────────────────────────────────────────────────
+    .get(
+      "/accounts/:id/reconciliation-report",
+      async ({ params, query, companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
+
+        if (!query.periodId) {
+          set.status = 400;
+          return { error: "periodId is required" };
+        }
+
+        try {
+          const report = await getReconciliationReport(companyId, params.id, query.periodId);
+          return report;
+        } catch (err: any) {
+          set.status = 400;
+          return { error: err.message };
+        }
+      },
+      {
+        params: t.Object({ id: t.String() }),
+        query: t.Object({ periodId: t.String() })
+      }
+    )
+    // ─────────────────────────────────────────────────────────
+    // 12. OPEN ITEMS REPORT (bank:read)
+    // ─────────────────────────────────────────────────────────
+    .get(
+      "/reports/open-items",
+      async ({ companyId, set }) => {
+        if (!companyId) {
+          set.status = 403;
+          return { error: "No active company in session." };
+        }
+
+        try {
+          const report = await getOpenItemsReport(companyId);
+          return report;
+        } catch (err: any) {
+          set.status = 400;
+          return { error: err.message };
+        }
       }
     )
   );

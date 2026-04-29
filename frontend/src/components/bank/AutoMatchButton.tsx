@@ -19,7 +19,10 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [results, setResults] = useState<{ matched: number; crossed: number; pending: number; errors: any[] } | null>(null);
+
   const queryClient = useQueryClient();
+
 
   // Dragging State
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -130,18 +133,12 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
         body: JSON.stringify({ bankAccountId, periodId }),
       });
       
-      let msg = '';
-      if (res.matched === 0 && res.pending > 0) {
-        msg = `Automatch finalizado: 0 conciliadas de ${Math.max(res.pending, 0)} pendientes.`;
-      } else if (res.pending === 0 && res.matched > 0) {
-        msg = '¡Éxito! Se resolvieron todas las transacciones pendientes.';
-      } else if (res.pending === 0 && res.matched === 0) {
-        msg = 'No hay transacciones pendientes para conciliar.';
-      } else {
-        msg = `Automatch completado: ${res.matched} conciliadas de ${res.pending} pendientes.`;
-      }
+      setResults(res);
       
-      setToast({ message: msg, type: 'success' });
+      if (res.matched === 0 && res.errors.length === 0 && res.pending === 0) {
+        setToast({ message: 'No hay transacciones pendientes para conciliar.', type: 'info' });
+      }
+
       
       queryClient.invalidateQueries({ queryKey: ['bank-transactions-history'] });
       queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
@@ -307,6 +304,93 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
       {createPortal(
         <>
           {modalContent}
+          
+          {results && (
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+              <div className="bg-[#0f2240] border border-white/10 rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                <div className="p-8 border-b border-white/5 flex items-center justify-between bg-[#0a1628]/50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-500/10 rounded-2xl flex items-center justify-center border border-indigo-500/20">
+                      <Zap className="w-6 h-6 text-indigo-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white tracking-tight">Resumen de Conciliación</h3>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Motor de Auto-Match Finalizado</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setResults(null)} className="p-3 hover:bg-white/5 rounded-2xl transition-colors">
+                    <X className="w-6 h-6 text-gray-400" />
+                  </button>
+                </div>
+
+                <div className="p-8 overflow-y-auto space-y-8">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-emerald-500/5 border border-emerald-500/10 p-5 rounded-3xl text-center">
+                      <p className="text-[10px] font-black text-emerald-500/50 uppercase tracking-widest mb-1">Conciliadas</p>
+                      <p className="text-3xl font-black text-emerald-400">{results.matched}</p>
+                    </div>
+                    <div className="bg-blue-500/5 border border-blue-500/10 p-5 rounded-3xl text-center">
+                      <p className="text-[10px] font-black text-blue-500/50 uppercase tracking-widest mb-1">Cruzadas</p>
+                      <p className="text-3xl font-black text-blue-400">{results.crossed}</p>
+                    </div>
+                    <div className="bg-rose-500/5 border border-rose-500/10 p-5 rounded-3xl text-center">
+                      <p className="text-[10px] font-black text-rose-500/50 uppercase tracking-widest mb-1">Fallidas</p>
+                      <p className="text-3xl font-black text-rose-400">{results.errors.length}</p>
+                    </div>
+                    <div className="bg-slate-500/5 border border-white/5 p-5 rounded-3xl text-center">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Pendientes</p>
+                      <p className="text-3xl font-black text-gray-400">{results.pending}</p>
+                    </div>
+                  </div>
+
+
+                  {/* Detailed Errors */}
+                  {results.errors.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-500" />
+                        Detalle de Excepciones ({results.errors.length})
+                      </h4>
+                      <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                        {results.errors.map((err, i) => (
+                          <div key={i} className="bg-slate-900/50 border border-white/5 p-4 rounded-2xl flex items-start gap-3">
+                            <div className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-xs font-bold text-gray-300">ID: {err.transactionId || 'N/A'}</p>
+                              <p className="text-[10px] text-rose-400/80 mt-0.5">{err.reason}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(results.matched > 0 || results.crossed > 0) && (
+                    <div className="bg-emerald-500/5 border border-emerald-500/10 p-6 rounded-3xl flex items-center gap-4">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                      <p className="text-sm text-emerald-200/80 leading-relaxed font-medium">
+                        Se han procesado **{results.matched + results.crossed}** transacciones exitosamente. El Libro Mayor y los auxiliares bancarios han sido actualizados en tiempo real.
+                      </p>
+                    </div>
+                  )}
+
+                </div>
+
+                <div className="p-8 border-t border-white/5 bg-[#0a1628]/30 flex justify-end">
+                  <button
+                    onClick={() => setResults(null)}
+                    className="px-8 py-3 bg-[#0071c5] hover:bg-[#005fa3] text-white text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl shadow-[#0071c5]/20"
+                  >
+                    Entendido
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {modalContent}
+
           {toast && (
             <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[1000000] animate-in fade-in slide-in-from-top-10 duration-500 w-full max-w-xl px-4">
               <div className={`

@@ -3,9 +3,11 @@ import {
   bankTransactions, 
   bankTransactionGroups, 
   bankTransactionGroupItems, 
+  bankAccounts
 } from "../../db/schema/index.ts";
 import { eq, and, inArray } from "drizzle-orm";
 import { createDraft, post } from "../journal-core.service.ts";
+import { recalculateBankAccountBalance } from "./reconciliation.service.ts";
 
 export async function createGroup(input: {
   companyId: string;
@@ -75,6 +77,7 @@ export async function reconcileGroup(input: {
   sessionId: string;
   ipAddress: string;
   bankAccountGlId: string;
+  source?: 'auto_matched' | 'manual' | 'new_entry';
 }): Promise<{ journalEntryId: string }> {
 
   return await db.transaction(async (tx) => {
@@ -154,9 +157,37 @@ export async function reconcileGroup(input: {
           journalEntryId: draftId,
           glAccountId: group.glAccountId,
           matchedBy: input.userId,
-          matchedAt: now
+          matchedAt: now,
+          matchSource: input.source || 'new_entry'
         })
         .where(inArray(bankTransactions.id, transactionIds));
+    }
+
+    // 8. Recalculate Bank Account Balance
+    // We need to find the bank account record. We take it from the first transaction in the group.
+    if (transactionIds.length > 0) {
+      const [firstTx] = await tx
+        .select({ bankAccount: bankTransactions.bankAccount })
+        .from(bankTransactions)
+        .where(eq(bankTransactions.id, transactionIds[0]))
+        .limit(1);
+
+      if (firstTx) {
+        const [accountRecord] = await tx
+          .select({ id: bankAccounts.id })
+          .from(bankAccounts)
+          .where(
+            and(
+              eq(bankAccounts.companyId, input.companyId),
+              eq(bankAccounts.accountNumber, firstTx.bankAccount)
+            )
+          )
+          .limit(1);
+
+        if (accountRecord) {
+          await recalculateBankAccountBalance(input.companyId, accountRecord.id, tx);
+        }
+      }
     }
 
     return { journalEntryId: draftId };

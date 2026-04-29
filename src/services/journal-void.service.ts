@@ -17,9 +17,13 @@ export async function voidEntry(
   entryId:   string,
   voidedBy:  string,
   sessionId: string,
-  ipAddress: string
+  ipAddress: string,
+  tx?: any
 ): Promise<void> {
-  await db.transaction(async (tx) => {
+  const runner = tx || db;
+  return await (tx ? voidLogic(tx) : db.transaction(voidLogic));
+
+  async function voidLogic(tx: any) {
     // Lock entry row — prevents concurrent void of the same entry
     const [entry] = await tx.execute(sql`
       SELECT company_id, status, period_id, entry_number
@@ -49,7 +53,7 @@ export async function voidEntry(
     const revNumber = await nextEntryNumber(entry.company_id);
     const prevHash  = (await getJournalChainTip(entry.company_id)).hash;
 
-    const formattedLinesForHash = originalLines.map((l) => ({
+    const formattedLinesForHash = originalLines.map((l: any) => ({
       accountId:    l.accountId,
       debitAmount:  parseFloat(l.creditAmount ?? "0"),
       creditAmount: parseFloat(l.debitAmount  ?? "0"),
@@ -120,5 +124,5 @@ export async function voidEntry(
       afterState:  { status: "voided", voidedAt: now.toISOString(), reversalEntryId: revId },
       ipAddress,
     }, tx);
-  });
+  }
 }

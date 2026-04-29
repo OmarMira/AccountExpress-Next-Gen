@@ -8,7 +8,9 @@ import { PrintPreviewModal } from '../components/PrintPreviewModal';
 export function Reports() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
   
-  const [activeTab, setActiveTab] = useState<'balance-sheet' | 'income-statement' | 'trial-balance' | 'cash-flow' | 'aging'>('balance-sheet');
+  const [activeTab, setActiveTab] = useState<'balance-sheet' | 'income-statement' | 'trial-balance' | 'cash-flow' | 'aging' | 'reconciliation' | 'open-items'>('balance-sheet');
+  const [selectedBankAccountId, setSelectedBankAccountId] = useState<string>('');
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().substring(0, 10));
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().substring(0, 10));
   const [endDate, setEndDate] = useState(new Date().toISOString().substring(0, 10));
@@ -42,6 +44,30 @@ export function Reports() {
     queryKey: ['report-aging', activeCompany?.id, asOfDate],
     queryFn: () => fetchApi(`/reports/aging?companyId=${activeCompany?.id}&asOfDate=${asOfDate}`),
     enabled: !!activeCompany && activeTab === 'aging'
+  });
+
+  const { data: bankAccounts } = useQuery({
+    queryKey: ['bank-accounts', activeCompany?.id],
+    queryFn: () => fetchApi(`/bank-accounts?companyId=${activeCompany?.id}`),
+    enabled: !!activeCompany
+  });
+
+  const { data: fiscalPeriods } = useQuery({
+    queryKey: ['fiscal-periods', activeCompany?.id],
+    queryFn: () => fetchApi(`/fiscal-periods?companyId=${activeCompany?.id}`),
+    enabled: !!activeCompany
+  });
+
+  const { data: reconciliationReport, isLoading: loadRec } = useQuery({
+    queryKey: ['report-reconciliation', activeCompany?.id, selectedBankAccountId, selectedPeriodId],
+    queryFn: () => fetchApi(`/bank/accounts/${selectedBankAccountId}/reconciliation-report?periodId=${selectedPeriodId}`),
+    enabled: !!activeCompany && activeTab === 'reconciliation' && !!selectedBankAccountId && !!selectedPeriodId
+  });
+
+  const { data: openItemsReport, isLoading: loadOpen } = useQuery({
+    queryKey: ['report-open-items', activeCompany?.id],
+    queryFn: () => fetchApi(`/bank/reports/open-items`),
+    enabled: !!activeCompany && activeTab === 'open-items'
   });
 
   const exportToCSV = (filename: string, rows: string[][]) => {
@@ -127,6 +153,26 @@ export function Reports() {
         ['CAMBIO NETO EN EFECTIVO', '', data.netCashChange.toFixed(2)]
       ];
       exportToCSV('Flujo_Caja', csv);
+    } else if (activeTab === 'reconciliation' && reconciliationReport) {
+      const data = reconciliationReport;
+      const csv = [
+        ['Conciliación Bancaria', activeCompany?.legalName || ''],
+        ['Cuenta:', `${data.bankAccount.accountName} (${data.bankAccount.accountNumber})`],
+        ['Periodo:', `${data.period.name} (${data.period.startDate} a ${data.period.endDate})`],
+        [],
+        ['Saldo según Libros', '', data.balancePerBooks.toFixed(2)],
+        ['Saldo según Extracto', '', data.balancePerStatement.toFixed(2)],
+        ['Diferencia', '', data.difference.toFixed(2)],
+        [],
+        ['PARTIDAS CONCILIADAS'],
+        ['Fecha', 'Descripción', 'Monto'],
+        ...data.reconciledItems.map((i: any) => [i.transactionDate, i.description, i.amount.toFixed(2)]),
+        [],
+        ['PARTIDAS PENDIENTES'],
+        ['Fecha', 'Descripción', 'Monto'],
+        ...data.unreconciledItems.map((i: any) => [i.transactionDate, i.description, i.amount.toFixed(2)]),
+      ];
+      exportToCSV('Conciliacion_Bancaria', csv);
     }
   };
 
@@ -198,7 +244,9 @@ export function Reports() {
             { id: 'income-statement', name: 'Estado de Resultados' },
             { id: 'cash-flow', name: 'Flujo de Caja' },
             { id: 'trial-balance', name: 'Bal. Comprobación' },
-            { id: 'aging', name: 'Antigüedad' }
+            { id: 'aging', name: 'Antigüedad' },
+            { id: 'reconciliation', name: 'Conciliación Bancaria' },
+            { id: 'open-items', name: 'Partidas Abiertas' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -223,6 +271,39 @@ export function Reports() {
                   onChange={(e) => setAsOfDate(e.target.value)}
                   className="bg-[#0a1628] border border-white/10 rounded-md px-3 py-1.5 text-white text-sm focus:border-[#0071c5]"
                 />
+              </div>
+            ) : activeTab === 'reconciliation' ? (
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-400">Cuenta:</span>
+                  <select 
+                    value={selectedBankAccountId}
+                    onChange={(e) => setSelectedBankAccountId(e.target.value)}
+                    className="bg-[#0a1628] border border-white/10 rounded-md px-3 py-1.5 text-white text-sm focus:border-[#0071c5]"
+                  >
+                    <option value="">Seleccione cuenta</option>
+                    {(bankAccounts as any[])?.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.accountName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-400">Periodo:</span>
+                  <select 
+                    value={selectedPeriodId}
+                    onChange={(e) => setSelectedPeriodId(e.target.value)}
+                    className="bg-[#0a1628] border border-white/10 rounded-md px-3 py-1.5 text-white text-sm focus:border-[#0071c5]"
+                  >
+                    <option value="">Seleccione periodo</option>
+                    {(fiscalPeriods as any[])?.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : activeTab === 'open-items' ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-400 italic">Reporte global de transacciones sin conciliar</span>
               </div>
             ) : (
               <div className="flex items-center gap-4">
@@ -251,7 +332,7 @@ export function Reports() {
           <div className="p-6 md:p-8 flex-1 overflow-auto bg-[#0d1b2e]">
             
             {/* Loading State */}
-            {(loadBS || loadCF || loadIS || loadTB || loadAging) && (
+            {(loadBS || loadCF || loadIS || loadTB || loadAging || loadRec || loadOpen) && (
               <div className="flex flex-col items-center justify-center p-12 text-gray-500">
                 <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                 Compilando reporte contable...
@@ -458,6 +539,128 @@ export function Reports() {
               </div>
             )}
 
+            {/* RECONCILIATION REPORT RENDER */}
+            {!loadRec && activeTab === 'reconciliation' && reconciliationReport && (
+              <div className="max-w-5xl mx-auto space-y-6">
+                <div className="bg-[#0f2240] border border-white/7 p-8 rounded-xl shadow-2xl">
+                  <div className="text-center mb-10 border-b border-white/10 pb-6">
+                    <h2 className="text-2xl font-black text-white uppercase tracking-widest">{activeCompany?.legalName}</h2>
+                    <h3 className="text-lg text-gray-400 mt-1">Conciliación Bancaria</h3>
+                    <p className="text-sm text-gray-500">Cuenta: {reconciliationReport.bankAccount.accountName} ({reconciliationReport.bankAccount.accountNumber})</p>
+                    <p className="text-sm text-gray-500">Periodo: {reconciliationReport.period.name} ({reconciliationReport.period.startDate} a {reconciliationReport.period.endDate})</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="bg-[#0a1628] p-6 rounded-2xl border border-white/5 shadow-inner">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Saldo según Libros</p>
+                      <p className="text-2xl font-mono font-bold text-white">${reconciliationReport.balancePerBooks.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    <div className="bg-[#0a1628] p-6 rounded-2xl border border-white/5 shadow-inner">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Saldo según Extracto</p>
+                      <p className="text-2xl font-mono font-bold text-white">${reconciliationReport.balancePerStatement.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    <div className={`p-6 rounded-2xl border shadow-inner ${Math.abs(reconciliationReport.difference) < 0.01 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'}`}>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Diferencia</p>
+                      <p className={`text-2xl font-mono font-bold ${Math.abs(reconciliationReport.difference) < 0.01 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        ${reconciliationReport.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-8">
+                    <div>
+                      <h4 className="text-sm font-black text-gray-400 uppercase tracking-[0.2em] mb-4 border-b border-white/5 pb-2">Partidas Conciliadas</h4>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-gray-500 border-b border-white/5">
+                            <th className="py-2 pl-4">Fecha</th>
+                            <th className="py-2">Descripción</th>
+                            <th className="py-2 pr-4 text-right">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {reconciliationReport.reconciledItems.map((item: any, i: number) => (
+                            <tr key={i} className="hover:bg-white/5">
+                              <td className="py-2 pl-4 text-gray-500 font-mono w-28">{item.transactionDate}</td>
+                              <td className="py-2 text-gray-300">{item.description}</td>
+                              <td className="py-2 pr-4 text-right font-mono text-gray-300">${Math.abs(parseFloat(item.amount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-black text-amber-400/70 uppercase tracking-[0.2em] mb-4 border-b border-white/5 pb-2">Partidas Pendientes (No Conciliadas)</h4>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-gray-500 border-b border-white/5">
+                            <th className="py-2 pl-4">Fecha</th>
+                            <th className="py-2">Descripción</th>
+                            <th className="py-2 pr-4 text-right">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {reconciliationReport.unreconciledItems.map((item: any, i: number) => (
+                            <tr key={i} className="hover:bg-white/5">
+                              <td className="py-2 pl-4 text-gray-500 font-mono w-28">{item.transactionDate}</td>
+                              <td className="py-2 text-gray-300">{item.description}</td>
+                              <td className="py-2 pr-4 text-right font-mono text-amber-400/80">${Math.abs(parseFloat(item.amount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* OPEN ITEMS REPORT RENDER */}
+            {!loadOpen && activeTab === 'open-items' && openItemsReport && (
+              <div className="max-w-5xl mx-auto space-y-6">
+                 <div className="bg-[#0f2240] border border-white/7 p-8 rounded-xl shadow-2xl">
+                    <div className="text-center mb-10 border-b border-white/10 pb-6">
+                      <h2 className="text-2xl font-black text-white uppercase tracking-widest">{activeCompany?.legalName}</h2>
+                      <h3 className="text-lg text-gray-400 mt-1">Reporte Global de Partidas Abiertas</h3>
+                      <p className="text-sm text-gray-500 italic">Transacciones bancarias pendientes de conciliación en todas las cuentas</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {(openItemsReport as any[]).map((account) => (
+                        <div key={account.accountId} className="bg-[#0a1628] border border-white/7 rounded-2xl overflow-hidden hover:border-[#0071c5]/50 transition-colors group shadow-lg">
+                          <div className="p-5 border-b border-white/5 bg-[#0f2240]/50">
+                            <h4 className="font-bold text-white truncate">{account.accountName}</h4>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mt-1">{account.bankName} · {account.accountNumber}</p>
+                          </div>
+                          <div className="p-5 space-y-4">
+                            <div className="flex justify-between items-end">
+                              <div>
+                                <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Partidas Pendientes</p>
+                                <p className="text-2xl font-mono font-black text-amber-400">{account.pendingCount}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Monto Total</p>
+                                <p className="text-xl font-mono font-bold text-white">${account.totalPendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                setSelectedBankAccountId(account.accountId);
+                                setActiveTab('reconciliation');
+                              }}
+                              className="w-full py-2 bg-[#0071c5]/10 hover:bg-[#0071c5]/20 text-[#0071c5] text-xs font-black uppercase tracking-widest rounded-lg border border-[#0071c5]/20 transition-all"
+                            >
+                              Ver Detalles
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                 </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -471,7 +674,9 @@ export function Reports() {
           activeTab === 'balance-sheet' ? 'Balance General' :
           activeTab === 'income-statement' ? 'Estado de Resultados' :
           activeTab === 'trial-balance' ? 'Balance de Comprobación' :
-          activeTab === 'cash-flow' ? 'Estado de Flujo de Efectivo' : 'Antigüedad de Cuentas'
+          activeTab === 'cash-flow' ? 'Estado de Flujo de Efectivo' : 
+          activeTab === 'reconciliation' ? 'Conciliación Bancaria' :
+          activeTab === 'open-items' ? 'Reporte de Partidas Abiertas' : 'Antigüedad de Cuentas'
         }
         config={{
           moduleName: 'reports',
@@ -526,6 +731,24 @@ export function Reports() {
             return agingReport.data.buckets.flatMap((b: any) => [
               { name: b.label, code: 'BUCKET', balance: b.total },
               ...b.transactions.map((t: any) => ({ ...t, name: t.description, balance: t.amount }))
+            ]);
+          }
+          if (activeTab === 'reconciliation' && reconciliationReport) {
+            const d = reconciliationReport;
+            return [
+              { name: 'Saldo según Libros', code: 'LEDGER', balance: d.balancePerBooks },
+              { name: 'Saldo según Extracto', code: 'BANK', balance: d.balancePerStatement },
+              { name: 'Diferencia', code: 'DIFF', balance: d.difference },
+              { name: 'PARTIDAS CONCILIADAS', code: 'HEADER', balance: 0 },
+              ...d.reconciledItems.map((i: any) => ({ ...i, name: i.description, balance: i.amount })),
+              { name: 'PARTIDAS PENDIENTES', code: 'HEADER', balance: 0 },
+              ...d.unreconciledItems.map((i: any) => ({ ...i, name: i.description, balance: i.amount }))
+            ];
+          }
+          if (activeTab === 'open-items' && openItemsReport) {
+            return (openItemsReport as any[]).flatMap(acc => [
+              { name: acc.accountName, code: 'ACCOUNT', balance: acc.totalPendingAmount },
+              ...acc.items.map((i: any) => ({ ...i, name: i.description, balance: i.amount }))
             ]);
           }
           return [];
