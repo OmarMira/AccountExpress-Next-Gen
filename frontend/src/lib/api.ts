@@ -17,7 +17,9 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
       window.location.href = '/login';
     }
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || `Error ${res.status}`);
+    const errorObj = new Error(errorData.error || `Error ${res.status}`);
+    (errorObj as any).details = errorData.details;
+    throw errorObj;
   }
   
   if (res.status !== 204) {

@@ -1,7 +1,7 @@
 import { Elysia, t } from 'elysia';
 import { db } from '../db/connection';
 import { bankAccounts } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 // ⚠️ FIX: Import authMiddleware to get session context (user, companyId) server-side.
 import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
@@ -168,13 +168,37 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
   .delete('/:id', async ({ params, companyId, set }) => {
     const { id } = params;
 
-    // ⚠️ FIX: Verify tenant ownership before soft-deleting.
+    // Verify tenant ownership before soft-deleting.
     if (!companyId) {
       set.status = 403;
       return { error: 'No active company in session.' };
     }
 
     try {
+      const account = await db.query.bankAccounts.findFirst({
+        where: and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId))
+      });
+
+      if (!account) {
+        set.status = 404;
+        return { error: 'Bank account not found' };
+      }
+
+      // Ensure no transactions exist before deleting
+      const txCountQuery = account.accountNumber
+        ? sql`SELECT COUNT(*) FROM bank_transactions WHERE company_id = ${companyId} AND (bank_account = ${id} OR bank_account = ${account.accountNumber})`
+        : sql`SELECT COUNT(*) FROM bank_transactions WHERE company_id = ${companyId} AND bank_account = ${id}`;
+        
+      const txCountResult = await db.execute(txCountQuery);
+      
+      if (Number(txCountResult[0].count) > 0) {
+        set.status = 400;
+        return { 
+          error: 'Restricción de Integridad',
+          details: 'No se puede eliminar esta cuenta bancaria porque tiene transacciones importadas o registradas. Si ya no la usas, ignora futuras importaciones, pero el historial debe conservarse.' 
+        };
+      }
+
       const now = new Date();
       const updated = await db.update(bankAccounts)
         .set({ isActive: false, updatedAt: now })

@@ -361,7 +361,7 @@ export async function runGroupMatch(
   ipAddress: string,
   limit: number = DEFAULT_BATCH_LIMIT
 ): Promise<AutoMatchResult> {
-  const result: AutoMatchResult = { matched: 0, pending: 0, errors: [] };
+  const result: AutoMatchResult = { matched: 0, pending: 0, crossed: 0, errors: [] };
 
   // 0. Security & UX: Verify target period and closed periods
   await checkPeriodOpen(companyId, periodId);

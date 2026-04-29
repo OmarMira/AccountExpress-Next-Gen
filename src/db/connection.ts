@@ -16,10 +16,11 @@ const DATABASE_URL =
 
 // postgres.js client — used internally by Drizzle
 // max: 10 pool connections (suitable for a backend API process)
-const client = postgres(DATABASE_URL, { max: 10 });
+// Exported for use cases requiring native parameterized queries (e.g., dynamic AI-generated SQL)
+export const pgClient = postgres(DATABASE_URL, { max: 10 });
 
 // Drizzle ORM instance with full schema type inference
-export const db = drizzle(client, { schema });
+export const db = drizzle(pgClient, { schema });
 
 // Re-export sql tag for raw SQL fragments when needed in complex queries
 export { sql } from "drizzle-orm";

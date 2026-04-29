@@ -8,6 +8,7 @@ import "./config/validate.ts"; // Side-effect: validates process.env immediately
 import { runMigrations } from "./db/migrate.ts";
 import { runSeed }       from "./db/seed/seed.ts";
 import { initAuditChainCache } from "./services/audit.service.ts";
+import { startOllama } from "./services/ollama.service.ts";
 import { logger } from "./lib/logger.ts";
 import { validateEnv } from "./config/validate.ts";
 
@@ -36,4 +37,9 @@ app.listen(PORT);
 
 logger.info("app", "Server ready", { url: `http://localhost:${PORT}` });
 logger.info("app", "Health check ready", { url: `http://localhost:${PORT}/health` });
+
+// 5. Start Ollama (background, fire-and-forget)
+startOllama().catch(err => {
+  logger.warn("app", "Could not auto-start Ollama at boot. User may need to start it manually.", { error: err instanceof Error ? err.message : String(err) });
+});
 

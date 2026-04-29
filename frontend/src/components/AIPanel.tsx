@@ -64,9 +64,15 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
       });
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (err: any) {
+      const isBlocked = err?.message === 'Consulta no permitida.' || err?.message === 'Mensaje inválido.' || err?.message?.startsWith('El mensaje es demasiado largo');
       setMessages((prev) => [
         ...prev,
-        { role: 'error', content: 'No se pudo conectar con el asistente. Intenta de nuevo.' },
+        {
+          role: 'error',
+          content: isBlocked
+            ? err.message
+            : 'No se pudo conectar con el asistente. Intenta de nuevo.',
+        },
       ]);
     } finally {
       setSending(false);

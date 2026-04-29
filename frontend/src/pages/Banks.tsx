@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
-import { Landmark, Plus, Trash2, X, Pencil, Printer } from 'lucide-react';
+import { Landmark, Plus, Trash2, X, Pencil, Printer, AlertCircle } from 'lucide-react';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
 
 const emptyForm = {
@@ -22,6 +22,7 @@ export function Banks() {
   const [showModal, setShowModal] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [editingBank, setEditingBank] = useState<any | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   // Separate string state for balance input: avoids type coercion issues
   // and allows US-format commas while keeping cursor stable.
@@ -58,10 +59,17 @@ export function Banks() {
     }
   });
 
+  const [errorModal, setErrorModal] = useState<{ title: string; message: string; details?: string } | null>(null);
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => fetchApi(`/bank-accounts/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bank-accounts', activeCompany?.id] }),
-    onError: (err: any) => alert(`Error al desactivar cuenta: ${err.message}`)
+    onError: (err: any) => {
+      setErrorModal({
+        title: err.message || 'Error al eliminar cuenta',
+        message: err.details || 'Ocurrió un problema inesperado.',
+      });
+    }
   });
 
   const openEdit = (b: any) => {
@@ -188,9 +196,7 @@ export function Banks() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm('¿Desactivar esta cuenta bancaria?')) {
-                              deleteMutation.mutate(b.id);
-                            }
+                            setConfirmDelete({ id: b.id, name: b.accountName });
                           }}
                           className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-md transition-colors"
                           title="Eliminar"
@@ -361,6 +367,74 @@ export function Banks() {
         ]}
         data={banks}
       />
+
+      {/* Error Modal */}
+      {errorModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0f2240] border border-red-500/30 rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                  <Landmark className="w-5 h-5 text-red-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white">{errorModal.title}</h3>
+              </div>
+              <p className="text-gray-300 text-sm leading-relaxed">
+                {errorModal.message}
+              </p>
+              {errorModal.details && (
+                <p className="mt-3 text-xs text-gray-500 bg-black/20 p-3 rounded-lg border border-white/5 font-mono break-words">
+                  {errorModal.details}
+                </p>
+              )}
+            </div>
+            <div className="p-4 bg-black/20 border-t border-white/5 flex justify-end">
+              <button
+                onClick={() => setErrorModal(null)}
+                className="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors border border-white/10"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-[#10141a] border border-white/5 rounded-2xl shadow-2xl w-full max-w-[400px] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-[#ff0033]/10 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5 text-[#ff0033]" />
+                </div>
+                <h3 className="text-xl font-bold text-white tracking-tight">Desactivar Cuenta</h3>
+              </div>
+              <p className="text-gray-400 text-[15px] leading-relaxed">
+                ¿Estás seguro de que deseas desactivar la cuenta "{confirmDelete.name}"?
+              </p>
+            </div>
+            <div className="p-5 bg-transparent flex justify-end gap-3 mt-2">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-5 py-2 hover:bg-white/5 text-gray-300 rounded-lg text-sm font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  deleteMutation.mutate(confirmDelete.id);
+                  setConfirmDelete(null);
+                }}
+                className="px-6 py-2 bg-[#ff0033] hover:bg-[#ff0033]/90 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-[#ff0033]/20"
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
