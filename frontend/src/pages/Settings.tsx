@@ -156,9 +156,12 @@ export function Settings() {
 
   // --- Users State ---
   const { data: usersData, refetch: refetchUsers } = useQuery({
-    queryKey: ['users', activeCompany?.id],
-    queryFn: () => fetchApi(`/users?companyId=${activeCompany?.id}`),
-    enabled: activeTab === 'users' && !!activeCompany,
+    queryKey: ['users', user?.isSuperAdmin ? 'all' : activeCompany?.id],
+    queryFn: () =>
+      user?.isSuperAdmin
+        ? fetchApi('/users/all')
+        : fetchApi(`/users?companyId=${activeCompany?.id}`),
+    enabled: activeTab === 'users' && (!!user?.isSuperAdmin || !!activeCompany),
     select: (res: { data: any[] }) => res.data ?? [],
   });
   const users: any[] = usersData ?? [];

@@ -87,21 +87,40 @@ export async function listRoles() {
 }
 
 // ── Listar todos los usuarios del sistema (super admin only) ──
-export async function listAllUsers() {
-  return db
+// ── Listar todos los usuarios del sistema (super admin only) ──
+export async function listAllUsers(companyId?: string) {
+  let query = db
     .select({
-      id:           users.id,
-      username:     users.username,
-      email:        users.email,
-      firstName:    users.firstName,
-      lastName:     users.lastName,
-      isActive:     users.isActive,
+      id: users.id,
+      username: users.username,
+      email: users.email,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      isActive: users.isActive,
       isSuperAdmin: users.isSuperAdmin,
-      lastLoginAt:  users.lastLoginAt,
-      createdAt:    users.createdAt,
+      lastLoginAt: users.lastLoginAt,
+      createdAt: users.createdAt,
+      roleId: userCompanyRoles.roleId,
+      roleName: roles.name,
+      roleDisplayName: roles.displayName,
     })
     .from(users)
-    .orderBy(users.createdAt);
+    .leftJoin(
+      userCompanyRoles,
+      and(
+        eq(userCompanyRoles.userId, users.id),
+        eq(userCompanyRoles.isActive, true)
+      )
+    )
+    .leftJoin(roles, eq(roles.id, userCompanyRoles.roleId));
+
+  if (companyId) {
+    query = query.where(eq(userCompanyRoles.companyId, companyId));
+  }
+
+
+
+  return query.orderBy(users.createdAt);
 }
 
 // ── Crear usuario + asignar rol en tenant ────────────────────

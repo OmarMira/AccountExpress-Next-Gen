@@ -1,6 +1,6 @@
 import { Elysia } from "elysia";
 import { db } from "../db/connection.ts";
-import { roles, permissions, rolePermissions } from "../db/schema/system.schema.ts";
+import { roles, permissions, rolePermissions, users } from "../db/schema/system.schema.ts";
 import { eq, and } from "drizzle-orm";
 import { tenantMiddleware } from "./tenant.middleware.ts";
 
@@ -10,7 +10,14 @@ interface RoleSession {
 
 export const requirePermission = (moduleName: string, actionName: string) => (app: Elysia) => app
   .use(tenantMiddleware)
-  .onBeforeHandle(async ({ roleId }: { roleId: string }) => {
+  .onBeforeHandle(async ({ roleId, user }: { roleId: string; user?: string }) => {
+    // Super Admin bypass: if the authenticated user is a super admin, skip all permission checks
+    if (user) {
+      const usr = await db.query.users.findFirst({ where: eq(users.id, user) });
+      if (usr?.isSuperAdmin) {
+        return; // allow request without further checks
+      }
+    }
     const role = await db.query.roles.findFirst({
       where: eq(roles.id, roleId)
     });

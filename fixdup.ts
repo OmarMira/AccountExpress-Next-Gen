@@ -1,0 +1,1 @@
+import {db} from './src/db/connection.ts';import {sql} from 'drizzle-orm';await db.execute(sql.raw('DELETE FROM user_company_roles WHERE id NOT IN (SELECT DISTINCT ON (user_id, company_id) id FROM user_company_roles ORDER BY user_id, company_id, granted_at DESC)'));console.log('Duplicados eliminados');
