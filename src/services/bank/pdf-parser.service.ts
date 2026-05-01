@@ -1,11 +1,10 @@
 // src/services/bank/pdf-parser.service.ts
 // Parser PDF ejecutado exclusivamente en el backend.
-// El frontend envía el binario; este servicio extrae y normaliza las transacciones.
+// Usa pdf-parse — librería diseñada para Node.js, sin dependencias de browser/Worker API.
 
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-
-// Deshabilitar el worker — en backend no existe window ni Worker API
-pdfjs.GlobalWorkerOptions.workerSrc = '';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdfParse: (buffer: Buffer) => Promise<{ text: string; numpages: number }> = require('pdf-parse');
 
 export interface ParsedTransaction {
     date: string;        // formato YYYY-MM-DD
@@ -19,7 +18,6 @@ export interface PdfParseResult {
     totalRows: number;
     rejectedRows: number;
     rejectedReasons: string[];
-    // Metadata extracted from statement
     bankName: string;
     accountNumber: string;
     accountHolder: string;
@@ -30,7 +28,7 @@ export interface PdfParseResult {
     endingBalance: number;
 }
 
-// ── Date helpers (Ported from frontend) ─────────────────────────────────────────────
+// ── Date helpers ──────────────────────────────────────────────
 
 const ES_TO_EN: Record<string, string> = {
     ene: 'jan', feb: 'feb', mar: 'mar', abr: 'apr', may: 'may', jun: 'jun',
@@ -53,8 +51,6 @@ function parseDateToISO(raw: string): string | null {
         let [a, b, c] = parts;
         if (c.length === 2) c = `20${c}`;
         if (c.length === 4) {
-            // Check if it's MM/DD/YYYY or DD/MM/YYYY based on standard heuristics
-            // Here we assume MM/DD/YYYY as per frontend logic
             return `${c}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`;
         }
     }
@@ -75,7 +71,7 @@ function parseAmount(raw: string): number {
     return isNeg ? -Math.abs(num) : num;
 }
 
-// ── Bank name detection ──────────────────────────────────────
+// ── Bank name detection ───────────────────────────────────────
 
 function detectBankName(text: string, filename?: string): string {
     if (/Bank\s+of\s+America/i.test(text)) return 'Bank of America';
@@ -110,7 +106,7 @@ function detectBankName(text: string, filename?: string): string {
     return 'Banco Desconocido';
 }
 
-// ── Period extraction ───────────────────────────────────────
+// ── Period extraction ─────────────────────────────────────────
 
 function extractPeriod(text: string): { periodStart: string; periodEnd: string } {
     const today = new Date().toISOString().split('T')[0];
@@ -163,41 +159,27 @@ function extractAccountHolder(text: string): string {
     return 'Titular';
 }
 
+// ── Main parser ───────────────────────────────────────────────
+
 export async function parseBankPdf(buffer: ArrayBuffer, filename?: string): Promise<PdfParseResult> {
-    const loadingTask = pdfjs.getDocument({
-        data: new Uint8Array(buffer),
-        useSystemFonts: true,
-        disableFontFace: true,
-    });
-    
-    const pdf = await loadingTask.promise;
-    const lines: string[] = [];
-    let totalTextItems = 0;
+    // pdf-parse acepta un Buffer de Node.js directamente — sin workers, sin browser API
+    const data = await pdfParse(Buffer.from(buffer));
 
-    for (let p = 1; p <= pdf.numPages; p++) {
-        const page = await pdf.getPage(p);
-        const content = await page.getTextContent();
-        const items = content.items as any[];
-        totalTextItems += items.length;
-
-        const rowMap = new Map<number, string>();
-        for (const item of items) {
-            if (!item.str?.trim()) continue;
-            const y = Math.round(item.transform[5]);
-            rowMap.set(y, (rowMap.get(y) ?? '') + ' ' + item.str);
-        }
-        const sorted = [...rowMap.entries()].sort((a, b) => b[0] - a[0]);
-        sorted.forEach(([, text]) => lines.push(text.trim()));
-    }
-
-    if (totalTextItems < 20) {
+    if (!data.text || data.text.trim().length < 50) {
         throw new Error(
-            'Este PDF parece ser una imagen escaneada (se detectaron menos de 20 elementos de texto). ' +
+            'Este PDF parece ser una imagen escaneada (no se encontró texto seleccionable). ' +
             'Por favor use un PDF con texto seleccionable.'
         );
     }
 
-    const fullText = lines.join('\n');
+    // Dividir el texto en líneas para procesar transacciones
+    const lines = data.text
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
+
+    const fullText = data.text;
+
     const yearMatches = fullText.match(/\b20[2-9]\d\b/g) ?? [];
     const years = [...new Set(yearMatches)].sort().map(Number);
     const primaryYear = years.at(-1) ?? new Date().getFullYear();
@@ -261,8 +243,7 @@ export async function parseBankPdf(buffer: ArrayBuffer, filename?: string): Prom
                 .replace(/\s+/g, ' ').trim();
 
             const isoDate = parseDateToISO(rawDate);
-            
-            // STRICT VALIDATIONS
+
             if (!isoDate) {
                 rejectedReasons.push(`Fila ${i + 1}: fecha inválida "${rawDate}"`);
                 continue;
@@ -309,6 +290,6 @@ export async function parseBankPdf(buffer: ArrayBuffer, filename?: string): Prom
         periodStart,
         periodEnd,
         beginningBalance,
-        endingBalance
+        endingBalance,
     };
 }
