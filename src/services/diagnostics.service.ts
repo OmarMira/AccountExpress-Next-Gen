@@ -14,7 +14,7 @@ import {
   sessions, 
   companies 
 } from "../db/schema/index.ts";
-import { eq, isNull, desc, count, lt, sql, and, isNotNull, notInArray } from "drizzle-orm";
+import { eq, isNull, desc, count, lt, sql, and, isNotNull, notInArray, asc } from "drizzle-orm";
 import { verifyAuditChain, hmacSha256 as computeAuditHmac, initAuditChainCache } from "./audit.service.ts";
 import { hmacSha256 as computeJournalHmac } from "./journal-hash.service.ts";
 import { runSeed } from "../db/seed/seed.ts";
@@ -235,8 +235,8 @@ export async function repairDiagnostic(id: string): Promise<{ success: boolean; 
         await repairJournalHMAC();
         return { success: true, message: "Cadena de hashes del libro diario recalculada y sellada." };
       case "audit":
-        await initAuditChainCache();
-        return { success: true, message: "Caché de integridad de auditoría sincronizado con el estado actual de la base de datos." };
+        await repairAuditChain();
+        return { success: true, message: "Cadena de auditoría reconstruida y sellada correctamente desde el registro más antiguo." };
       case "roles":
       case "config":
         await runSeed();
@@ -329,3 +329,59 @@ async function repairJournalHMAC() {
   }
 }
 
+// ── Repair Audit Chain (full rebuild) ─────────────────────────
+// Bypasses Drizzle ORM to disable immutability triggers, then
+// rebuilds the entire chain for every scope (system + per company).
+async function repairAuditChain(): Promise<void> {
+  const rawSql = postgres(env.DATABASE_URL);
+
+  async function rebuildScope(tx: postgres.TransactionSql, companyId: string | null): Promise<void> {
+    const rows = await tx<Array<{
+      id: string; user_id: string | null; action: string;
+      after_state: string | null; created_at: Date; timestamp_token: string | null;
+    }>>`
+      SELECT id, user_id, action, after_state, created_at, timestamp_token
+      FROM audit_logs
+      WHERE ${companyId ? tx`company_id = ${companyId}` : tx`company_id IS NULL`}
+      ORDER BY created_at ASC
+    `;
+
+    if (rows.length === 0) return;
+
+    let expectedPrevHash = "GENESIS";
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const timeToken = row.timestamp_token || new Date(row.created_at).getTime().toString();
+      const hashInput = [row.id, row.user_id ?? "system", row.action, row.after_state ?? "", expectedPrevHash, timeToken].join("|");
+      const entryHash = computeAuditHmac(hashInput);
+
+      await tx`
+        UPDATE audit_logs
+        SET chain_index = ${i}, prev_hash = ${expectedPrevHash}, entry_hash = ${entryHash}, timestamp_token = ${timeToken}
+        WHERE id = ${row.id}
+      `;
+      expectedPrevHash = entryHash;
+    }
+  }
+
+  try {
+    await rawSql.begin(async (tx) => {
+      await tx`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_immutable`;
+      await tx`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_nodelete`;
+
+      await rebuildScope(tx, null);
+      const allCompanies = await tx<Array<{ id: string }>>`SELECT id FROM companies`;
+      for (const company of allCompanies) {
+        await rebuildScope(tx, company.id);
+      }
+
+      await tx`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_immutable`;
+      await tx`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_nodelete`;
+    });
+  } finally {
+    await rawSql.end();
+  }
+
+  // Sync in-memory cache to reflect the new DB state
+  await initAuditChainCache();
+}

@@ -11,7 +11,7 @@ import { eq } from "drizzle-orm";
 
 const BCRYPT_ROUNDS   = env.BCRYPT_ROUNDS;
 const MAX_ATTEMPTS    = 5;
-const LOCKOUT_MINUTES = 30;
+const LOCKOUT_MINUTES = 5;
 
 export interface HashResult {
   hash: string;

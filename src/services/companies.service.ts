@@ -277,7 +277,7 @@ export async function addUserToCompany(
     )
     .limit(1);
 
-  if (existing) throw new Error("User already has an active role in this company");
+  if (existing) throw new Error("El usuario ya tiene un rol activo en esta empresa");
 
   const id = uuidv4();
   const now = new Date();

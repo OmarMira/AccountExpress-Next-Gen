@@ -38,7 +38,7 @@ export function Users() {
   const queryClient = useQueryClient();
   
   if (!activeCompany) {
-    return <div className="p-8 text-white">Cargando contexto de empresa...</div>;
+    return <div className="p-8 text-red-400">No hay una empresa activa en la sesión.</div>;
   }
 
   const [showForm, setShowForm] = useState(false);
@@ -243,7 +243,7 @@ export function Users() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {safeUsers.map((u) => (
                 <tr key={u.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                   <td className="px-4 py-3 text-white font-medium">
                     {u.firstName} {u.lastName}

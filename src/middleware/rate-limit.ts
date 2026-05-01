@@ -16,6 +16,7 @@ const memoryStore = new Map<string, RateLimitInfo>();
  * @param windowMs Time window in milliseconds.
  */
 export const loginRateLimiter = (max: number, windowMs: number) => {
+  const windowMinutes = Math.round(windowMs / 60000);
   // REASON: Elysia Context types are complex internal generics not easily narrowed without importing internal types
   return async ({ request, set }: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const ip = request.headers.get("x-forwarded-for") ?? "unknown";
@@ -36,11 +37,12 @@ export const loginRateLimiter = (max: number, windowMs: number) => {
     }
     
     if (info.count >= max) {
+      const remainingSeconds = Math.ceil((info.resetAt - now) / 1000);
       set.status = 429;
-      set.headers['Retry-After'] = Math.ceil((info.resetAt - now) / 1000).toString();
+      set.headers['Retry-After'] = remainingSeconds.toString();
       return { 
-        error: "Too many login attempts from this IP. Please try again later.",
-        retryAfterSeconds: Math.ceil((info.resetAt - now) / 1000)
+        error: `Demasiados intentos fallidos. Por favor espere ${windowMinutes} minuto${windowMinutes !== 1 ? 's' : ''} antes de intentar nuevamente.`,
+        retryAfterSeconds: remainingSeconds
       };
     }
     

@@ -57,18 +57,18 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       if (!user) {
         await verifyPassword(body.password, DUMMY_HASH);
         set.status = 401;
-        return { error: "Invalid credentials" };
+        return { error: "Usuario o contraseña incorrectos." };
       }
 
       if (!user.isActive) {
         set.status = 403;
-        return { error: "Account is deactivated" };
+        return { error: "Esta cuenta no está disponible. Contacte al administrador." };
       }
 
       const lockStatus = await isAccountLocked(user.id);
       if (lockStatus.locked) {
         set.status = 423;
-        return { error: `Account locked until ${lockStatus.until}` };
+        return { error: "Cuenta bloqueada por demasiados intentos. Por favor espere 5 minutos." };
       }
 
       const valid = await verifyPassword(body.password, user.passwordHash);
@@ -81,7 +81,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
           beforeState: null, afterState: { result: "failed" }, ipAddress: ip,
         });
         set.status = 401;
-        return { error: "Invalid credentials" };
+        return { error: "Usuario o contraseña incorrectos." };
       }
 
       await resetFailedAttempts(user.id);
@@ -150,7 +150,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       };
     },
     {
-      beforeHandle: loginRateLimiter(5, 15 * 60 * 1000), // 5 attempts per 15 mins
+      beforeHandle: loginRateLimiter(5, 5 * 60 * 1000), // 5 attempts per 5 mins
       body: t.Object({
         username:  t.String({ minLength: 1 }),
         password:  t.String({ minLength: 1 }),
@@ -206,7 +206,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         afterState: { result: "company_selected", companyId: body.companyId }, ipAddress: ip,
       });
 
-      return { message: "Company selected successfully" };
+      return { message: "Empresa seleccionada correctamente." };
     },
     { body: t.Object({ companyId: t.String() }) }
   )
@@ -247,7 +247,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         beforeState: null, afterState: { result: "company_switched", companyId: body.companyId }, ipAddress: ip,
       });
 
-      return { message: "Company switched successfully" };
+      return { message: "Empresa cambiada correctamente." };
     },
     { body: t.Object({ companyId: t.String() }) }
   )
@@ -259,7 +259,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       await invalidateSession(token);
       cookie["session"].remove();
     }
-    return { message: "Logged out" };
+    return { message: "Sesión cerrada correctamente." };
   })
 
   // ── POST /auth/logout-all — revoke all sessions ───────────
@@ -289,10 +289,10 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         .where(eq(users.id, user))
         .limit(1);
 
-      if (!dbUser) { set.status = 404; return { error: "User not found" }; }
+      if (!dbUser) { set.status = 404; return { error: "Usuario no encontrado." }; }
 
       const valid = await verifyPassword(body.currentPassword, dbUser.passwordHash);
-      if (!valid) { set.status = 401; return { error: "Current password is incorrect" }; }
+      if (!valid) { set.status = 401; return { error: "La contraseña actual es incorrecta." }; }
 
       const { hash: newHash, salt: newSalt } = await hashPassword(body.newPassword);
 
@@ -305,7 +305,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
         })
         .where(eq(users.id, user));
 
-      return { message: "Password changed successfully" };
+      return { message: "Contraseña actualizada correctamente." };
     },
     {
       body: t.Object({

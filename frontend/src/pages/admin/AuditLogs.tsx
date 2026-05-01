@@ -16,23 +16,74 @@ const safeFormatDate = (date: any, formatStr: string) => {
   }
 };
 
-interface AuditLog {
-  id: string;
-  action: string;
-  module: string;
-  description: string;
-  userId: string;
-  createdAt: string;
+// Traducción de acciones
+function translateAction(action: string): string {
+  const map: Record<string, string> = {
+    "users:read": "Visualizó usuarios",
+    "users:create": "Creó usuario",
+    "users:update": "Actualizó usuario",
+    "users:delete": "Eliminó usuario",
+    "session:select_company": "Seleccionó empresa",
+    "session:switch_company": "Cambió de empresa",
+    "journal:create": "Creó asiento contable",
+    "journal:approve": "Publicó asiento",
+    "journal:void": "Anuló asiento",
+    "bank:reconcile": "Concilió transacción",
+    "bank:auto_match": "Ejecutó conciliación automática",
+    "companies:create": "Creó empresa",
+    "companies:update": "Actualizó empresa",
+    "companies:archive": "Archivó empresa",
+    "backup:success": "Respaldo exitoso",
+    "backup:failed": "Respaldo fallido",
+    "create": "Creó registro",
+    "update": "Actualizó registro",
+    "delete": "Eliminó registro",
+    "company_users:create": "Asignó usuario a empresa"
+  };
+  return map[action] || action;
+}
+
+// Traducción de módulos
+function translateModule(module: string): string {
+  const map: Record<string, string> = {
+    "users": "Usuarios",
+    "auth": "Autenticación",
+    "journal": "Diario Contable",
+    "bank": "Bancos",
+    "companies": "Empresas",
+    "system": "Sistema",
+    "backup": "Respaldos",
+  };
+  return map[module] || module;
+}
+
+// Formatear nombre de usuario
+function formatUserName(log: any): string {
+  if (log.userFirstName && log.userLastName) {
+    return `${log.userFirstName} ${log.userLastName}`;
+  }
+  if (log.userUsername) {
+    return `@${log.userUsername}`;
+  }
+  // Fallback para registros huérfanos (el usuario ya no existe en la DB)
+  if (log.userId && log.userId !== 'system') {
+    return `Usuario eliminado (${log.userId.substring(0, 8)}...)`;
+  }
+  return "Sistema";
 }
 
 import { PrintPreviewModal } from '../../components/PrintPreviewModal';
 
 export function AuditLogs() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
+  const user = useAuthStore((state) => state.user);
   const [searchTerm, setSearchTerm] = useState('');
   const [showPrintModal, setShowPrintModal] = useState(false);
 
-  if (!activeCompany) {
+  // Super Admin bypass for global view
+  const canViewLogs = !!activeCompany || user?.isSuperAdmin;
+
+  if (!canViewLogs) {
     return (
       <div className="p-8 text-white min-h-screen bg-gray-950">
         <div className="animate-pulse space-y-4">
@@ -44,19 +95,24 @@ export function AuditLogs() {
   }
 
   const { data: logs = [], isLoading } = useQuery<AuditLog[]>({
-    queryKey: ['audit-logs', activeCompany?.id],
-    queryFn: () => fetchApi(`/audit?companyId=${activeCompany?.id}`),
-    enabled: !!activeCompany,
+    queryKey: ['audit-logs', activeCompany?.id || 'global'],
+    queryFn: () => {
+      const url = activeCompany?.id 
+        ? `/audit?companyId=${activeCompany.id}` 
+        : `/audit`;
+      return fetchApi(url);
+    },
+    enabled: canViewLogs,
     select: (res: any) => (Array.isArray(res) ? res : res?.data ?? [])
   });
 
   const safeLogs = useMemo(() => {
     return (logs || []).map((l: any) => ({
       ...l,
-      action: l?.action || 'Desconocida',
-      module: l?.module || 'Global',
+      action: translateAction(l?.action || 'Desconocida'),
+      module: translateModule(l?.module || 'Global'),
       createdAt: l?.createdAt || new Date().toISOString(),
-      userId: l?.userId || 'Sistema'
+      userName: formatUserName(l)
     }));
   }, [logs]);
 
@@ -65,12 +121,12 @@ export function AuditLogs() {
     return safeLogs.filter(log => {
       const actionRaw = log.action || '';
       const moduleRaw = log.module || '';
+      const userRaw = log.userName || '';
       return actionRaw.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             moduleRaw.toLowerCase().includes(searchTerm.toLowerCase());
+             moduleRaw.toLowerCase().includes(searchTerm.toLowerCase()) ||
+             userRaw.toLowerCase().includes(searchTerm.toLowerCase());
     });
   }, [safeLogs, searchTerm]);
-
-  if (!activeCompany) return <div className="p-8 text-white">Seleccione una empresa primero.</div>;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -99,7 +155,7 @@ export function AuditLogs() {
           <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
           <input 
             className="w-full bg-[#0a1628] border border-white/10 p-3 pl-12 rounded-xl text-white outline-none"
-            placeholder="Buscar registros..."
+            placeholder="Buscar registros por acción, módulo o usuario..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
@@ -125,7 +181,7 @@ export function AuditLogs() {
                   <td className="p-4 font-mono text-sm">{safeFormatDate(log.createdAt, 'dd/MM/yyyy HH:mm:ss')}</td>
                   <td className="p-4 font-bold">{log.action}</td>
                   <td className="p-4 text-[#0071c5]">{log.module}</td>
-                  <td className="p-4 text-gray-400">{log.userId}</td>
+                  <td className="p-4 text-gray-400">{log.userName}</td>
                 </tr>
               ))}
             </tbody>
@@ -141,11 +197,11 @@ export function AuditLogs() {
           moduleName: 'audit-logs',
           searchByDescription: true,
           columnSelector: true,
-          mandatoryColumns: ['createdAt', 'action', 'userId']
+          mandatoryColumns: ['createdAt', 'action', 'userName']
         }}
         columns={[
           { key: 'createdAt', label: 'Fecha', align: 'left', format: (val: any) => safeFormatDate(val, 'dd/MM/yyyy HH:mm:ss') },
-          { key: 'userId', label: 'Usuario', align: 'left' },
+          { key: 'userName', label: 'Usuario', align: 'left' },
           { key: 'action', label: 'Acción', align: 'left' },
           { key: 'module', label: 'Módulo', align: 'left' },
           { key: 'description', label: 'Descripción', align: 'left' }
@@ -155,3 +211,4 @@ export function AuditLogs() {
     </div>
   );
 }
+

@@ -53,13 +53,13 @@ async function seedSystemConfig(): Promise<void> {
 async function seedRoles(): Promise<void> {
   for (const r of ROLES_SEED) {
     await db.insert(roles).values({
-      id:          r.id,
-      name:        r.name,
+      id: r.id,
+      name: r.name,
       displayName: r.displayName,
       description: r.description,
-      isSystem:    r.isSystem === 1,
-      isActive:    r.isActive === 1,
-      createdAt:   new Date(r.createdAt),
+      isSystem: r.isSystem === 1,
+      isActive: r.isActive === 1,
+      createdAt: new Date(r.createdAt),
     }).onConflictDoNothing();
   }
   console.log(`[SEED] ✓ ${ROLES_SEED.length} roles seeded`);
@@ -69,11 +69,11 @@ async function seedRoles(): Promise<void> {
 async function seedPermissions(): Promise<void> {
   for (const p of PERMISSIONS_SEED) {
     await db.insert(permissions).values({
-      id:          p.id,
-      module:      p.module,
-      action:      p.action,
+      id: p.id,
+      module: p.module,
+      action: p.action,
       description: p.description,
-      createdAt:   new Date(p.createdAt),
+      createdAt: new Date(p.createdAt),
     }).onConflictDoNothing();
   }
   console.log(`[SEED] ✓ ${PERMISSIONS_SEED.length} permissions seeded`);
@@ -83,10 +83,10 @@ async function seedPermissions(): Promise<void> {
 async function seedRolePermissions(): Promise<void> {
   for (const rp of ROLE_PERMISSIONS_SEED) {
     await db.insert(rolePermissions).values({
-      id:           rp.id,
-      roleId:       rp.roleId,
+      id: rp.id,
+      roleId: rp.roleId,
       permissionId: rp.permissionId,
-      createdAt:    new Date(rp.createdAt),
+      createdAt: new Date(rp.createdAt),
     }).onConflictDoNothing({ target: [rolePermissions.roleId, rolePermissions.permissionId] });
   }
   console.log(`[SEED] ✓ ${ROLE_PERMISSIONS_SEED.length} role_permissions seeded`);
@@ -101,28 +101,28 @@ async function seedSuperAdmin(): Promise<void> {
   }
 
   const username = process.env["SUPER_ADMIN_USERNAME"] ?? "admin";
-  const email    = process.env["SUPER_ADMIN_EMAIL"]    ?? "admin@localhost";
-  const password = process.env["SUPER_ADMIN_PASSWORD"] ?? "ChangeMe@2026!";
+  const email = process.env["SUPER_ADMIN_EMAIL"] ?? "admin@localhost.com";
+  const password = process.env["SUPER_ADMIN_PASSWORD"] ?? "Admin2026!!";
 
   const saltRounds = parseInt(process.env["BCRYPT_ROUNDS"] ?? "12", 10);
-  const salt       = await bcrypt.genSalt(saltRounds);
-  const hash       = await bcrypt.hash(password, salt);
+  const salt = await bcrypt.genSalt(saltRounds);
+  const hash = await bcrypt.hash(password, salt);
 
   await db.insert(users).values({
-    id:                 uuidv4(),
-    username:           username,
-    email:              email,
-    passwordHash:       hash,
-    passwordSalt:       salt,
-    firstName:          "Super",
-    lastName:           "Admin",
-    isSuperAdmin:       true,
-    isActive:           true,
-    isLocked:           false,
-    failedAttempts:     0,
+    id: uuidv4(),
+    username: username,
+    email: email,
+    passwordHash: hash,
+    passwordSalt: salt,
+    firstName: "Super",
+    lastName: "Admin",
+    isSuperAdmin: true,
+    isActive: true,
+    isLocked: false,
+    failedAttempts: 0,
     mustChangePassword: true,
-    createdAt:          NOW,
-    updatedAt:          NOW
+    createdAt: NOW,
+    updatedAt: NOW
   });
   console.log(`[SEED] ✓ super_admin seeded — username: ${username}`);
   console.log(`[SEED] ⚠  must_change_password=true — user must change on first login`);

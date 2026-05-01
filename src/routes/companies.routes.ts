@@ -259,18 +259,23 @@ export const companiesRoutes = new Elysia({ prefix: "/companies" })
         }
       }
 
-      const ucrId = await addUserToCompany(params.id, body.userId, body.roleId, uid);
+      try {
+        const ucrId = await addUserToCompany(params.id, body.userId, body.roleId, uid);
 
-      const ip = request.headers.get("x-forwarded-for") ?? "unknown";
-      await createAuditEntry({
-        companyId: params.id, userId: uid, sessionId,
-        action: "company_users:create", module: "companies",
-        entityType: "user_company_roles", entityId: ucrId,
-        beforeState: null, afterState: { targetUserId: body.userId, roleId: body.roleId }, ipAddress: ip,
-      });
+        const ip = request.headers.get("x-forwarded-for") ?? "unknown";
+        await createAuditEntry({
+          companyId: params.id, userId: uid, sessionId,
+          action: "company_users:create", module: "companies",
+          entityType: "user_company_roles", entityId: ucrId,
+          beforeState: null, afterState: { targetUserId: body.userId, roleId: body.roleId }, ipAddress: ip,
+        });
 
-      set.status = 201;
-      return { id: ucrId, message: "User added to company" };
+        set.status = 201;
+        return { id: ucrId, message: "User added to company" };
+      } catch (err: any) {
+        set.status = 400;
+        return { error: err.message || "Failed to add user to company" };
+      }
     },
     {
       params: t.Object({

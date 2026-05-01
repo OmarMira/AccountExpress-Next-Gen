@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, type Company } from '../store/authStore';
 import { fetchApi } from '../lib/api';
@@ -7,12 +7,23 @@ import { Building2, ChevronRight, LogOut } from 'lucide-react';
 export function SelectCompany() {
   const user = useAuthStore((state) => state.user);
   const companies = useAuthStore((state) => state.availableCompanies);
+  const setAvailableCompanies = useAuthStore((state) => state.setAvailableCompanies);
   const setActiveCompany = useAuthStore((state) => state.setActiveCompany);
   const setPermissions = useAuthStore((state) => state.setPermissions);
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchApi('/companies')
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setAvailableCompanies(data);
+        }
+      })
+      .catch((err) => console.error("Error fetching companies:", err));
+  }, [setAvailableCompanies]);
 
   const handleSelect = async (company: Company) => {
     setLoadingId(company.id);

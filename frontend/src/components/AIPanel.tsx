@@ -76,6 +76,7 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
       ]);
     } finally {
       setSending(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
@@ -110,6 +111,7 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
       setMessages((prev) => [...prev, { role: 'error', content: 'Error al conectar con el asistente.' }]);
     } finally {
       setSending(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 

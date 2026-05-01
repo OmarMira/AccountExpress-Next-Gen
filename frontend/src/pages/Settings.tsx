@@ -159,7 +159,7 @@ export function Settings() {
     queryKey: ['users', user?.isSuperAdmin ? 'all' : activeCompany?.id],
     queryFn: () =>
       user?.isSuperAdmin
-        ? fetchApi('/users/all')
+        ? fetchApi(`/users?companyId=${activeCompany?.id}`)
         : fetchApi(`/users?companyId=${activeCompany?.id}`),
     enabled: activeTab === 'users' && (!!user?.isSuperAdmin || !!activeCompany),
     select: (res: { data: any[] }) => res.data ?? [],

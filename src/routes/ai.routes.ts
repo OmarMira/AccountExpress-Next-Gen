@@ -29,7 +29,10 @@ import {
 // Only includes tables and columns relevant for business queries.
 // ─────────────────────────────────────────────────────────────
 const DB_SCHEMA_CONTEXT = `
-Tablas disponibles (PostgreSQL). Solo puedes usar SELECT. company_id es siempre obligatorio en el WHERE.
+Tablas disponibles (PostgreSQL). Solo puedes usar SELECT.
+
+companies(id, legal_name, trade_name, ein, is_active[boolean], created_at)
+users(id, username, email, first_name, last_name, is_super_admin[boolean], is_active[boolean])
 
 bank_transactions(id, company_id, bank_account[FK bank_accounts.id], transaction_date[YYYY-MM-DD text], description, amount[numeric 15,2 — positivo=crédito negativo=débito], transaction_type[debit|credit], status[pending|assigned|reconciled|ignored], gl_account_id[FK chart_of_accounts.id])
 
@@ -91,33 +94,31 @@ function sanitizeAndValidateMessage(
 // buildSqlPrompt — asks Gemma 4 to classify and optionally generate SQL
 // ─────────────────────────────────────────────────────────────
 function buildSqlPrompt(userMessage: string): string {
-  return `Eres un asistente de base de datos para un sistema contable.
+  return `Clasifica esta pregunta en EXACTAMENTE UNO de estos tipos:
 
-${DB_SCHEMA_CONTEXT}
+TIPO SQL: si pregunta por DATOS reales del sistema (empresas, usuarios, transacciones, saldos, cuentas, asientos)
+TIPO GENERAL: si pregunta por conceptos contables, impuestos, leyes, definiciones (sin pedir datos específicos)
+TIPO CHAT: si es saludo, despedida o conversación casual
 
-TAREA: Analiza el mensaje del usuario y responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+REGLAS DE SEGURIDAD - NUNCA GENERES SQL QUE:
+- Modifique datos (INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE)
+- Acceda a información de otros usuarios sin company_id
+- Muestre contraseñas, hashes, salts o credenciales
 
-Si el mensaje requiere datos del sistema (transacciones, saldos, cuentas, asientos, periodos):
-{"type": "sql", "query": "SELECT ... FROM ... WHERE company_id = $1 ..."}
+EJEMPLOS CORRECTOS:
+"cuántas empresas hay" → {"type": "sql", "query": "SELECT COUNT(*) FROM companies WHERE is_active = true"}
+"listar mis empresas" → {"type": "sql", "query": "SELECT legal_name FROM companies WHERE is_active = true"}
+"qué es el IVA" → {"type": "general"}
+"hola" → {"type": "chat"}
 
-Si el mensaje es una pregunta general de contabilidad, impuestos o finanzas (NO relacionada con datos del sistema):
-{"type": "general"}
+ESTRUCTURA DE TABLAS DISPONIBLES:
+- companies (id, legal_name, tax_id, is_active)
+- users (id, username, email, first_name, last_name, is_active)
+- audit_logs (id, user_id, action, module, created_at)
+- journal_entries (id, company_id, date, description, status)
 
-Si el mensaje pregunta sobre períodos fiscales, su estado, fechas de apertura o cierre:
-{"type": "sql", "query": "SELECT name, period_type, start_date, end_date, status FROM fiscal_periods WHERE company_id = $1 ORDER BY end_date DESC LIMIT 5"}
-
-Si el mensaje es un saludo o conversación casual:
-{"type": "chat"}
-
-REGLAS CRÍTICAS:
-- SIEMPRE usa $1 como placeholder para company_id en el WHERE
-- NUNCA uses INSERT, UPDATE, DELETE, DROP, ALTER, CREATE
-- NUNCA inventes nombres de columnas — usa solo los del schema
-- Para montos en bank_accounts.balance: dividir entre 100 (están en centavos)
-- Para fechas: la columna es text en formato YYYY-MM-DD, usa LIKE o substring para filtrar por mes/año
-- El JSON debe ser una sola línea, sin saltos de línea dentro
-
-Mensaje a clasificar:`;
+IMPORTANTE: Responde ÚNICAMENTE con el objeto JSON. No incluyas explicaciones.
+Pregunta del usuario: "${userMessage}"`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -212,6 +213,45 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
           return { error: "Mensaje inválido." };
         }
         const safeMessage = validation.safe;
+
+        // ── DETECCIÓN DIRECTA DE PREGUNTAS COMUNES (antes de llamar al modelo) ──
+        const lowerMessage = safeMessage.toLowerCase();
+
+        // Preguntas sobre conteo de empresas
+        if (lowerMessage.includes("cuántas empresa") || 
+            lowerMessage.includes("cuantas empresa") ||
+            lowerMessage.includes("número de empresas") ||
+            lowerMessage.includes("total de empresas")) {
+          
+          const companyCount = await db.execute(sql`SELECT COUNT(*) as count FROM companies WHERE is_active = true`);
+          const count = Number((companyCount as any[])[0]?.count ?? 0);
+          const reply = `El sistema tiene ${count} empresa${count !== 1 ? 's' : ''} activa${count !== 1 ? 's' : ''}.`;
+          
+          // Persistir en historial
+          await db.insert(aiConversations).values([
+            { companyId, userId: user, role: "user", content: message },
+            { companyId, userId: user, role: "assistant", content: reply },
+          ]);
+          
+          return { reply };
+        }
+
+        // Preguntas sobre listar empresas
+        if (lowerMessage.includes("listar empresa") || 
+            lowerMessage.includes("mostrar empresa") ||
+            lowerMessage.includes("qué empresas")) {
+          
+          const companiesList = await db.execute(sql`SELECT legal_name FROM companies WHERE is_active = true ORDER BY legal_name`);
+          const companies = (companiesList as any[]).map(c => c.legal_name).join(", ");
+          const reply = companies.length > 0 ? `Empresas activas en el sistema: ${companies}` : "No hay empresas activas en el sistema.";
+          
+          await db.insert(aiConversations).values([
+            { companyId, userId: user, role: "user", content: message },
+            { companyId, userId: user, role: "assistant", content: reply },
+          ]);
+          
+          return { reply };
+        }
 
         // 1. Check Ollama is running
         const status = await checkOllamaStatus();

@@ -65,15 +65,32 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
 
   .use(requirePermission("audit", "read"))
 
-  // GET /audit?userId=&date=&startTime=&endTime=&module=&limit=&offset=
-  .get("/", async ({ query, companyId, set }) => {
-    if (!companyId) {
+  // GET /audit?userId=&date=&startTime=&endTime=&module=&limit=&offset=&companyId=
+  .get("/", async ({ query, companyId: sessionCompanyId, user, set }) => {
+    // 1. Check if user is Super Admin
+    const [dbUser] = await db
+      .select({ isSuperAdmin: users.isSuperAdmin })
+      .from(users)
+      .where(eq(users.id, user!))
+      .limit(1);
+
+    const isSuperAdmin = dbUser?.isSuperAdmin || false;
+    
+    // 2. Determine target companyId
+    // Super Admin can provide companyId via query or see all if not provided
+    // Normal users MUST have a session companyId
+    const targetCompanyId = isSuperAdmin ? (query.companyId || null) : sessionCompanyId;
+
+    if (!isSuperAdmin && !targetCompanyId) {
       set.status = 403;
       return { success: false, error: 'No active company in session.' };
     }
 
     const conditions = [];
-    conditions.push(eq(auditLogs.companyId, companyId));
+    if (targetCompanyId) {
+      conditions.push(eq(auditLogs.companyId, targetCompanyId));
+    }
+    
     if (query.userId)    conditions.push(eq(auditLogs.userId, query.userId));
     if (query.module)    conditions.push(eq(auditLogs.module, query.module));
     if (query.action)    conditions.push(eq(auditLogs.action, query.action));
@@ -94,8 +111,18 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
     const safeOffset = Number.isFinite(offsetVal) && offsetVal >= 0 ? offsetVal : 0;
 
     const results = await db
-      .select()
+      .select({
+        id: auditLogs.id,
+        action: auditLogs.action,
+        module: auditLogs.module,
+        userId: auditLogs.userId,
+        createdAt: auditLogs.createdAt,
+        userFirstName: users.firstName,
+        userLastName: users.lastName,
+        userUsername: users.username,
+      })
       .from(auditLogs)
+      .leftJoin(users, sql`lower(trim(${users.id})) = lower(trim(${auditLogs.userId}))`)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .limit(safeLimit)
       .offset(safeOffset)
@@ -104,6 +131,7 @@ export const auditRoutes = new Elysia({ prefix: "/audit" })
     return { success: true, data: results };
   }, {
     query: t.Object({
+      companyId: t.Optional(t.String()), // Allow companyId via query for Super Admins
       userId:    t.Optional(t.String()),
       date:      t.Optional(t.String()),
       startTime: t.Optional(t.String()),

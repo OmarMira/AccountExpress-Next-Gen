@@ -4,7 +4,7 @@
 // All functions async.
 // ============================================================
 
-import { db }                 from "../db/connection.ts";
+import { db, sql }          from "../db/connection.ts";
 import { users, userCompanyRoles, roles, journalEntries, auditLogs, sessions, bankTransactions, fiscalPeriods } from "../db/schema/index.ts";
 import { eq, and, or, count }    from "drizzle-orm";
 import { hashPassword }        from "./auth.service.ts";
@@ -87,40 +87,59 @@ export async function listRoles() {
 }
 
 // ── Listar todos los usuarios del sistema (super admin only) ──
-// ── Listar todos los usuarios del sistema (super admin only) ──
 export async function listAllUsers(companyId?: string) {
-  let query = db
-    .select({
-      id: users.id,
-      username: users.username,
-      email: users.email,
-      firstName: users.firstName,
-      lastName: users.lastName,
-      isActive: users.isActive,
-      isSuperAdmin: users.isSuperAdmin,
-      lastLoginAt: users.lastLoginAt,
-      createdAt: users.createdAt,
-      roleId: userCompanyRoles.roleId,
-      roleName: roles.name,
-      roleDisplayName: roles.displayName,
-    })
-    .from(users)
-    .leftJoin(
-      userCompanyRoles,
-      and(
-        eq(userCompanyRoles.userId, users.id),
-        eq(userCompanyRoles.isActive, true)
-      )
-    )
-    .leftJoin(roles, eq(roles.id, userCompanyRoles.roleId));
-
+  // When companyId is provided, return users with their role in that specific company
   if (companyId) {
-    query = query.where(eq(userCompanyRoles.companyId, companyId));
+    return db
+      .select({
+        id:              users.id,
+        username:        users.username,
+        email:           users.email,
+        firstName:       users.firstName,
+        lastName:        users.lastName,
+        isActive:        users.isActive,
+        isSuperAdmin:    users.isSuperAdmin,
+        lastLoginAt:     users.lastLoginAt,
+        createdAt:       users.createdAt,
+        roleId:          userCompanyRoles.roleId,
+        roleName:        roles.name,
+        roleDisplayName: roles.displayName,
+      })
+      .from(users)
+      .innerJoin(
+        userCompanyRoles,
+        and(
+          eq(userCompanyRoles.userId, users.id),
+          eq(userCompanyRoles.companyId, companyId),
+          eq(userCompanyRoles.isActive, true)
+        )
+      )
+      .leftJoin(roles, eq(roles.id, userCompanyRoles.roleId))
+      .orderBy(users.createdAt);
   }
 
+  // When no companyId (global view), return ONE row per user with aggregated role info
+  // Use DISTINCT ON to get unique users, and aggregate roles into a string
+  const rows = await db.execute(sql`
+    SELECT DISTINCT ON (u.id)
+      u.id,
+      u.username,
+      u.email,
+      u.first_name as "firstName",
+      u.last_name as "lastName",
+      u.is_active as "isActive",
+      u.is_super_admin as "isSuperAdmin",
+      u.last_login_at as "lastLoginAt",
+      u.created_at as "createdAt",
+      STRING_AGG(DISTINCT r.display_name, ', ') FILTER (WHERE r.display_name IS NOT NULL) as "roleDisplayName"
+    FROM users u
+    LEFT JOIN user_company_roles ucr ON ucr.user_id = u.id AND ucr.is_active = true
+    LEFT JOIN roles r ON r.id = ucr.role_id
+    GROUP BY u.id
+    ORDER BY u.id, u.created_at
+  `);
 
-
-  return query.orderBy(users.createdAt);
+  return rows;
 }
 
 // ── Crear usuario + asignar rol en tenant ────────────────────

@@ -11,8 +11,11 @@ import { initAuditChainCache } from "./services/audit.service.ts";
 import { startOllama } from "./services/ollama.service.ts";
 import { logger } from "./lib/logger.ts";
 import { validateEnv } from "./config/validate.ts";
+import { ensureSecrets } from "./config/secrets.ts";
 
-// Validate environment before anything else
+// Validate and ensure environment secrets before anything else
+// Ensure environment secrets exist before validation
+ensureSecrets();
 validateEnv();
 
 const PORT = parseInt(process.env["PORT"] ?? "3000", 10);

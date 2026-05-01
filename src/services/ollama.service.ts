@@ -72,9 +72,9 @@ export async function detectRAM(): Promise<number> {
 // Returns the recommended Ollama model based on available RAM.
 // ─────────────────────────────────────────────────────────────
 export function selectModel(ramGB: number): string {
-  if (ramGB === 0 || ramGB < 16) return "llama3.2:1b";
-  if (ramGB < 32)                return "llama3.2:3b";
-  return "gemma4:latest";
+  // Forzar modelo 3B para mejor comprensión de instrucciones SQL
+  // El modelo 1B es demasiado limitado para clasificar consultas correctamente
+  return "llama3.2:3b";
 }
 
 // ─────────────────────────────────────────────────────────────
