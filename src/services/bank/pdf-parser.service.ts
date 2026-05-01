@@ -2,9 +2,15 @@
 // Parser PDF ejecutado exclusivamente en el backend.
 // Usa pdf-parse — librería diseñada para Node.js, sin dependencias de browser/Worker API.
 
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdfParse: (buffer: Buffer) => Promise<{ text: string; numpages: number }> = require('pdf-parse');
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { resolve } from 'path';
+import { pathToFileURL } from 'url';
+
+// En Bun/Node.js, pdfjs v5 requiere una URL válida al archivo worker.
+// process.cwd() es siempre la raíz del proyecto cuando el servidor arranca.
+pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(
+  resolve(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs')
+).href;
 
 export interface ParsedTransaction {
     date: string;        // formato YYYY-MM-DD
@@ -162,23 +168,40 @@ function extractAccountHolder(text: string): string {
 // ── Main parser ───────────────────────────────────────────────
 
 export async function parseBankPdf(buffer: ArrayBuffer, filename?: string): Promise<PdfParseResult> {
-    // pdf-parse acepta un Buffer de Node.js directamente — sin workers, sin browser API
-    const data = await pdfParse(Buffer.from(buffer));
+    const loadingTask = pdfjs.getDocument({
+        data: new Uint8Array(buffer),
+        useSystemFonts: true,
+        disableFontFace: true,
+    });
+    const pdf = await loadingTask.promise;
+    const lines: string[] = [];
+    let totalTextItems = 0;
 
-    if (!data.text || data.text.trim().length < 50) {
+    for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const items = content.items as any[];
+        totalTextItems += items.length;
+        const rowMap = new Map<number, string>();
+        for (const item of items) {
+            if (!item.str?.trim()) continue;
+            const y = Math.round(item.transform[5]);
+            rowMap.set(y, (rowMap.get(y) ?? '') + ' ' + item.str);
+        }
+        const sorted = [...rowMap.entries()].sort((a, b) => b[0] - a[0]);
+        sorted.forEach(([, text]) => lines.push(text.trim()));
+    }
+
+    if (totalTextItems < 20) {
         throw new Error(
-            'Este PDF parece ser una imagen escaneada (no se encontró texto seleccionable). ' +
+            'Este PDF parece ser una imagen escaneada (no se detectaron elementos de texto). ' +
             'Por favor use un PDF con texto seleccionable.'
         );
     }
 
-    // Dividir el texto en líneas para procesar transacciones
-    const lines = data.text
-        .split('\n')
-        .map(l => l.trim())
-        .filter(l => l.length > 0);
+    const fullText = lines.join('\n');
 
-    const fullText = data.text;
+
 
     const yearMatches = fullText.match(/\b20[2-9]\d\b/g) ?? [];
     const years = [...new Set(yearMatches)].sort().map(Number);
