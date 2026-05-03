@@ -1,185 +1,20 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
 import { PermissionGate } from '../components/PermissionGate';
+import { AccountSelector, getNormalBalanceBadge } from '../components/AccountSelector';
+import type { GlAccount } from '../components/AccountSelector';
 import { 
   Plus, 
   Search, 
   Trash2, 
-  Settings2, 
-  AlertCircle, 
-  CheckCircle2, 
-  ArrowRightLeft,
   Pencil,
   Printer,
-  X,
-  Zap,
-  Clock,
-  Code,
   ChevronDown
 } from 'lucide-react';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
-
-interface GlAccount {
-  id: string;
-  code: string;
-  name: string;
-  accountType: string;
-  normalBalance: string;
-}
-
-function getNormalBalanceBadge(normalBalance: string) {
-  if (normalBalance === 'debit') {
-    return { label: 'Débito', className: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' };
-  }
-  return { label: 'Crédito', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
-}
-
-function getAccountTypeBadge(accountType: string) {
-  switch (accountType) {
-    case 'asset':     return { label: 'Activo',  className: 'bg-sky-500/10 text-sky-400 border border-sky-500/20' };
-    case 'liability': return { label: 'Pasivo',  className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' };
-    case 'equity':    return { label: 'Capital', className: 'bg-violet-500/10 text-violet-400 border border-violet-500/20' };
-    case 'revenue':   return { label: 'Ingreso', className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' };
-    case 'expense':   return { label: 'Gasto',   className: 'bg-rose-500/10 text-rose-400 border border-rose-500/20' };
-    default:          return { label: accountType, className: 'bg-slate-700 text-slate-300' };
-  }
-}
-
-interface AccountSelectorProps {
-  accounts: GlAccount[];
-  value: string;
-  onChange: (id: string) => void;
-  required?: boolean;
-}
-
-function AccountSelector({ accounts, value, onChange, required }: AccountSelectorProps) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const selected = useMemo(() => accounts.find(a => a.id === value), [accounts, value]);
-
-  const filtered = useMemo(() => {
-    return accounts.filter(a => 
-      a.code.toLowerCase().includes(search.toLowerCase()) || 
-      a.name.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [accounts, search]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [open]);
-
-  const handleSelect = (acc: GlAccount) => {
-    onChange(acc.id);
-    setOpen(false);
-    setSearch('');
-  };
-
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange('');
-    setSearch('');
-  };
-
-  return (
-    <div className="relative group" ref={containerRef}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="w-full bg-[#0a1628] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#0071c5] flex items-center justify-between text-left transition-all"
-      >
-        <div className="flex items-center gap-2 flex-1 truncate">
-          {selected ? (
-            <>
-              <span className="font-mono text-[#0071c5] whitespace-nowrap">{selected.code}</span>
-              <span className="truncate text-slate-200">{selected.name}</span>
-              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full whitespace-nowrap ${getNormalBalanceBadge(selected.normalBalance).className}`}>
-                {getNormalBalanceBadge(selected.normalBalance).label}
-              </span>
-            </>
-          ) : (
-            <span className="text-slate-500">Seleccionar cuenta...</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 ml-2">
-          {selected && (
-            <div onClick={handleClear} className="p-1 hover:bg-white/5 rounded-md transition-colors">
-              <X className="w-3.5 h-3.5 text-slate-500 hover:text-rose-400" />
-            </div>
-          )}
-          <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        </div>
-      </button>
-
-      <input 
-        required={required} 
-        value={value} 
-        onChange={() => {}} 
-        className="absolute opacity-0 pointer-events-none w-full h-10 bottom-0 left-0" 
-      />
-
-      {open && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0f2240] border border-white/7 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="p-2 border-b border-white/10 bg-[#0a1628]/50 flex items-center gap-2">
-            <Search className="w-4 h-4 text-slate-500 ml-2" />
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Buscar por código o nombre..."
-              className="w-full bg-transparent p-2 text-sm text-white outline-none"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.stopPropagation()}
-            />
-          </div>
-          <ul className="max-h-64 overflow-y-auto p-1 custom-scrollbar">
-            {filtered.length > 0 ? (
-              filtered.map((acc) => (
-                <li
-                  key={acc.id}
-                  onClick={() => handleSelect(acc)}
-                  className={`
-                    flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all
-                    ${value === acc.id ? 'bg-[#0071c5]/20 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'}
-                  `}
-                >
-                  <span className="font-mono text-[#0071c5] w-12 text-xs font-bold">{acc.code}</span>
-                  <span className="flex-1 truncate text-sm">{acc.name}</span>
-                  <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${getAccountTypeBadge(acc.accountType).className}`}>
-                      {getAccountTypeBadge(acc.accountType).label}
-                    </span>
-                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${getNormalBalanceBadge(acc.normalBalance).className}`}>
-                      {getNormalBalanceBadge(acc.normalBalance).label}
-                    </span>
-                  </div>
-                </li>
-              ))
-            ) : (
-              <li className="p-4 text-center text-slate-500 text-sm">No se encontraron cuentas</li>
-            )}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
+import { RuleFormModal, type RuleFormData } from '../components/RuleFormModal';
 
 export function BankRules() {
   const activeCompany = useAuthStore((state) => state.activeCompany);
@@ -189,16 +24,7 @@ export function BankRules() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    conditionType: 'contains' as 'contains' | 'starts_with' | 'equals',
-    conditionValue: '',
-    transactionDirection: 'any' as 'any' | 'debit' | 'credit',
-    glAccountId: '',
-    autoAdd: false,
-    priority: 10,
-    isActive: true
-  });
+  const [editFormData, setEditFormData] = useState<Partial<RuleFormData>>({});
 
   const { data: rules = [], isLoading, error } = useQuery({
     queryKey: ['bank-rules', activeCompany?.id],
@@ -213,7 +39,7 @@ export function BankRules() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: typeof formData) =>
+    mutationFn: (data: RuleFormData) =>
       fetchApi('/bank-rules', {
         method: 'POST',
         body: JSON.stringify({ ...data, companyId: activeCompany?.id }),
@@ -247,16 +73,7 @@ export function BankRules() {
   });
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      conditionType: 'contains',
-      conditionValue: '',
-      transactionDirection: 'any',
-      glAccountId: '',
-      autoAdd: false,
-      priority: 10,
-      isActive: true
-    });
+    setEditFormData({});
     setShowForm(false);
     setEditingId(null);
   };
@@ -327,7 +144,7 @@ export function BankRules() {
   const handleEditRule = (rule: any) => {
     setShowForm(true);
     setEditingId(rule.id);
-    setFormData({
+    setEditFormData({
       name: rule.name,
       conditionType: rule.conditionType,
       conditionValue: rule.conditionValue,
@@ -382,128 +199,18 @@ export function BankRules() {
       </div>
     </div>
 
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#0f2240] border border-white/10 rounded-3xl shadow-2xl w-full max-w-2xl relative flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-8 py-6 border-b border-white/10">
-              <h2 className="text-xl font-bold text-white">
-                {editingId ? 'Editar Regla Bancaria' : 'Nueva Regla Bancaria'}
-              </h2>
-              <button
-                type="button"
-                onClick={resetForm}
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (editingId) updateMutation.mutate({ ...formData, id: editingId });
-                else createMutation.mutate(formData);
-              }}
-              className="px-8 py-6 flex flex-col gap-5"
-            >
-              {/* Nombre */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Nombre de la regla</label>
-                <input
-                  required
-                  className="bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors"
-                  placeholder="Ej: Pagos de Lyft - Ingresos de transporte"
-                  value={formData.name}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-
-              {/* Condición */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Condición</label>
-                <div className="flex gap-3">
-                  <select
-                    className="bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors w-40 shrink-0 [&>option]:bg-[#0f2240]"
-                    value={formData.conditionType}
-                    onChange={e => setFormData({ ...formData, conditionType: e.target.value as any })}
-                  >
-                    <option value="contains">Contiene</option>
-                    <option value="starts_with">Empieza con</option>
-                    <option value="equals">Igual a</option>
-                  </select>
-                  <input
-                    required
-                    className="flex-1 bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors"
-                    placeholder="Ej: LYFT, UBER, AMAZON..."
-                    value={formData.conditionValue}
-                    onChange={e => setFormData({ ...formData, conditionValue: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              {/* Dirección */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Dirección de la transacción</label>
-                <select
-                  className="bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors [&>option]:bg-[#0f2240]"
-                  value={formData.transactionDirection}
-                  onChange={e => setFormData({ ...formData, transactionDirection: e.target.value as any })}
-                >
-                  <option value="any">Cualquiera (débito o crédito)</option>
-                  <option value="debit">Solo débitos (salidas)</option>
-                  <option value="credit">Solo créditos (entradas)</option>
-                </select>
-              </div>
-
-              {/* Cuenta GL */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Cuenta contable (GL)</label>
-                <AccountSelector
-                  accounts={Array.isArray(glAccounts) ? glAccounts : []}
-                  value={formData.glAccountId}
-                  onChange={(id) => setFormData({ ...formData, glAccountId: id })}
-                  required
-                />
-              </div>
-
-              {/* Prioridad */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Prioridad</label>
-                <select
-                  className="bg-[#0a1628] border border-white/10 px-4 py-3 rounded-xl text-white outline-none focus:border-[#0071c5] transition-colors [&>option]:bg-[#0f2240]"
-                  value={formData.priority}
-                  onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
-                >
-                  <option value="0">0 — Prioridad Crítica (se evalúa primero)</option>
-                  <option value="5">5 — Prioridad Alta</option>
-                  <option value="10">10 — Prioridad Normal</option>
-                  <option value="15">15 — Prioridad Baja</option>
-                  <option value="20">20 — Prioridad Muy Baja</option>
-                </select>
-              </div>
-
-              {/* Footer */}
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10 mt-1">
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="px-6 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-sm transition-colors"
-                >
-                  {editingId ? 'Actualizar regla' : 'Guardar regla'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <RuleFormModal
+        isOpen={showForm}
+        onClose={resetForm}
+        onSave={(data) => {
+          if (editingId) updateMutation.mutate({ ...data, id: editingId });
+          else createMutation.mutate(data);
+        }}
+        initialData={editFormData}
+        glAccounts={Array.isArray(glAccounts) ? glAccounts : []}
+        title={editingId ? 'Editar Regla Bancaria' : 'Nueva Regla Bancaria'}
+        submitLabel={editingId ? 'Actualizar regla' : 'Guardar regla'}
+      />
 
       <div className="bg-[#0f2240] border border-white/7 rounded-3xl overflow-hidden">
         {isLoading ? (

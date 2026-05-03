@@ -3,6 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
+import { AccountSelector } from '../components/AccountSelector';
+import type { GlAccount } from '../components/AccountSelector';
+import { fetchGroups, suggestRule, createRule } from '../services/bankRuleGeneratorApi';
+import type { PendingGroup } from '../services/bankRuleGeneratorApi';
+import { RuleFormModal, type RuleFormData } from '../components/RuleFormModal';
 import { 
   Settings as SettingsIcon, 
   Building, 
@@ -23,7 +28,15 @@ import {
   Search, 
   Download, 
   Printer, 
-  ShieldCheck 
+  ShieldCheck,
+  Zap,
+  Sparkles,
+  ChevronRight,
+  SkipForward,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  X as XIcon
 } from 'lucide-react';
 import { PrintPreviewModal } from '../components/PrintPreviewModal';
 import { BackupPanel } from '../components/BackupPanel';
@@ -36,9 +49,12 @@ export function Settings() {
   const queryClient = useQueryClient();
   
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups' | 'diagnostics'>(
-    (searchParams.get('tab') as 'company' | 'users' | 'roles' | 'periods' | 'backups' | 'diagnostics') ?? 'company'
+  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'periods' | 'backups' | 'diagnostics' | 'rule-generator'>(
+    (searchParams.get('tab') as 'company' | 'users' | 'roles' | 'periods' | 'backups' | 'diagnostics' | 'rule-generator') ?? 'company'
   );
+
+  // --- Rule Generator State ---
+  const [ruleGenSessionCount, setRuleGenSessionCount] = useState(0);
   const [companyViewMode, setCompanyViewMode] = useState<'list' | 'edit' | 'create'>('list');
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
 
@@ -471,6 +487,21 @@ export function Settings() {
           <button onClick={() => setActiveTab('backups')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === 'backups' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}>
             <Database className="w-5 h-5" /> Respaldos del Sistema
           </button>
+
+          {/* Separador visual */}
+          <div className="my-1 border-t border-white/5" />
+
+          <button
+            onClick={() => setActiveTab('rule-generator')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              activeTab === 'rule-generator'
+                ? 'bg-[#0071c5]/20 text-[#0071c5] border border-[#0071c5]/30 shadow-inner'
+                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+            }`}
+          >
+            <Zap className="w-5 h-5" /> Generador de Reglas IA
+          </button>
+
           {user?.isSuperAdmin && (
             <button 
               onClick={() => setActiveTab('diagnostics')} 
@@ -1297,6 +1328,17 @@ export function Settings() {
               </div>
             </div>
           )}
+
+          {/* TAB: GENERADOR DE REGLAS IA */}
+          {activeTab === 'rule-generator' && (
+            <RuleGeneratorTab
+              activeCompany={activeCompany}
+              ruleGenSessionCount={ruleGenSessionCount}
+              setRuleGenSessionCount={setRuleGenSessionCount}
+              setNotification={setNotification}
+            />
+          )}
+
         </div>
       </div>
 
@@ -1594,6 +1636,571 @@ export function Settings() {
         ]}
         data={users}
       />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RuleGeneratorTab — Componente del Generador de Reglas IA (Por Grupos)
+// ─────────────────────────────────────────────────────────────────────────────
+interface RuleGeneratorTabProps {
+  activeCompany: any;
+  ruleGenTx: any;
+  setRuleGenTx: (v: any) => void;
+  ruleGenSuggestion: any;
+  setRuleGenSuggestion: (v: any) => void;
+  ruleGenLoading: boolean;
+  setRuleGenLoading: (v: boolean) => void;
+  ruleGenError: string | null;
+  setRuleGenError: (v: string | null) => void;
+  ruleGenDuplicate: { existingRuleName: string; message: string } | null;
+  setRuleGenDuplicate: (v: any) => void;
+  ruleGenSessionCount: number;
+  setRuleGenSessionCount: (v: number) => void;
+  ruleGenSkipped: number;
+  setRuleGenSkipped: (v: number) => void;
+  ruleGenForm: {
+    name: string;
+    conditionType: 'contains' | 'starts_with' | 'equals';
+    conditionValue: string;
+    transactionDirection: 'any' | 'debit' | 'credit';
+    glAccountId: string;
+    priority: number;
+    autoAdd: boolean;
+    isActive: boolean;
+  };
+  setRuleGenForm: (v: any) => void;
+  setNotification: (v: { title: string; message: string; type: 'success' | 'error' } | null) => void;
+}
+
+function RuleGeneratorTab({
+  activeCompany,
+  ruleGenSessionCount,
+  setRuleGenSessionCount,
+  setNotification,
+}: RuleGeneratorTabProps) {
+  const queryClient = useQueryClient();
+
+  const [groups, setGroups] = useState<PendingGroup[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [suggestions, setSuggestions] = useState<Record<string, any>>({});
+  const [loadingSuggestions, setLoadingSuggestions] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Auditoría y Logs de generación
+  const [batchLogs, setBatchLogs] = useState<any[]>([]);
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  
+  // Modal de edición de regla
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editInitialData, setEditInitialData] = useState<Partial<RuleFormData> | null>(null);
+
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+  const [isGeneratingBatch, setIsGeneratingBatch] = useState(false);
+  const [batchLoadingGroups, setBatchLoadingGroups] = useState<Set<string>>(new Set());
+
+  const { data: glAccounts = [] } = useQuery({
+    queryKey: ['gl-accounts', activeCompany?.id],
+    queryFn: () => fetchApi('/gl-accounts'),
+    enabled: !!activeCompany,
+  });
+
+  const loadGroups = async () => {
+    if (!activeCompany?.id) return;
+    setLoadingGroups(true);
+    try {
+      const result = await fetchGroups(activeCompany.id, 2, 500);
+      setGroups(result);
+    } catch (error: any) {
+      setNotification({ title: 'Error', message: error.message || 'Error al cargar grupos', type: 'error' });
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadGroups();
+  }, [activeCompany?.id]);
+
+  const handleSuggestRule = async (group: PendingGroup): Promise<any> => {
+    if (!activeCompany?.id) return null;
+    
+    setLoadingSuggestions(prev => ({ ...prev, [group.groupId]: true }));
+    setErrors(prev => ({ ...prev, [group.groupId]: '' }));
+    
+    try {
+      const enrichedMessage = `
+Tipo: ${group.direction === 'debit' ? 'Pago (débito)' : 'Ingreso (crédito)'}
+Monto promedio: $${(Math.abs(group.totalAmount) / group.count).toFixed(2)}
+Contraparte: ${group.counterparty || 'No detectada'}
+Concepto: ${group.concept || 'No detectado'}
+Transacción de ejemplo: ${group.sampleDescription}
+`.trim();
+
+      const res = await suggestRule(activeCompany.id, enrichedMessage);
+      if (res.suggested) {
+        setSuggestions(prev => ({ ...prev, [group.groupId]: res.suggested }));
+        return res.suggested;
+      } else {
+        const errorMsg = res.error || 'La IA no pudo sugerir una regla.';
+        setErrors(prev => ({ ...prev, [group.groupId]: errorMsg }));
+        return null;
+      }
+    } catch (err: any) {
+      setErrors(prev => ({ ...prev, [group.groupId]: err.message || 'Error de conexión' }));
+      return null;
+    } finally {
+      setLoadingSuggestions(prev => ({ ...prev, [group.groupId]: false }));
+    }
+  };
+
+
+
+  const openEditModal = async (group: PendingGroup) => {
+    // 1. Intentar obtener de la caché (sugerencias ya generadas)
+    let suggestion = suggestions[group.groupId];
+    
+    // 2. Si no hay en caché, llamar a la IA (flujo normal)
+    if (!suggestion) {
+      try {
+        // Timeout por seguridad (40s)
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 40000));
+        suggestion = await Promise.race([handleSuggestRule(group), timeoutPromise]);
+      } catch (err) {
+        suggestion = null;
+      }
+    }
+
+    // Si sigue sin haber sugerencia (error o vacía), usar campos vacíos pero NO lógica inventada
+    const safeSug = suggestion || {};
+
+    const initialData = {
+      name: safeSug.name || '',
+      conditionType: safeSug.conditionType || 'contains',
+      conditionValue: safeSug.conditionValue || '',
+      transactionDirection: safeSug.transactionDirection || group.direction || 'any',
+      glAccountId: safeSug.glAccountId || '',
+      priority: safeSug.priority || 10,
+      autoAdd: false,
+      isActive: true,
+      explanation: safeSug.explanation || ''
+    };
+    setEditInitialData(initialData);
+    setEditingGroupId(group.groupId);
+  };
+
+  const handleSaveRule = async (data: RuleFormData) => {
+    if (!activeCompany?.id || !editingGroupId) return;
+    
+    try {
+      await createRule(activeCompany.id, data);
+      setNotification({ title: '✓ Regla Creada', message: 'Regla guardada exitosamente', type: 'success' });
+      setRuleGenSessionCount(prev => prev + 1);
+      
+      // Remover el grupo de la lista
+      setGroups(prev => prev.filter(g => g.groupId !== editingGroupId));
+      setEditingGroupId(null);
+    } catch (err: any) {
+      setNotification({ title: 'Error', message: err.message || 'Error al guardar la regla', type: 'error' });
+    }
+  };
+
+  const handleBatchGenerate = async () => {
+    if (!activeCompany?.id || selectedGroups.size === 0) return;
+    
+    setIsGeneratingBatch(true);
+    setNotification({ title: 'Generando...', message: `Generando reglas para ${selectedGroups.size} grupos...`, type: 'success' });
+    
+    let successCount = 0;
+    let failCount = 0;
+    const successfulGroupIds = new Set<string>();
+    const newLogs: any[] = [];
+    
+    for (const groupId of selectedGroups) {
+      const group = groups.find(g => g.groupId === groupId);
+      if (!group) continue;
+      
+      setBatchLoadingGroups(prev => new Set(prev).add(groupId));
+      
+      try {
+        let suggestion = suggestions[groupId];
+        if (!suggestion) {
+          suggestion = await handleSuggestRule(group);
+        }
+        
+        if (suggestion && suggestion.glAccountId && suggestion.name) {
+          const ruleData = {
+            name: suggestion.name,
+            conditionType: suggestion.conditionType || 'contains',
+            conditionValue: suggestion.conditionValue,
+            transactionDirection: suggestion.transactionDirection || group.direction || 'any',
+            glAccountId: suggestion.glAccountId,
+            priority: suggestion.priority || 10,
+            autoAdd: false,
+            isActive: true,
+          };
+          
+          await createRule(activeCompany.id, ruleData);
+          successCount++;
+          successfulGroupIds.add(groupId);
+          
+          // Buscar nombre de la cuenta para el log
+          const glAcc = Array.isArray(glAccounts) ? glAccounts.find((a: any) => a.id === suggestion.glAccountId) : null;
+
+          newLogs.push({
+            groupId: group.groupId,
+            sampleDescription: group.sampleDescription,
+            counterparty: group.counterparty,
+            conditionValue: suggestion.conditionValue,
+            glAccountId: suggestion.glAccountId,
+            glAccountName: glAcc ? `${glAcc.code} - ${glAcc.name}` : suggestion.glAccountName || 'Detectada',
+            explanation: suggestion.explanation || 'IA sugirió cuenta razonable.',
+            priority: suggestion.priority || 10,
+            status: 'success'
+          });
+        } else {
+          failCount++;
+          newLogs.push({
+            groupId: group.groupId,
+            sampleDescription: group.sampleDescription,
+            status: 'error',
+            errorMessage: 'La IA no pudo determinar una cuenta contable válida.'
+          });
+        }
+      } catch (err: any) {
+        failCount++;
+        newLogs.push({
+          groupId: group.groupId,
+          sampleDescription: group.sampleDescription,
+          status: 'error',
+          errorMessage: err.message || 'Fallo de red o servidor.'
+        });
+      } finally {
+        setBatchLoadingGroups(prev => {
+          const next = new Set(prev);
+          next.delete(groupId);
+          return next;
+        });
+      }
+    }
+    
+    // Guardar logs y mostrar modal de auditoría
+    setBatchLogs(newLogs);
+    setShowAuditModal(true);
+
+    // Actualizar la lista de grupos solo una vez al final
+    setGroups(prev => prev.filter(g => !successfulGroupIds.has(g.groupId)));
+    setSelectedGroups(prev => {
+      const newSet = new Set(prev);
+      successfulGroupIds.forEach(id => newSet.delete(id));
+      return newSet;
+    });
+    
+    setIsGeneratingBatch(false);
+    setRuleGenSessionCount(prev => prev + successCount);
+    setNotification({ 
+      title: 'Proceso finalizado', 
+      message: `✅ ${successCount} reglas creadas. ${failCount > 0 ? `❌ ${failCount} fallaron.` : ''}`, 
+      type: successCount > 0 ? 'success' : 'error' 
+    });
+  };
+
+  const formatAmount = (amount: string | number) => {
+    const n = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(n));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-[#0071c5]/10 border border-[#0071c5]/20 flex items-center justify-center">
+            <Zap className="w-5 h-5 text-[#0071c5]" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white">Generador de Reglas IA</h2>
+            <p className="text-xs text-gray-400">Patrones detectados automáticamente usando IA local.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-xs font-bold text-emerald-400">{ruleGenSessionCount} creadas</span>
+          </div>
+          <button onClick={loadGroups} className="p-2 text-gray-500 hover:text-white bg-white/5 rounded-lg transition-colors">
+            <RefreshCw className={`w-4 h-4 ${loadingGroups ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-[#0a1628] rounded-2xl border border-gray-800 overflow-hidden">
+        
+        {!loadingGroups && groups.length > 0 && (
+          <div className="flex items-center gap-3 p-4 border-b border-gray-800 bg-[#0f2240]/50">
+            <button 
+              onClick={() => setSelectedGroups(new Set(groups.map(g => g.groupId)))}
+              disabled={isGeneratingBatch}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+            >
+              Seleccionar todo
+            </button>
+            <button 
+              onClick={() => setSelectedGroups(new Set())}
+              disabled={isGeneratingBatch || selectedGroups.size === 0}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+            >
+              Deseleccionar todo
+            </button>
+            <button
+              onClick={() => {
+                setGroups(groups.filter(g => !selectedGroups.has(g.groupId)));
+                setSelectedGroups(new Set());
+              }}
+              disabled={isGeneratingBatch || selectedGroups.size === 0}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-400/10 transition-colors ml-auto"
+            >
+              Descartar seleccionadas
+            </button>
+            <button
+              onClick={handleBatchGenerate}
+              disabled={isGeneratingBatch || selectedGroups.size === 0}
+              className="text-xs font-bold px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white transition-colors flex items-center gap-2"
+            >
+              {isGeneratingBatch ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              Generar reglas ({selectedGroups.size})
+            </button>
+            {batchLogs.length > 0 && (
+              <button
+                onClick={() => setShowAuditModal(true)}
+                className="text-xs font-bold px-4 py-1.5 rounded-lg bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600/30 transition-colors flex items-center gap-2"
+              >
+                <Eye className="w-3.5 h-3.5" /> Ver Auditoría
+              </button>
+            )}
+          </div>
+        )}
+
+        {loadingGroups ? (
+          <div className="p-12 text-center text-gray-500 flex flex-col items-center">
+            <RefreshCw className="w-8 h-8 animate-spin mb-3 text-[#0071c5]" />
+            <p>Analizando transacciones pendientes y buscando patrones...</p>
+          </div>
+        ) : groups.length === 0 ? (
+          <div className="p-12 text-center">
+            <CheckCircle2 className="w-12 h-12 text-emerald-500/40 mx-auto mb-3" />
+            <p className="text-gray-400">No se encontraron patrones repetitivos para sugerir reglas.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-[#0f2240] text-gray-400 text-xs uppercase font-bold border-b border-gray-800">
+                <tr>
+                  <th className="py-4 px-5 w-12 text-center">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-600 bg-[#0a1628] text-[#0071c5] focus:ring-[#0071c5] disabled:opacity-50"
+                      disabled={isGeneratingBatch}
+                      checked={groups.length > 0 && selectedGroups.size === groups.length}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedGroups(new Set(groups.map(g => g.groupId)));
+                        else setSelectedGroups(new Set());
+                      }}
+                    />
+                  </th>
+                  <th className="py-4 px-5">Patrón Base</th>
+                  <th className="py-4 px-5 text-center">Tx</th>
+                  <th className="py-4 px-5 text-right">Volumen</th>
+                  <th className="py-4 px-5">Sugerencia IA</th>
+                  <th className="py-4 px-5 text-center">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {groups.map(group => {
+                  const isDebit = group.direction === 'debit' || group.totalAmount < 0;
+                  const suggestion = suggestions[group.groupId];
+                  const isLoading = loadingSuggestions[group.groupId];
+                  const error = errors[group.groupId];
+
+                  return (
+                    <tr key={group.groupId} className={`hover:bg-white/[0.02] transition-colors cursor-pointer select-none ${selectedGroups.has(group.groupId) ? 'bg-[#0071c5]/5' : ''}`} onDoubleClick={() => !isGeneratingBatch && openEditModal(group)}>
+                      <td className="py-4 px-5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-gray-600 bg-[#0a1628] text-[#0071c5] focus:ring-[#0071c5] disabled:opacity-50 cursor-pointer"
+                          disabled={isGeneratingBatch}
+                          checked={selectedGroups.has(group.groupId)}
+                          onChange={(e) => {
+                            const newSet = new Set(selectedGroups);
+                            if (e.target.checked) newSet.add(group.groupId);
+                            else newSet.delete(group.groupId);
+                            setSelectedGroups(newSet);
+                          }}
+                        />
+                      </td>
+                      <td className="py-4 px-5">
+                        <div className="font-mono text-xs text-indigo-300 font-bold bg-indigo-500/10 inline-block px-2 py-1 rounded">
+                          {group.representativeDescription}
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1 truncate max-w-xs">Ej: {group.sampleDescription}</p>
+                      </td>
+                      <td className="py-4 px-5 text-center">
+                        <span className="px-2 py-1 rounded-full bg-gray-800 text-gray-300 text-xs font-bold">
+                          {group.count}
+                        </span>
+                      </td>
+                      <td className="py-4 px-5 text-right">
+                        <span className={`font-bold ${isDebit ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {isDebit ? '−' : '+'}{formatAmount(group.totalAmount)}
+                        </span>
+                      </td>
+                      <td className="py-4 px-5">
+                        {isLoading || batchLoadingGroups.has(group.groupId) ? (
+                          <span className="flex items-center text-xs text-[#0071c5] animate-pulse">
+                            <Sparkles className="w-3.5 h-3.5 mr-1" /> Pensando...
+                          </span>
+                        ) : error ? (
+                          <span className="text-xs text-rose-400" title={error}>Error IA</span>
+                        ) : suggestion ? (
+                          <div className="text-xs text-gray-300">
+                            <p className="font-semibold text-white">{suggestion.name}</p>
+                            <p className="text-[10px] text-emerald-400 mt-0.5">→ Cuenta: {suggestion.glAccountName || 'Detectada'}</p>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSuggestRule(group); }}
+                            disabled={isGeneratingBatch}
+                            className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#0071c5]/10 hover:bg-[#0071c5]/20 text-[#0071c5] font-medium transition-colors border border-[#0071c5]/20 disabled:opacity-50"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" /> Sugerir
+                          </button>
+                        )}
+                      </td>
+                      <td className="py-4 px-5 text-center">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openEditModal(group); }}
+                          disabled={isGeneratingBatch}
+                          className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                        >
+                          Revisar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <RuleFormModal
+        key={editingGroupId || 'new'}
+        isOpen={!!editingGroupId}
+        onClose={() => { setEditingGroupId(null); setEditInitialData(null); }}
+        onSave={handleSaveRule}
+        initialData={editInitialData || undefined}
+        glAccounts={Array.isArray(glAccounts) ? glAccounts : []}
+        title="Revisar Regla Sugerida"
+        submitLabel="Guardar Regla"
+      />
+
+      <AuditModal 
+        isOpen={showAuditModal} 
+        onClose={() => setShowAuditModal(false)} 
+        logs={batchLogs} 
+      />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AuditModal — Detalle técnico de la generación en lote
+// ─────────────────────────────────────────────────────────────────────────────
+function AuditModal({ isOpen, onClose, logs }: { isOpen: boolean; onClose: () => void; logs: any[] }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-[#0a1628] rounded-3xl w-full max-w-5xl shadow-2xl border border-white/10 overflow-hidden transform animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        <div className="p-6 bg-[#0d1b2e]/80 border-b border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/10 rounded-lg">
+              <Eye className="w-6 h-6 text-indigo-400" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">Auditoría de Generación IA</h3>
+              <p className="text-xs text-gray-500">Detalle técnico de las reglas procesadas en el último lote.</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors"
+          >
+            <XIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-[#0f2240] text-gray-400 text-xs uppercase font-bold border-b border-gray-800">
+              <tr>
+                <th className="py-3 px-4">Estado</th>
+                <th className="py-3 px-4">Patrón / Grupo</th>
+                <th className="py-3 px-4">Condición</th>
+                <th className="py-3 px-4">Cuenta GL</th>
+                <th className="py-3 px-4">Explicación</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800">
+              {logs.map((log, i) => (
+                <tr key={i} className="hover:bg-white/[0.02]">
+                  <td className="py-3 px-4">
+                    {log.status === 'success' ? (
+                      <span className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> OK
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-rose-400 font-bold text-xs">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Error
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="text-gray-200 font-medium max-w-[200px] truncate" title={log.sampleDescription}>
+                      {log.sampleDescription}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    <code className="text-[10px] bg-indigo-500/10 text-indigo-300 px-1.5 py-0.5 rounded font-bold uppercase">
+                      {log.conditionValue || 'N/A'}
+                    </code>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="text-xs">
+                      <p className="text-gray-200 font-semibold">{log.glAccountName || 'N/A'}</p>
+                      <p className="text-[10px] text-gray-500">{log.glAccountId || '-'}</p>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    <p className="text-[11px] text-gray-400 max-w-[300px] italic whitespace-normal leading-relaxed">
+                      {log.errorMessage || log.explanation || 'Sin detalles'}
+                    </p>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="p-6 bg-[#0d1b2e]/80 border-t border-white/5 flex justify-end">
+          <button 
+            onClick={onClose}
+            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors shadow-lg shadow-indigo-600/20"
+          >
+            Cerrar Auditoría
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

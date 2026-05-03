@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { BankRulesService } from "../services/bank/bank-rules.service";
+import { analyzePendingTransactions } from "../services/bank/rule-generator.service.ts";
 import { authMiddleware, requireAuth } from "../middleware/auth.middleware";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { db } from "../db/connection.ts";
@@ -102,4 +103,26 @@ export const bankRulesRouter = new Elysia({ prefix: "/bank-rules" })
     return await BankRulesService.deleteRule(id);
   }, {
     params: t.Object({ id: t.String() }, { additionalProperties: false })
+  })
+
+  .post("/analyze-pending", async ({ body, companyId, set }) => {
+    if (!companyId) {
+      set.status = 403;
+      return { success: false, error: "No active company in session." };
+    }
+    const minGroupSize = body?.minGroupSize ?? 2;
+    const limit = body?.limit ?? 500;
+
+    try {
+      const groups = await analyzePendingTransactions(companyId, minGroupSize, limit);
+      return { success: true, groups };
+    } catch (err: any) {
+      set.status = 500;
+      return { success: false, error: err.message };
+    }
+  }, {
+    body: t.Optional(t.Object({
+      minGroupSize: t.Optional(t.Number()),
+      limit: t.Optional(t.Number()),
+    }))
   });
