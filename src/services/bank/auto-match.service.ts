@@ -37,9 +37,9 @@ export interface AutoMatchResult {
 async function resolveGlAccountId(
   bankAccountId: string,
   companyId: string
-): Promise<string | null> {
+): Promise<{ glAccountId: string | null; accountName: string }> {
   const [account] = await db
-    .select({ glAccountId: bankAccounts.glAccountId })
+    .select({ glAccountId: bankAccounts.glAccountId, accountName: bankAccounts.accountName })
     .from(bankAccounts)
     .where(
       and(
@@ -49,7 +49,10 @@ async function resolveGlAccountId(
       )
     )
     .limit(1);
-  return account?.glAccountId ?? null;
+  return { 
+    glAccountId: account?.glAccountId ?? null,
+    accountName: account?.accountName ?? "Cuenta Desconocida"
+  };
 }
 
 // ── Helper: Verify Period Status ─────────────────────────────
@@ -100,12 +103,12 @@ export async function runAutoMatch(
   const isDateClosed = await getClosedPeriodFilter(companyId);
 
   // 1. Resolve the bank's GL account (e.g., 1010 - Cash Checking)
-  const bankGlAccountId = await resolveGlAccountId(bankAccountId, companyId);
+  const { glAccountId: bankGlAccountId, accountName } = await resolveGlAccountId(bankAccountId, companyId);
   if (!bankGlAccountId) {
     result.errors.push({
-      transactionId: bankAccountId,
+      transactionId: accountName,
       reason:
-        "Bank account has no GL account assigned. Assign a GL account to this bank account before running auto-match.",
+        "La cuenta bancaria no tiene una Cuenta Contable (GL) asignada. Por favor, asígnale una desde el menú 'Cuentas Bancarias' antes de usar la conciliación automática.",
     });
     return result;
   }
@@ -192,10 +195,10 @@ export async function runAutoMatch(
         });
         result.crossed++;
         continue; // Successfully crossed, skip rule matching
-      } catch (err: any) {
-
+      } catch (err) {
         // Log error but continue to try rules if cross-match failed for some reason
-        console.error(`Ledger match failed for tx ${tx.id}: ${err.message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`Ledger match failed for tx ${tx.id}: ${message}`);
       }
     }
 
@@ -281,8 +284,9 @@ export async function runAutoMatch(
         'auto_matched'
       );
       result.matched++;
-    } catch (err: any) {
-      result.errors.push({ transactionId: tx.id, reason: `Rule match failed: ${err.message}` });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      result.errors.push({ transactionId: tx.id, reason: `Rule match failed: ${message}` });
     }
   }
 
@@ -368,11 +372,11 @@ export async function runGroupMatch(
   const isDateClosed = await getClosedPeriodFilter(companyId);
 
   // 1. Resolve bank GL account
-  const bankGlAccountId = await resolveGlAccountId(bankAccountId, companyId);
+  const { glAccountId: bankGlAccountId, accountName } = await resolveGlAccountId(bankAccountId, companyId);
   if (!bankGlAccountId) {
     result.errors.push({
-      transactionId: bankAccountId,
-      reason: "Bank account has no GL account assigned.",
+      transactionId: accountName,
+      reason: "La cuenta bancaria no tiene una Cuenta Contable (GL) asignada. Por favor, asígnale una desde el menú 'Cuentas Bancarias'.",
     });
     return result;
   }
@@ -450,6 +454,76 @@ export async function runGroupMatch(
           transactionId: tx.id,
           reason: err instanceof Error ? err.message : String(err),
         });
+      }
+    }
+  }
+
+  return result;
+}
+
+// ── Apply a specific rule to all matching transactions ─────
+export async function applyRuleToTransactions(
+  companyId: string,
+  ruleId: string,
+  userId: string,
+  sessionId: string,
+  ipAddress: string
+): Promise<{ matched: number; errors: { transactionId: string; error: string }[] }> {
+  const result = { matched: 0, errors: [] as { transactionId: string; error: string }[] };
+
+  // 1. Get the rule
+  const [rule] = await db
+    .select()
+    .from(bankRules)
+    .where(and(eq(bankRules.id, ruleId), eq(bankRules.companyId, companyId)))
+    .limit(1);
+
+  if (!rule) throw new Error("Regla no encontrada");
+
+  // 2. Get pending transactions
+  const pendingTxs = await db
+    .select()
+    .from(bankTransactions)
+    .where(
+      and(
+        eq(bankTransactions.companyId, companyId),
+        or(
+          eq(bankTransactions.status, "pending"),
+          isNull(bankTransactions.glAccountId)
+        )
+      )
+    );
+
+  const descMatch = (txDesc: string | null, ruleVal: string, type: string) => {
+    const d = (txDesc ?? "").toUpperCase();
+    const v = ruleVal.toUpperCase();
+    if (type === "contains") return d.includes(v);
+    if (type === "starts_with") return d.startsWith(v);
+    if (type === "equals") return d === v;
+    return false;
+  };
+
+  // 3. Filter and Apply
+  for (const tx of pendingTxs) {
+    const dirMatch =
+      rule.transactionDirection === "any" ||
+      (rule.transactionDirection === "debit" && tx.transactionType === "debit") ||
+      (rule.transactionDirection === "credit" && tx.transactionType === "credit");
+
+    if (dirMatch && descMatch(tx.description, rule.conditionValue, rule.conditionType)) {
+      try {
+        await db.update(bankTransactions)
+          .set({
+            glAccountId: rule.glAccountId,
+            appliedRuleId: rule.id,
+            status: "assigned"
+          })
+          .where(eq(bankTransactions.id, tx.id));
+        
+        result.matched++;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        result.errors.push({ transactionId: tx.id, error: message });
       }
     }
   }

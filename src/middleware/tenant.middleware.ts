@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { db } from "../db/connection.ts";
+import { db, sql } from "../db/connection.ts";
 import { userCompanyRoles } from "../db/schema/system.schema.ts";
 import { eq, and, isNull } from "drizzle-orm";
 import { requireAuth, authMiddleware } from "./auth.middleware.ts";
@@ -46,6 +46,10 @@ export const tenantMiddleware = (app: Elysia) => app
 
     if (!membership) {
       return new Response(JSON.stringify({ error: "User not in this company" }), { status: 403 });
+    }
+
+    if (companyId) {
+      await db.execute(sql`SET app.current_company_id = ${companyId}`);
     }
   })
   .derive(async ({ user, companyId }: TenantContext) => {

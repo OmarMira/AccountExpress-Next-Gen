@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
 import { AccountSelector } from '../components/AccountSelector';
 import type { GlAccount } from '../components/AccountSelector';
-import { fetchGroups, suggestRule, createRule } from '../services/bankRuleGeneratorApi';
+import { fetchGroups, suggestRule, createRule, applyRuleToPending } from '../services/bankRuleGeneratorApi';
 import type { PendingGroup } from '../services/bankRuleGeneratorApi';
 import { RuleFormModal, type RuleFormData } from '../components/RuleFormModal';
 import { 
@@ -55,6 +55,7 @@ export function Settings() {
 
   // --- Rule Generator State ---
   const [ruleGenSessionCount, setRuleGenSessionCount] = useState(0);
+  const [applyBatchToPending, setApplyBatchToPending] = useState(true);
   const [companyViewMode, setCompanyViewMode] = useState<'list' | 'edit' | 'create'>('list');
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
 
@@ -1336,6 +1337,8 @@ export function Settings() {
               ruleGenSessionCount={ruleGenSessionCount}
               setRuleGenSessionCount={setRuleGenSessionCount}
               setNotification={setNotification}
+              applyBatchToPending={applyBatchToPending}
+              setApplyBatchToPending={setApplyBatchToPending}
             />
           )}
 
@@ -1645,32 +1648,11 @@ export function Settings() {
 // ─────────────────────────────────────────────────────────────────────────────
 interface RuleGeneratorTabProps {
   activeCompany: any;
-  ruleGenTx: any;
-  setRuleGenTx: (v: any) => void;
-  ruleGenSuggestion: any;
-  setRuleGenSuggestion: (v: any) => void;
-  ruleGenLoading: boolean;
-  setRuleGenLoading: (v: boolean) => void;
-  ruleGenError: string | null;
-  setRuleGenError: (v: string | null) => void;
-  ruleGenDuplicate: { existingRuleName: string; message: string } | null;
-  setRuleGenDuplicate: (v: any) => void;
   ruleGenSessionCount: number;
-  setRuleGenSessionCount: (v: number) => void;
-  ruleGenSkipped: number;
-  setRuleGenSkipped: (v: number) => void;
-  ruleGenForm: {
-    name: string;
-    conditionType: 'contains' | 'starts_with' | 'equals';
-    conditionValue: string;
-    transactionDirection: 'any' | 'debit' | 'credit';
-    glAccountId: string;
-    priority: number;
-    autoAdd: boolean;
-    isActive: boolean;
-  };
-  setRuleGenForm: (v: any) => void;
+  setRuleGenSessionCount: React.Dispatch<React.SetStateAction<number>>;
   setNotification: (v: { title: string; message: string; type: 'success' | 'error' } | null) => void;
+  applyBatchToPending: boolean;
+  setApplyBatchToPending: (v: boolean) => void;
 }
 
 function RuleGeneratorTab({
@@ -1678,6 +1660,8 @@ function RuleGeneratorTab({
   ruleGenSessionCount,
   setRuleGenSessionCount,
   setNotification,
+  applyBatchToPending,
+  setApplyBatchToPending,
 }: RuleGeneratorTabProps) {
   const queryClient = useQueryClient();
 
@@ -1718,7 +1702,7 @@ function RuleGeneratorTab({
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadGroups();
   }, [activeCompany?.id]);
 
@@ -1793,8 +1777,22 @@ Transacción de ejemplo: ${group.sampleDescription}
     if (!activeCompany?.id || !editingGroupId) return;
     
     try {
-      await createRule(activeCompany.id, data);
-      setNotification({ title: '✓ Regla Creada', message: 'Regla guardada exitosamente', type: 'success' });
+      const result = await createRule(activeCompany.id, data);
+      
+      let message = 'Regla guardada exitosamente';
+      let type: 'success' | 'warning' = 'success';
+      
+      if (data.applyToPending && result.id) {
+        const applyResult = await applyRuleToPending(result.id);
+        if (applyResult.success) {
+          message += `. Se aplicó a ${applyResult.matched} transacciones.`;
+        } else {
+          message += '. Pero falló la aplicación automática.';
+          type = 'warning';
+        }
+      }
+      
+      setNotification({ title: '✓ Regla Creada', message, type });
       setRuleGenSessionCount(prev => prev + 1);
       
       // Remover el grupo de la lista
@@ -1840,9 +1838,14 @@ Transacción de ejemplo: ${group.sampleDescription}
             isActive: true,
           };
           
-          await createRule(activeCompany.id, ruleData);
+          const createdRule = await createRule(activeCompany.id, ruleData);
           successCount++;
           successfulGroupIds.add(groupId);
+
+          // Aplicar a pendientes si está habilitado
+          if (applyBatchToPending && createdRule?.id) {
+            await applyRuleToPending(createdRule.id);
+          }
           
           // Buscar nombre de la cuenta para el log
           const glAcc = Array.isArray(glAccounts) ? glAccounts.find((a: any) => a.id === suggestion.glAccountId) : null;
@@ -1961,6 +1964,22 @@ Transacción de ejemplo: ${group.sampleDescription}
             >
               Descartar seleccionadas
             </button>
+
+            <label className="flex items-center gap-2 cursor-pointer group ml-2 px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors">
+              <div className="relative flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-white/20 bg-[#0a1628] transition-all checked:border-[#0071c5] checked:bg-[#0071c5]/20"
+                  checked={applyBatchToPending}
+                  onChange={e => setApplyBatchToPending(e.target.checked)}
+                />
+                <div className="pointer-events-none absolute text-[#0071c5] opacity-0 peer-checked:opacity-100">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 group-hover:text-gray-200 transition-colors uppercase">Aplicar a pendientes</span>
+            </label>
+
             <button
               onClick={handleBatchGenerate}
               disabled={isGeneratingBatch || selectedGroups.size === 0}

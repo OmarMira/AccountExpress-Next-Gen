@@ -31,7 +31,7 @@ const PORT = parseInt(process.env["PORT"] ?? "3000", 10);
 
 export const app = new Elysia()
   .use(cors({
-    origin: process.env["CORS_ORIGIN"] ?? "http://localhost:5173",
+    origin: ["http://localhost:5173", "https://localhost:8443"],
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE", "PUT"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -44,8 +44,8 @@ export const app = new Elysia()
     version: "1.0.0",
     time:    new Date().toISOString(),
   }))
-
-  .group("/api", (app) => app
+ 
+   .group("/api", (app) => app
     .onBeforeHandle(globalRateLimiter(100, 60 * 1000))
     .use(authMiddleware)
     .use(authRoutes)

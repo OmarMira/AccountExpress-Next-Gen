@@ -30,11 +30,7 @@ await runMigrations();
 // 2. Run seed (idempotent)
 await runSeed();
 
-// 3. Initialize Audit Chain Cache (CRITICAL: Step 5 of the report)
-await initAuditChainCache();
-logger.info("app", "Audit chain cache initialized");
-
-// 4. Start server
+// 3. Start server
 const { app } = await import("./server.ts");
 app.listen(PORT);
 

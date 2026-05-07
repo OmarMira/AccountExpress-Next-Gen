@@ -10,7 +10,7 @@ interface RoleSession {
 
 export const requirePermission = (moduleName: string, actionName: string) => (app: Elysia) => app
   .use(tenantMiddleware)
-  .onBeforeHandle(async ({ roleId, user }: { roleId: string; user?: string }) => {
+  .onBeforeHandle(async ({ roleId, user }: { roleId: string; user: string | null | undefined }) => {
     // Super Admin bypass: if the authenticated user is a super admin, skip all permission checks
     if (user) {
       const usr = await db.query.users.findFirst({ where: eq(users.id, user) });

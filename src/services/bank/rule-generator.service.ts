@@ -1,6 +1,9 @@
 import { db, sql } from "../../db/connection.ts";
 
-interface PendingGroup {
+import { ruleMappings } from "../../db/schema/index.ts";
+import { eq, or, and } from "drizzle-orm";
+
+export interface PendingGroup {
   groupId: string;
   sampleDescription: string;
   count: number;
@@ -184,5 +187,34 @@ function extractConcept(description: string): string | null {
   if (forMatch) return forMatch[1].trim();
   const descParts = description.split(/DES:|CCD|WEB|ID:/);
   if (descParts.length > 1) return descParts[1].trim();
+  return null;
+}
+
+// ── AI Prompt & Deterministic Fallback ────────────────────────
+export function buildRuleSuggestionPrompt(group: Partial<PendingGroup>): string {
+  return `
+Tipo: ${group.direction === 'debit' ? 'Pago (débito)' : 'Ingreso (crédito)'}
+Monto promedio: $${group.avgAmount ? group.avgAmount.toFixed(2) : (group.totalAmount && group.count ? (Math.abs(group.totalAmount) / group.count).toFixed(2) : '0.00')}
+Contraparte: ${group.counterparty || 'No detectada'}
+Concepto: ${group.concept || 'No detectado'}
+Transacción de ejemplo: ${group.sampleDescription || 'N/A'}
+`.trim();
+}
+
+export async function findDeterministicMapping(companyId: string, description: string): Promise<string | null> {
+  const upperDesc = description.toUpperCase();
+  
+  const mappings = await db.select().from(ruleMappings).where(
+    or(
+      eq(ruleMappings.isGlobal, true),
+      eq(ruleMappings.companyId, companyId)
+    )
+  );
+  
+  for (const mapping of mappings) {
+    if (upperDesc.includes(mapping.pattern.toUpperCase())) {
+      return mapping.glAccountCode;
+    }
+  }
   return null;
 }

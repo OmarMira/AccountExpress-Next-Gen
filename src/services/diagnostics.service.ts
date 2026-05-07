@@ -21,7 +21,7 @@ import { runSeed } from "../db/seed/seed.ts";
 import { BackupService } from "./backup/BackupService.ts";
 import { logger } from "../lib/logger.ts";
 import { env } from "../config/validate.ts";
-import postgres from "postgres";
+import postgres, { TransactionSql } from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 
 export interface DiagnosticItem {
@@ -65,8 +65,9 @@ async function checkDbConnection(): Promise<DiagnosticItem> {
   try {
     await db.execute(sql`SELECT 1`);
     return { id: "db", name: "Conexión a la base de datos", status: "success", canRepair: false };
-  } catch (err: any) {
-    return { id: "db", name: "Conexión a la base de datos", status: "error", message: err.message, canRepair: false };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { id: "db", name: "Conexión a la base de datos", status: "error", message, canRepair: false };
   }
 }
 
@@ -119,7 +120,7 @@ async function checkJournalIntegrity(): Promise<DiagnosticItem> {
           je.prevHash,
         ].join("|");
 
-        const computedHash = computeJournalHmac(hashInput);
+        const computedHash = await computeJournalHmac(hashInput);
         if (je.entryHash !== computedHash) {
           totalBrokenCount++;
           break;
@@ -133,8 +134,9 @@ async function checkJournalIntegrity(): Promise<DiagnosticItem> {
     } else {
       return { id: "journal", name: "Integridad de la cadena HMAC del libro diario", status: "error", message: `Se detectaron ${totalBrokenCount} empresas con cadenas de diario rotas o alteradas.`, canRepair: true };
     }
-  } catch (err: any) {
-    return { id: "journal", name: "Integridad de la cadena HMAC del libro diario", status: "error", message: err.message, canRepair: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { id: "journal", name: "Integridad de la cadena HMAC del libro diario", status: "error", message, canRepair: true };
   }
 }
 
@@ -154,8 +156,9 @@ async function checkAuditIntegrity(): Promise<DiagnosticItem> {
     }
 
     return { id: "audit", name: "Integridad de la cadena de auditoría", status: "success", canRepair: true };
-  } catch (err: any) {
-    return { id: "audit", name: "Integridad de la cadena de auditoría", status: "error", message: err.message, canRepair: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { id: "audit", name: "Integridad de la cadena de auditoría", status: "error", message, canRepair: true };
   }
 }
 
@@ -169,8 +172,9 @@ async function checkRolesAndPermissions(): Promise<DiagnosticItem> {
     }
 
     return { id: "roles", name: "Roles y permisos sembrados correctamente", status: "success", canRepair: true };
-  } catch (err: any) {
-    return { id: "roles", name: "Roles y permisos sembrados correctamente", status: "error", message: err.message, canRepair: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { id: "roles", name: "Roles y permisos sembrados correctamente", status: "error", message, canRepair: true };
   }
 }
 
@@ -181,8 +185,9 @@ async function checkSystemConfig(): Promise<DiagnosticItem> {
       return { id: "config", name: "Configuración del sistema (system_config)", status: "error", message: "La tabla system_config está vacía.", canRepair: true };
     }
     return { id: "config", name: "Configuración del sistema (system_config)", status: "success", canRepair: true };
-  } catch (err: any) {
-    return { id: "config", name: "Configuración del sistema (system_config)", status: "error", message: err.message, canRepair: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { id: "config", name: "Configuración del sistema (system_config)", status: "error", message, canRepair: true };
   }
 }
 
@@ -201,8 +206,9 @@ async function checkSessions(): Promise<DiagnosticItem> {
       return { id: "sessions", name: "Sesiones huérfanas o expiradas", status: "error", message: `Hay ${orphanedCount.c} sesiones expiradas ocupando espacio en la base de datos.`, canRepair: true };
     }
     return { id: "sessions", name: "Sesiones huérfanas o expiradas", status: "success", canRepair: true };
-  } catch (err: any) {
-    return { id: "sessions", name: "Sesiones huérfanas o expiradas", status: "error", message: err.message, canRepair: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { id: "sessions", name: "Sesiones huérfanas o expiradas", status: "error", message, canRepair: true };
   }
 }
 
@@ -221,8 +227,9 @@ async function checkBackupStatus(): Promise<DiagnosticItem> {
     }
 
     return { id: "backup", name: "Estado de los respaldos automáticos", status: "success", canRepair: true };
-  } catch (err: any) {
-    return { id: "backup", name: "Estado de los respaldos automáticos", status: "error", message: err.message, canRepair: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { id: "backup", name: "Estado de los respaldos automáticos", status: "error", message, canRepair: true };
   }
 }
 
@@ -262,8 +269,8 @@ export async function repairDiagnostic(id: string): Promise<{ success: boolean; 
             ));
 
           return { success: true, message: "Las sesiones expiradas han sido invalidadas y archivadas exitosamente. El estado de salud del sistema se ha normalizado (el borrado físico se omite para proteger la integridad forense)." };
-        } catch (err: any) {
-             const detail = err.message || JSON.stringify(err);
+        } catch (err) {
+             const detail = err instanceof Error ? err.message : JSON.stringify(err);
              return { success: false, message: `Fallo en base de datos: ${detail}` };
         }
       }
@@ -274,9 +281,10 @@ export async function repairDiagnostic(id: string): Promise<{ success: boolean; 
       default:
         return { success: false, message: "No existe una rutina de reparación para este ítem." };
     }
-  } catch (err: any) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logger.error("Diagnostics", `Repair failed for ${id}`, err);
-    return { success: false, message: `Error en reparación: ${err.message}` };
+    return { success: false, message: `Error en reparación: ${message}` };
   }
 }
 
@@ -318,7 +326,7 @@ async function repairJournalHMAC() {
         expectedPrevHash,
       ].join("|");
 
-      const entryHash = computeJournalHmac(hashInput);
+      const entryHash = await computeJournalHmac(hashInput);
       
       await db.update(journalEntries)
         .set({ entryHash, prevHash: expectedPrevHash })
@@ -335,11 +343,11 @@ async function repairJournalHMAC() {
 async function repairAuditChain(): Promise<void> {
   const rawSql = postgres(env.DATABASE_URL);
 
-  async function rebuildScope(tx: postgres.TransactionSql, companyId: string | null): Promise<void> {
-    const rows = await tx<Array<{
+  async function rebuildScope(tx: any, companyId: string | null): Promise<void> {
+    const rows = await tx<{
       id: string; user_id: string | null; action: string;
       after_state: string | null; created_at: Date; timestamp_token: string | null;
-    }>>`
+    }[]>`
       SELECT id, user_id, action, after_state, created_at, timestamp_token
       FROM audit_logs
       WHERE ${companyId ? tx`company_id = ${companyId}` : tx`company_id IS NULL`}
@@ -353,7 +361,7 @@ async function repairAuditChain(): Promise<void> {
       const row = rows[i];
       const timeToken = row.timestamp_token || new Date(row.created_at).getTime().toString();
       const hashInput = [row.id, row.user_id ?? "system", row.action, row.after_state ?? "", expectedPrevHash, timeToken].join("|");
-      const entryHash = computeAuditHmac(hashInput);
+      const entryHash = await computeAuditHmac(hashInput);
 
       await tx`
         UPDATE audit_logs
@@ -365,12 +373,12 @@ async function repairAuditChain(): Promise<void> {
   }
 
   try {
-    await rawSql.begin(async (tx) => {
+    await rawSql.begin(async (tx: any) => {
       await tx`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_immutable`;
       await tx`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_nodelete`;
 
       await rebuildScope(tx, null);
-      const allCompanies = await tx<Array<{ id: string }>>`SELECT id FROM companies`;
+      const allCompanies = await tx<{ id: string }[]>`SELECT id FROM companies`;
       for (const company of allCompanies) {
         await rebuildScope(tx, company.id);
       }

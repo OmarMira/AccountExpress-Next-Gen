@@ -1,5 +1,6 @@
 // src/services/ollama.service.ts
 import OpenAI from 'openai';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Cliente de OpenRouter (compatible con OpenAI SDK)
 const openrouter = new OpenAI({
@@ -13,11 +14,11 @@ const openrouter = new OpenAI({
 
 // ── Funciones principales para el chat y sugerencia de reglas ──
 
-export async function callAIChat(messages: Array<{role: string, content: string}>): Promise<string> {
+export async function callAIChat(messages: ChatCompletionMessageParam[]): Promise<string> {
   try {
     const completion = await openrouter.chat.completions.create({
       model: "openrouter/free",
-      messages: messages as any,
+      messages: messages,
       temperature: 0.7,
       max_tokens: 1500,
     });
@@ -30,12 +31,13 @@ export async function callAIChat(messages: Array<{role: string, content: string}
 
 export async function suggestRuleWithAI(systemPrompt: string, userMessage: string): Promise<string> {
   try {
+    const messages: ChatCompletionMessageParam[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage }
+    ];
     const completion = await openrouter.chat.completions.create({
       model: "openrouter/free",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage }
-      ] as any,
+      messages: messages,
       temperature: 0.3,
       max_tokens: 800,
     });

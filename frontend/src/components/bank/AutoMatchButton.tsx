@@ -19,7 +19,7 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [showPeriodModal, setShowPeriodModal] = useState(false);
-  const [results, setResults] = useState<{ matched: number; crossed: number; pending: number; errors: any[] } | null>(null);
+  const [results, setResults] = useState<{ matched: number; crossed: number; pending: number; errors: { transactionId: string; reason: string }[] } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -110,7 +110,7 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
       queryClient.invalidateQueries({ queryKey: ['open-periods'] });
       queryClient.invalidateQueries({ queryKey: ['fiscal-periods'] });
     },
-    onError: (err: any) => setToast({ message: `Error: ${err.message}`, type: 'error' })
+    onError: (err) => setToast({ message: `Error: ${err.message}`, type: 'error' })
   });
 
   const handleAutoMatch = async () => {
@@ -142,8 +142,9 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
       
       queryClient.invalidateQueries({ queryKey: ['bank-transactions-history'] });
       queryClient.invalidateQueries({ queryKey: ['bank-transactions'] });
-    } catch (err: any) {
-      setToast({ message: err.message || 'Error al ejecutar el proceso de conciliación.', type: 'error' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al ejecutar el proceso de conciliación.';
+      setToast({ message, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -388,8 +389,6 @@ export const AutoMatchButton: React.FC<AutoMatchButtonProps> = ({ companyId, ban
               </div>
             </div>
           )}
-
-          {modalContent}
 
           {toast && (
             <div className="fixed top-10 left-1/2 -translate-x-1/2 z-[1000000] animate-in fade-in slide-in-from-top-10 duration-500 w-full max-w-xl px-4">

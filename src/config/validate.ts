@@ -32,12 +32,12 @@ export const envSchema = z.object({
     .refine(v => v !== "change-me-for-production", {
       message: "AUTO_BACKUP_SECRET must be changed from the default value before starting the server",
     }),
-  AUDIT_HMAC_SECRET:    z.string().min(32, "AUDIT_HMAC_SECRET must be at least 32 characters")
-    .refine(v => v !== "change-me-for-production", {
+  AUDIT_HMAC_SECRET:    z.string().min(32, "AUDIT_HMAC_SECRET must be at least 32 characters").optional()
+    .refine(v => !v || v !== "change-me-for-production", {
       message: "AUDIT_HMAC_SECRET must be changed from the default value before starting the server",
     }),
-  JOURNAL_HMAC_SECRET:  z.string().min(32, "JOURNAL_HMAC_SECRET must be at least 32 characters")
-    .refine(v => v !== "change-me-for-production", {
+  JOURNAL_HMAC_SECRET:  z.string().min(32, "JOURNAL_HMAC_SECRET must be at least 32 characters").optional()
+    .refine(v => !v || v !== "change-me-for-production", {
       message: "JOURNAL_HMAC_SECRET must be changed from the default value before starting the server",
     }),
   APP_NAME:             z.string().min(1, "APP_NAME is required for UI display"),
@@ -52,9 +52,33 @@ export const envSchema = z.object({
 
   // AI Configuration (Ollama)
   OLLAMA_URL:           z.string().url().optional(),
+
+  // KMS Configuration (Key Management Service)
+  KMS_PROVIDER:         z.enum(["aws", "vault", "none"]).default("none"),
+  KMS_KEY_ID:           z.string().optional(),
+  KMS_REGION:           z.string().optional(),
+
   // Herramientas de Base de Datos (PostgreSQL 17)
   PG_DUMP_PATH:         z.string().optional(),
   PSQL_PATH:            z.string().optional(),
+}).superRefine((data, ctx) => {
+  // If KMS is not configured, local HMAC secrets ARE REQUIRED
+  if (data.KMS_PROVIDER === "none") {
+    if (!data.JOURNAL_HMAC_SECRET || data.JOURNAL_HMAC_SECRET.length < 32) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "JOURNAL_HMAC_SECRET is required and must be at least 32 chars when KMS is not used",
+        path: ["JOURNAL_HMAC_SECRET"],
+      });
+    }
+    if (!data.AUDIT_HMAC_SECRET || data.AUDIT_HMAC_SECRET.length < 32) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "AUDIT_HMAC_SECRET is required and must be at least 32 chars when KMS is not used",
+        path: ["AUDIT_HMAC_SECRET"],
+      });
+    }
+  }
 });
 
 export function validateEnv(): void {

@@ -132,10 +132,10 @@ export const bankAccountsRoutes = new Elysia({ prefix: '/bank-accounts' })
       
       if (body.accountName !== undefined) updateData.accountName = body.accountName;
       if (body.bankName !== undefined) updateData.bankName = body.bankName;
-      if (body.accountNumber !== undefined) updateData.accountNumber = body.accountNumber;
+      if (body.accountNumber !== undefined) updateData.accountNumber = body.accountNumber || null;
       if (body.accountType !== undefined) updateData.accountType = body.accountType;
       if (body.balance !== undefined) updateData.balance = Math.round(body.balance * 100);
-      if (body.glAccountId !== undefined) updateData.glAccountId = body.glAccountId;
+      if (body.glAccountId !== undefined) updateData.glAccountId = body.glAccountId === "" ? null : body.glAccountId;
       if (body.isActive !== undefined) updateData.isActive = body.isActive ? true : false;
 
       const updated = await db.update(bankAccounts)

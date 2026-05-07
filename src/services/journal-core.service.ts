@@ -42,7 +42,7 @@ export async function createDraft(
   const now         = new Date();
   const entryNumber = await nextEntryNumber(entry.companyId);
   const prevHash    = (await getJournalChainTip(entry.companyId)).hash;
-  const entryHash   = computeEntryHash(id, entry, lines, prevHash);
+  const entryHash   = await computeEntryHash(id, entry, lines, prevHash);
 
   const insert = async (t: Tx) => {
     await t.insert(journalEntries).values({

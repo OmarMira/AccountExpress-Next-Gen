@@ -91,7 +91,7 @@ export function BankRules() {
     if (!Array.isArray(safeRules)) return [];
     
     // 1. Filter
-    let result = safeRules.filter((r: any) => {
+    const result = safeRules.filter((r: any) => {
       const name = r?.name || '';
       const conditionValue = r?.conditionValue || '';
       const account = Array.isArray(glAccounts) ? glAccounts.find((a: any) => a.id === r.glAccountId) : null;

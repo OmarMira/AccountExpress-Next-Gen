@@ -30,16 +30,35 @@ import { fetchApi } from '../../lib/api';
 import { AutoMatchButton } from './AutoMatchButton';
 
 // Local interface for backend PDF inspection results
+interface TransactionPreview {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  selectedAccountId: string | null;
+}
+
+interface GLAccount {
+  id: string;
+  code: string;
+  name: string;
+  accountType: string;
+  account_type?: string;
+  description?: string;
+}
+
 interface ParsedBankStatement {
   bankName: string;
   accountNumber: string;
   accountHolder: string;
   openingBalance: number;
+  beginningBalance?: number; // for UI consistency
   periodStart: string;
   periodEnd: string;
   transactions: any[];
   rejectedRows: number;
   rejectedReasons: string[];
+  _originalFile?: File; // Internal reference
 }
 
 // ── Sub-components ────────────────────────────────────────────
@@ -54,7 +73,7 @@ const InfoRow = ({ label, value }: { label: string; value: string }) => (
 const StepIndicator = ({
   active, completed, step, label, icon: Icon,
 }: {
-  active: boolean; completed: boolean; step: string; label: string; icon: any;
+  active: boolean; completed: boolean; step: string; label: string; icon: React.ElementType;
 }) => (
   <div className={`flex items-center gap-3 transition-all duration-300 ${active ? 'scale-105' : completed ? 'opacity-80' : 'opacity-50'}`}>
     <div className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all duration-300 shadow-sm ${
@@ -74,7 +93,7 @@ const StepIndicator = ({
 const StatHighlight = ({
   title, value, icon: Icon, color,
 }: {
-  title: string; value: string | number; icon: any; color: string;
+  title: string; value: string | number; icon: React.ElementType; color: 'blue' | 'rose' | 'emerald';
 }) => {
   const themes: Record<string, string> = {
     blue: 'text-blue-500 bg-blue-500/10 border-blue-500/20 shadow-blue-950/20',
@@ -151,7 +170,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
   const [statementGroups, setStatementGroups] = useState<StatementGroup[]>([]);
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
 
-  const [importedTransactions, setImportedTransactions] = useState<any[]>([]);
+  const [importedTransactions, setImportedTransactions] = useState<TransactionPreview[]>([]);
   const [importSummary, setImportSummary] = useState<{
     totalImported: number;
     bankName: string;
@@ -253,8 +272,9 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
           }
 
           allStatements.push(statement);
-        } catch (err: any) {
-          setError(`❌ Error procesando ${fileToProcess.name}: ${err.message}`);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Error desconocido';
+          setError(`❌ Error procesando ${fileToProcess.name}: ${message}`);
           setLoading(false);
           return;
         }
@@ -317,8 +337,9 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
               );
             }
           }
-        } catch (err: any) {
-          setError(`❌ Error procesando ${fileToProcess.name}: ${err.message}`);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Error desconocido';
+          setError(`❌ Error procesando ${fileToProcess.name}: ${message}`);
           setLoading(false);
           return;
         }
@@ -343,7 +364,9 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
           });
         }
         groups.get(key)!.statements.push(stmt);
-        groups.get(key)!.files.push((stmt as any)._originalFile);
+        if (stmt._originalFile) {
+          groups.get(key)!.files.push(stmt._originalFile);
+        }
         groups.get(key)!.totalTransactions += stmt.transactions.length;
       }
 
@@ -397,8 +420,8 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
         { credentials: 'include' }
       );
       const existingAccounts = await checkRes.json();
-      const existing = (Array.isArray(existingAccounts) ? existingAccounts : existingAccounts.data ?? [])
-        .find((a: any) => a.accountNumber === group.accountNumber || a.account_number === group.accountNumber);
+      const accountsList: any[] = Array.isArray(existingAccounts) ? existingAccounts : existingAccounts.data ?? [];
+      const existing = accountsList.find((a) => a.accountNumber === group.accountNumber || a.account_number === group.accountNumber);
 
       const createdBankAccountId: string = existing
         ? (existing.id)
@@ -426,7 +449,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
 
       // 2. Import all files in the group sequentially to the backend
       let totalImported = 0;
-      let totalDuplicates = 0;
+      const totalDuplicates = 0;
       const allRejectedReasons: string[] = [];
 
       for (const file of group.files) {
@@ -462,17 +485,14 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
       }
 
       // 3. Fetch the real DB rows for preview
-      const txRes = await fetch(
-        `/api/bank/transactions?companyId=${activeCompany?.id}`,
-        { credentials: 'include' }
-      );
       const txData = await txRes.json();
-      const realTxs = (Array.isArray(txData) ? txData : txData.data ?? [])
-        .filter((tx: any) =>
+      const rawTxs: any[] = Array.isArray(txData) ? txData : txData.data ?? [];
+      const realTxs: TransactionPreview[] = rawTxs
+        .filter((tx) =>
           tx.bank_account === createdBankAccountId ||
           tx.bankAccount === createdBankAccountId
         )
-        .map((tx: any) => ({
+        .map((tx) => ({
           id: tx.id,
           date: tx.transaction_date ?? tx.transactionDate,
           description: tx.description,
@@ -530,8 +550,8 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
           setStep('preview');
         }
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al confirmar el grupo');
     } finally {
       setLoading(false);
     }
@@ -791,7 +811,7 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
                   onChange={e => setSelectedGlAccountId(e.target.value)}
                 >
                   <option value="">— Selecciona una cuenta —</option>
-                  {(glAccounts as any[]).filter((a: any) => a.accountType === 'asset' || a.account_type === 'asset').map((a: any) => (
+                  {(glAccounts as GLAccount[]).filter((a) => a.accountType === 'asset' || a.account_type === 'asset').map((a) => (
                     <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
                   ))}
                 </select>
@@ -897,9 +917,9 @@ export const BankImportWizard: React.FC<BankImportWizardProps> = ({ onClose, onC
                               className="bg-slate-800 border border-slate-700 text-white text-xs rounded-lg px-3 py-2 w-full max-w-[200px] focus:outline-none focus:border-indigo-500 transition-colors"
                             >
                               <option value="">Sin asignar</option>
-                              {glAccounts
-                                .filter((a: any) => a.description !== 'Header')
-                                .map((a: any) => (
+                              {(glAccounts as GLAccount[])
+                                .filter((a) => a.description !== 'Header')
+                                .map((a) => (
                                   <option key={a.id} value={a.id}>{a.code} · {a.name}</option>
                                 ))}
                             </select>

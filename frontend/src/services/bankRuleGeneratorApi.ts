@@ -47,3 +47,10 @@ export async function createRule(companyId: string, ruleData: any): Promise<any>
   });
   return res;
 }
+
+export async function applyRuleToPending(ruleId: string): Promise<any> {
+  const res = await fetchApi(`/bank-rules/${ruleId}/apply-to-pending`, {
+    method: "POST"
+  });
+  return res;
+}

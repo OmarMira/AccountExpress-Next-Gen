@@ -19,6 +19,21 @@ import { createAuditEntry } from "../audit.service.ts";
 import { ValidationError } from "../../lib/errors.ts";
 import { v4 as uuidv4 } from "uuid";
 
+interface JournalLineDraft {
+  accountId: string;
+  debitAmount: number;
+  creditAmount: number;
+  lineNumber: number;
+  description: string;
+}
+
+interface ReconciliationSplit {
+  glAccountId: string;
+  amount: number | string;
+}
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 // ── Perform Bank Reconciliation ─────────────────────────────
 export async function matchTransaction(
   companyId: string,
@@ -31,9 +46,9 @@ export async function matchTransaction(
   ipAddress: string,
   appliedRuleId?: string,
   source: 'auto_matched' | 'manual' | 'new_entry' = 'new_entry',
-  splits?: { glAccountId: string; amount: number }[]
+  splits?: ReconciliationSplit[]
 ): Promise<string> {
-  return await db.transaction(async (tx: any) => {
+  return await db.transaction(async (tx) => {
     // 1. Validate Transaction
     const [transaction] = await tx
       .select()
@@ -53,7 +68,7 @@ export async function matchTransaction(
     const txAmountNum = Number(transaction.amount);
     const absAmount = Math.abs(txAmountNum);
     
-    const lines: any[] = [];
+    const lines: JournalLineDraft[] = [];
     
     // 2.1 Bank Side Line
     lines.push({
@@ -65,7 +80,7 @@ export async function matchTransaction(
     });
 
     // 2.2 Counterpart Side (Single Account or Splits)
-    const effectiveSplits = splits && splits.length > 0 ? splits : (transaction.reconciliationSplits as any[]);
+    const effectiveSplits = (splits && splits.length > 0 ? splits : (transaction.reconciliationSplits as ReconciliationSplit[] | null));
     const effectiveAccountId = accountId || transaction.glAccountId;
 
     if (effectiveSplits && effectiveSplits.length > 0) {
@@ -162,7 +177,7 @@ export async function matchAgainstJournal(input: {
   sessionId: string;
   ipAddress: string;
 }): Promise<void> {
-  return await db.transaction(async (tx: any) => {
+  return await db.transaction(async (tx) => {
     // 1. Fetch Bank Transaction
     const [transaction] = await tx
       .select()
@@ -195,11 +210,11 @@ export async function matchAgainstJournal(input: {
       throw new ValidationError("Una o más líneas de diario no existen.");
     }
 
-    if (lines.some((l: any) => l.companyId !== input.companyId)) {
+    if (lines.some((l) => l.companyId !== input.companyId)) {
       throw new ValidationError("Una o más líneas no pertenecen a la compañía.");
     }
 
-    if (lines.some((l: any) => l.isReconciled)) {
+    if (lines.some((l) => l.isReconciled)) {
       throw new ValidationError("Una o más líneas ya han sido conciliadas previamente.");
     }
 
@@ -263,7 +278,7 @@ export async function unreconcileTransaction(input: {
   sessionId: string;
   ipAddress: string;
 }): Promise<void> {
-  return await db.transaction(async (tx: any) => {
+  return await db.transaction(async (tx) => {
     // 1. Fetch Bank Transaction
     const [transaction] = await tx
       .select()
@@ -363,7 +378,7 @@ export async function ignoreTransaction(
   userId: string,
   ipAddress: string
 ): Promise<void> {
-  await db.transaction(async (tx: any) => {
+  await db.transaction(async (tx: Transaction) => {
     const [transaction] = await tx
       .select()
       .from(bankTransactions)
@@ -395,7 +410,7 @@ export async function ignoreTransaction(
 export async function recalculateBankAccountBalance(
   companyId: string,
   bankAccountId: string,
-  tx?: any
+  tx?: Transaction
 ): Promise<number> {
   const runner = tx || db;
 

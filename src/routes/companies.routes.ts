@@ -22,7 +22,12 @@ import { authMiddleware, requireAuth } from "../middleware/auth.middleware.ts";
 
 export const companiesRoutes = new Elysia({ prefix: "/companies" })
   .use(authMiddleware)
-  .onBeforeHandle(requireAuth)
+  .onBeforeHandle(({ user, set }) => {
+    if (!user) {
+      set.status = 401;
+      return { error: "Unauthorized" };
+    }
+  })
 
   // ── GET /companies ──────────────────────────────────────────
   .get("/", async ({ user }) => {

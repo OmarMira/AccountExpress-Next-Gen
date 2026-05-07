@@ -5,15 +5,16 @@
 // ============================================================
 
 import { createHmac }      from "crypto";
-import { env }             from "../config/validate.ts";
 import { db, sql }         from "../db/connection.ts";
 import { journalEntries }  from "../db/schema/index.ts";
 import { eq, desc }        from "drizzle-orm";
 import type { JournalEntryInput, JournalLineInput } from "../lib/journal-types.ts";
+import { getJournalHmacSecret } from "./secret-manager.service.ts";
 
 // ── HMAC-SHA256 helper ───────────────────────────────────────
-export function hmacSha256(data: string): string {
-  return createHmac("sha256", env.JOURNAL_HMAC_SECRET).update(data, "utf8").digest("hex");
+export async function hmacSha256(data: string): Promise<string> {
+  const secret = await getJournalHmacSecret();
+  return createHmac("sha256", secret).update(data, "utf8").digest("hex");
 }
 
 // ── Generate next sequential entry number ───────────────────
@@ -43,12 +44,12 @@ export async function getJournalChainTip(companyId: string): Promise<{ hash: str
 }
 
 // ── Compute SHA-256 hash for a journal entry ─────────────────
-export function computeEntryHash(
+export async function computeEntryHash(
   entryId:  string,
   entry:    JournalEntryInput,
   lines:    JournalLineInput[],
   prevHash: string
-): string {
+): Promise<string> {
   const linesFingerprint = [...lines]
     .sort((a, b) => a.lineNumber - b.lineNumber)
     .map((l) => `${l.accountId}|${l.debitAmount}|${l.creditAmount}`)
@@ -63,5 +64,5 @@ export function computeEntryHash(
     prevHash,
   ].join("|");
 
-  return hmacSha256(data);
+  return await hmacSha256(data);
 }

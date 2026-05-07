@@ -101,7 +101,7 @@ console.log("🔧 AccountExpress — Audit Chain Full Repair");
 console.log("=".repeat(50));
 
 // Run everything inside a single transaction with triggers disabled
-await sql.begin(async (tx) => {
+await sql.begin(async (tx: any) => {
   // Disable the immutability triggers for this session
   await tx`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_immutable`;
   await tx`ALTER TABLE audit_logs DISABLE TRIGGER trg_audit_nodelete`;
@@ -120,7 +120,7 @@ await sql.begin(async (tx) => {
   await tx`ALTER TABLE audit_logs ENABLE TRIGGER trg_audit_nodelete`;
 });
 
-async function repairChainInTx(tx: postgres.TransactionSql, companyId: string | null): Promise<void> {
+async function repairChainInTx(tx: any, companyId: string | null): Promise<void> {
   const label = companyId ?? "__system__";
   console.log(`\n🔗 Repairing chain for: ${label}`);
 

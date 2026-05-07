@@ -19,6 +19,7 @@ import { systemConfig, roles, permissions, rolePermissions, users } from "../sch
 import { ROLES_SEED } from "./roles.seed.ts";
 import { PERMISSIONS_SEED } from "./permissions.seed.ts";
 import { ROLE_PERMISSIONS_SEED } from "./role-permissions.seed.ts";
+import { seedRuleMappings } from "./rule-mappings.seed.ts";
 import { count, eq } from "drizzle-orm";
 
 const NOW = new Date();
@@ -140,6 +141,7 @@ async function runSeed(): Promise<void> {
   await seedPermissions();
   await seedRolePermissions();
   await seedSuperAdmin();
+  await seedRuleMappings();
 
   console.log("\n[SEED] ✅ Seed complete. System is ready.\n");
 }

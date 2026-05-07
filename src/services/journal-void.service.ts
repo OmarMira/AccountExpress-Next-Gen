@@ -71,7 +71,7 @@ export async function voidEntry(
       createdBy:   voidedBy,
     };
 
-    const revHash = computeEntryHash(revId, revInputForHash, formattedLinesForHash, prevHash);
+    const revHash = await computeEntryHash(revId, revInputForHash, formattedLinesForHash, prevHash);
 
     await tx.update(journalEntries)
       .set({ status: "voided", updatedAt: now })

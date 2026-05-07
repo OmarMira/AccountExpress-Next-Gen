@@ -109,7 +109,7 @@ export const ImportHistory: React.FC = () => {
   };
 
   const txs = useMemo(() => {
-    let result = [...rawTxs];
+    const result = [...rawTxs];
 
     if (sortConfig) {
       result.sort((a: any, b: any) => {

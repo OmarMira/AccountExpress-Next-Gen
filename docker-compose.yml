@@ -1,9 +1,23 @@
 services:
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # HTTP redirige a HTTPS
+      - "8443:8443"   # HTTPS
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
   api:
     build: .
     container_name: bookkeeping-api
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     volumes:
       - ./data:/app/data
     env_file:
@@ -18,5 +32,9 @@ services:
     depends_on:
       - api
     environment:
-      - VITE_API_URL=http://api:3000
+      - VITE_API_URL=https://localhost:8443/api
     restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -95,7 +95,7 @@ async function runIntegrityCheck() {
           je.prevHash,
         ].join("|");
 
-        const computedHash = computeJournalHmac(hashInput);
+        const computedHash = await computeJournalHmac(hashInput);
 
         if (je.entryHash !== computedHash) {
           console.error(`    ❌ JE Tampered at ${je.entryNumber}: Hash mismatch! Calculated: ${computedHash}, Stored: ${je.entryHash}`);

@@ -153,7 +153,7 @@ export const BankImport: React.FC = () => {
   );
 };
 
-const TabButton = ({ active, onClick, label, icon: Icon }: { active: boolean, onClick: () => void, label: string, icon: any }) => {
+const TabButton = ({ active, onClick, label, icon: Icon }: { active: boolean, onClick: () => void, label: string, icon: React.ElementType }) => {
   return (
     <button
       onClick={onClick}
@@ -165,8 +165,8 @@ const TabButton = ({ active, onClick, label, icon: Icon }: { active: boolean, on
   );
 };
 
-const GuidelineCard = ({ step, title, desc, icon: Icon, color }: { step: string, title: string, desc: string, icon: any, color: string }) => {
-  const themes: any = {
+const GuidelineCard = ({ step, title, desc, icon: Icon, color }: { step: string, title: string, desc: string, icon: React.ElementType, color: 'blue' | 'emerald' | 'indigo' }) => {
+  const themes: Record<string, string> = {
     blue: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
     emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
     indigo: 'text-purple-400 bg-purple-500/10 border-purple-500/20'

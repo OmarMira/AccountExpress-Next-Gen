@@ -28,3 +28,6 @@ jobs:
 
       - name: Lint backend
         run: bun run lint
+
+      - name: Run tests
+        run: bun test

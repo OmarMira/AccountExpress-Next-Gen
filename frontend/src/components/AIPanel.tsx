@@ -24,6 +24,7 @@ interface RuleSuggestion {
   autoAdd: boolean;
   priority: number;
   explanation: string;
+  applyToPending?: boolean;
 }
 
 export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
@@ -62,6 +63,12 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
         method: 'POST',
         body: JSON.stringify({ companyId, message: text }),
       });
+      
+      if (data.source === "rule_suggestion" && data.suggestedRule) {
+        setRuleSuggestion({ ...data.suggestedRule, applyToPending: true });
+        setRuleMode(true); // Switch to rule mode to show the card
+      }
+      
       setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (err: any) {
       const isBlocked = err?.message === 'Consulta no permitida.' || err?.message === 'Mensaje inválido.' || err?.message?.startsWith('El mensaje es demasiado largo');
@@ -99,7 +106,7 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
           content: data.message,
         }]);
       } else if (data.suggested) {
-        setRuleSuggestion(data.suggested);
+        setRuleSuggestion({ ...data.suggested, applyToPending: true });
         setMessages((prev) => [...prev, {
           role: 'assistant',
           content: `Sugerencia de regla lista. Revísala abajo antes de confirmar.`,
@@ -132,6 +139,11 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
           isActive: true,
         }),
       });
+      
+      if (ruleSuggestion.applyToPending && res.id) {
+        await fetchApi(`/bank-rules/${res.id}/apply-to-pending`, { method: 'POST' });
+      }
+
       setRuleCreated(true);
       setRuleSuggestion(null);
       setMessages((prev) => [...prev, { role: 'assistant', content: `✓ Regla "${ruleSuggestion.name}" creada exitosamente.` }]);
@@ -261,7 +273,23 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
                 <span>Cuenta GL:</span><span className="text-slate-200">{ruleSuggestion.glAccountCode} — {ruleSuggestion.glAccountName}</span>
                 <span>Prioridad:</span><span className="text-slate-200">{ruleSuggestion.priority}</span>
               </div>
-              <p className="text-slate-400 italic border-t border-white/10 pt-1.5">{ruleSuggestion.explanation}</p>
+              <p className="text-slate-400 italic border-t border-white/10 pt-1.5 pb-1.5">{ruleSuggestion.explanation}</p>
+              
+              <label className="flex items-center gap-2 cursor-pointer group py-1">
+                <div className="relative flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    className="peer h-3.5 w-3.5 cursor-pointer appearance-none rounded border border-white/20 bg-[#0a1628] transition-all checked:border-[#0071c5] checked:bg-[#0071c5]/20"
+                    checked={ruleSuggestion.applyToPending}
+                    onChange={e => setRuleSuggestion({ ...ruleSuggestion, applyToPending: e.target.checked })}
+                  />
+                  <div className="pointer-events-none absolute text-[#0071c5] opacity-0 peer-checked:opacity-100">
+                    <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold text-gray-500 group-hover:text-gray-300 transition-colors uppercase">Aplicar a pendientes</span>
+              </label>
+
               <button
                 onClick={createRule}
                 disabled={ruleCreating}
@@ -273,6 +301,19 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
             </div>
           )}
 
+          {/* Rule creation instructions */}
+          {ruleMode && !ruleSuggestion && !ruleCreated && (
+            <div className="mb-2 p-2.5 bg-[#0f2240]/50 border border-white/10 rounded-lg text-xs text-slate-300 shadow-inner">
+              <p className="font-semibold text-indigo-400 mb-1 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3" />
+                📝 Para crear una regla bancaria:
+              </p>
+              <p>Indica la <strong>descripción o patrón</strong> de la transacción, el <strong>tipo de condición</strong> (contiene, empieza con, igual a), la <strong>cuenta contable</strong> de destino y la <strong>prioridad</strong> (opcional).</p>
+              <p className="mt-1 italic text-slate-400">Ejemplo de formato: <span className="text-white">"Para transacciones que contengan 'UBER', usar cuenta 'Transportation Expenses' con prioridad 10"</span></p>
+              <p className="text-[10px] text-slate-500 mt-1.5 border-t border-white/5 pt-1.5">La IA analizará tu texto y te sugerirá la regla automáticamente.</p>
+            </div>
+          )}
+
           {/* Input area */}
           <div className="flex items-end gap-2">
             <textarea
@@ -280,7 +321,7 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={ruleMode ? 'Describe la transacción. Ej: "Los pagos de Lyft son gastos de transporte"' : 'Escribe tu pregunta... (Enter para enviar)'}
+              placeholder={ruleMode ? 'Ej: "Contiene \'AMAZON\', cuenta \'Office Supplies\', prioridad 5"' : 'Escribe tu pregunta... (Enter para enviar)'}
               rows={2}
               disabled={sending}
               className="flex-1 resize-none bg-[#0f2240] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-[#0071c5]/50 focus:border-[#0071c5]/50 disabled:opacity-50 transition-colors"
@@ -294,7 +335,7 @@ export function AIPanel({ isOpen, onClose, companyId }: AIPanelProps) {
             </button>
           </div>
           <p className="text-[10px] text-gray-600 mt-1.5 text-center">
-            {ruleMode ? 'Describe la transacción en lenguaje natural' : 'Shift+Enter para nueva línea'}
+            {ruleMode ? 'La IA analizará tu texto para sugerir una regla' : 'Shift+Enter para nueva línea'}
           </p>
         </div>
       </div>

@@ -1,29 +1,30 @@
 import { Elysia } from "elysia";
 import { db } from "../db/connection.ts";
-import { sessions } from "../db/schema/system.schema.ts";
+import { sessions } from "../db/schema/index.ts";
 import { eq, and } from "drizzle-orm";
 
-export const authMiddleware = new Elysia({ name: "auth-data" })
-  .derive({ as: "global" }, async ({ cookie }) => {
-    const sessionId = cookie.session?.value ? String(cookie.session.value) : "";
-    if (!sessionId) return { user: null as string | null, companyId: null as string | null, sessionId: "" };
-
-    const dbSession = await db.query.sessions.findFirst({
-      where: and(eq(sessions.id, sessionId), eq(sessions.isValid, true))
-    });
-
-    if (!dbSession) return { user: null as string | null, companyId: null as string | null, sessionId: "" };
-
-    if (new Date(dbSession.expiresAt) < new Date()) {
-      await db.update(sessions).set({ isValid: false }).where(eq(sessions.id, sessionId));
-      return { user: null as string | null, companyId: null as string | null, sessionId: "" };
+export const authMiddleware = new Elysia({ name: "auth" })
+  .derive({ as: 'scoped' }, async ({ cookie: { session }, set }) => {
+    const sessionId = session?.value;
+    
+    if (!sessionId) {
+      return { user: null, companyId: null, sessionId: null };
     }
 
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-    await db.update(sessions)
-      .set({ lastActiveAt: now, expiresAt: expiresAt })
-      .where(eq(sessions.id, sessionId));
+    const [dbSession] = await db
+      .select({
+        userId: sessions.userId,
+        companyId: sessions.companyId,
+        isValid: sessions.isValid,
+        expiresAt: sessions.expiresAt,
+      })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1);
+
+    if (!dbSession || !dbSession.isValid || new Date() > dbSession.expiresAt) {
+      return { user: null, companyId: null, sessionId: null };
+    }
 
     return {
       user: dbSession.userId,
@@ -32,9 +33,9 @@ export const authMiddleware = new Elysia({ name: "auth-data" })
     };
   });
 
-export const requireAuth = ({ user, set }: { user?: string | null; set: { status?: number | string } }) => {
+export const requireAuth = ({ user, set }: { user: string | null; set: any }) => {
   if (!user) {
     set.status = 401;
-    return { error: "Not authenticated" };
+    return { error: "Unauthorized" };
   }
 };

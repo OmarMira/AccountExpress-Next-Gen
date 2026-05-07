@@ -12,6 +12,7 @@ export interface RuleFormData {
   autoAdd: boolean;
   priority: number;
   isActive: boolean;
+  applyToPending?: boolean;
 }
 
 interface RuleFormModalProps {
@@ -33,7 +34,8 @@ const defaultFormData: RuleFormData = {
   glAccountId: '',
   autoAdd: false,
   priority: 10,
-  isActive: true
+  isActive: true,
+  applyToPending: true
 };
 
 export function RuleFormModal({
@@ -174,6 +176,39 @@ export function RuleFormModal({
               <option value="15">15 — Prioridad Baja</option>
               <option value="20">20 — Prioridad Muy Baja</option>
             </select>
+          </div>
+
+          {/* Opciones Adicionales */}
+          <div className="flex items-center gap-6 pt-1">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <div className="relative flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-white/20 bg-[#0a1628] transition-all checked:border-emerald-500 checked:bg-emerald-500/20"
+                  checked={formData.autoAdd}
+                  onChange={e => setFormData({ ...formData, autoAdd: e.target.checked })}
+                />
+                <div className="pointer-events-none absolute text-emerald-400 opacity-0 peer-checked:opacity-100">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-gray-400 group-hover:text-gray-200 transition-colors uppercase">Auto-Aprobar</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <div className="relative flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-white/20 bg-[#0a1628] transition-all checked:border-[#0071c5] checked:bg-[#0071c5]/20"
+                  checked={formData.applyToPending}
+                  onChange={e => setFormData({ ...formData, applyToPending: e.target.checked })}
+                />
+                <div className="pointer-events-none absolute text-[#0071c5] opacity-0 peer-checked:opacity-100">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </div>
+              </div>
+              <span className="text-xs font-semibold text-gray-400 group-hover:text-gray-200 transition-colors uppercase">Aplicar a pendientes</span>
+            </label>
           </div>
 
           {/* Footer */}

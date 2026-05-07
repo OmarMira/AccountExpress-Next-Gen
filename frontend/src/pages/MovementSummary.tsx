@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { fetchApi } from '../lib/api';
@@ -405,12 +406,12 @@ export function MovementSummary() {
                </div>
 
                {activeTab === 'bankPending' && block.count > 0 && (
-                 <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl flex items-center gap-4">
+                 <Link to="/reconciliation?tab=history" className="p-4 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 rounded-2xl flex items-center gap-4 transition-all cursor-pointer group">
                    <p className="text-xs text-amber-200/70 max-w-[200px] leading-tight">
                      Tienes <strong>{block.count}</strong> transacciones sin reconciliar. Ejecuta el motor para resolverlas.
                    </p>
-                   <ArrowRight className="w-4 h-4 text-amber-500 animate-pulse" />
-                 </div>
+                   <ArrowRight className="w-4 h-4 text-amber-500 group-hover:translate-x-1 transition-transform" />
+                 </Link>
                )}
              </div>
 

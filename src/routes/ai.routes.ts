@@ -8,7 +8,8 @@ import { Elysia, t }      from "elysia";
 import { eq, asc }        from "drizzle-orm";
 import { db, sql, pgClient } from "../db/connection.ts";
 import { aiConversations } from "../db/schema/index.ts";
-import { requireAuth }    from "../middleware/auth.middleware.ts";
+import { requireAuth, authMiddleware } from "../middleware/auth.middleware.ts";
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import {
   checkOllamaStatus,
   detectRAM,
@@ -21,6 +22,11 @@ import {
   callAIChat,
   suggestRuleWithAI,
 } from "../services/ollama.service.ts";
+import { 
+  findDeterministicMapping, 
+  buildRuleSuggestionPrompt 
+} from "../services/bank/rule-generator.service.ts";
+import { or } from "drizzle-orm";
 
 // ─────────────────────────────────────────────────────────────
 // SCHEMA CONTEXT — used for Text-to-SQL generation
@@ -134,7 +140,18 @@ async function executeSafeQuery(
   return rows;
 }
 
+interface ChatBody {
+  companyId: string;
+  message: string;
+}
+
+interface GenerateRuleBody {
+  companyId: string;
+  prompt: string;
+}
+
 export const aiRoutes = new Elysia({ prefix: "/ai" })
+  .use(authMiddleware)
   .guard({ beforeHandle: requireAuth })
 
   // ── GET /ai/status ─────────────────────────────────────────
@@ -148,10 +165,10 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
   // ── POST /ai/chat ───────────────────────────────────────────
   .post(
     "/chat",
-    async ({ body, set, ...ctx }: any) => {
+    async ({ body, set, user, sessionId }) => {
       try {
         const { companyId, message } = body;
-        const user: string = (ctx as any).user ?? '';
+        const activeUser: string = user ?? '';
 
         // 1. Sanitize
         const validation = sanitizeAndValidateMessage(message);
@@ -160,6 +177,30 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
           return { error: validation.reason === "injection_attempt" ? "Consulta no permitida." : "Mensaje inválido." };
         }
         const safeMessage = validation.safe;
+
+        // ── INTERCEPT RULE CREATION ────────────────────────────
+        const ruleMatch = safeMessage.match(/(?:crea[re]?|genera[re]?|nueva)\s+regla\s+(?:para|de|llamada)\s+["']?([^"']+)["']?(?:\s+como\s+["']?([^"']+)["']?)?/i);
+        
+        if (ruleMatch) {
+          const pattern = ruleMatch[1].trim();
+          const accountHint = ruleMatch[2] ? ruleMatch[2].trim() : '';
+          const suggestionResult = await suggestRuleInternal(companyId, `Pattern: ${pattern}\nHint: ${accountHint}`);
+          
+          if (suggestionResult.suggested) {
+            const s = suggestionResult.suggested;
+            const reply = `He preparado una sugerencia de regla:\n\n` +
+              `**Nombre:** ${s.name}\n` +
+              `**Condición:** ${s.conditionValue}\n` +
+              `**Cuenta:** ${s.glAccountName} (${s.glAccountCode})\n\n` +
+              `¿Deseas que la cree ahora?`;
+            
+            await db.insert(aiConversations).values([
+              { companyId, userId: activeUser, role: "user",      content: message },
+              { companyId, userId: activeUser, role: "assistant", content: reply },
+            ]);
+            return { reply, source: "rule_suggestion", suggestedRule: s };
+          }
+        }
 
         // 2. History
         const history = await db
@@ -170,9 +211,12 @@ export const aiRoutes = new Elysia({ prefix: "/ai" })
           .limit(6);
 
         // 3. First Call to AI
-        const messages = [
+        const messages: ChatCompletionMessageParam[] = [
           { role: "system", content: SYSTEM_PROMPT },
-          ...history.map((h) => ({ role: h.role, content: h.content })),
+          ...history.map((h) => ({ 
+            role: (h.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user', 
+            content: h.content 
+          })),
           { role: "user", content: safeMessage },
         ];
 
@@ -204,8 +248,8 @@ No menciones SQL ni JSON. Si no hay datos, dilo amablemente.`;
 
               // Persist dialogue
               await db.insert(aiConversations).values([
-                { companyId, userId: user, role: "user",      content: message },
-                { companyId, userId: user, role: "assistant", content: finalReply },
+                { companyId, userId: activeUser, role: "user",      content: message },
+                { companyId, userId: activeUser, role: "assistant", content: finalReply },
               ]);
 
               return { reply: finalReply, source: "db" };
@@ -218,15 +262,15 @@ No menciones SQL ni JSON. Si no hay datos, dilo amablemente.`;
 
         // 5. Conceptual Reply (No SQL or SQL processing failed)
         await db.insert(aiConversations).values([
-          { companyId, userId: user, role: "user",      content: message },
-          { companyId, userId: user, role: "assistant", content: initialReply },
+          { companyId, userId: activeUser, role: "user",      content: message },
+          { companyId, userId: activeUser, role: "assistant", content: initialReply },
         ]);
 
         return { reply: initialReply };
 
       } catch (err) {
         set.status = 500;
-        return { error: err instanceof Error ? err.message : String(err) };
+        return { error: err instanceof Error ? err.message : "Error desconocido" };
       }
     },
     {
@@ -237,112 +281,19 @@ No menciones SQL ni JSON. Si no hay datos, dilo amablemente.`;
     }
   )
 
-  // ── POST /ai/suggest-rule ───────────────────────────────────
-  .post('/suggest-rule', async ({ body, set }) => {
-    const { companyId, message: userMessage } = body as any;
-    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
-
-    const status = await checkOllamaStatus();
-    if (!status.ollamaRunning) {
-      set.status = 503;
-      return { error: "IA no disponible" };
-    }
-
-    const accounts = await db.execute(sql`
-      SELECT id, code, name, account_type
-      FROM chart_of_accounts
-      WHERE company_id = ${companyId} AND is_active = true
-      ORDER BY code ASC
-      LIMIT 80
-    `) as any[];
-
-    const [priorityRow] = await db.execute(sql`
-      SELECT COALESCE(MAX(priority), 0) AS max_priority
-      FROM bank_rules
-      WHERE company_id = ${companyId}
-    `) as any[];
-    const nextPriority = Number(priorityRow.max_priority) + 1;
-
-    const accountsText = accounts
-      .map((a: any) => `${a.code} | ${a.name} | ${a.account_type} | id:${a.id}`)
-      .join('\n');
-
-    const systemPrompt = `Eres un asistente contable especializado en clasificación bancaria bajo US GAAP y las leyes del estado de Florida.
-
-El usuario va a describir un tipo de transacción bancaria. Tu tarea es sugerir una regla bancaria para clasificarla automáticamente.
-
-IMPORTANTE: Debes responder ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. El JSON debe tener exactamente estos campos:
-
-{
-  "name": "string — nombre descriptivo de la regla (ej. 'Pagos a Laura Quijano')",
-  "conditionType": "contains",
-  "conditionValue": "string — UNA SUBCADENA REAL QUE APAREZCA EN LAS DESCRIPCIONES DE EJEMPLO, en mayúsculas, sin espacios extra. EJEMPLO: 'LAURA QUIJANO' (no el patrón completo)",
-  "transactionDirection": "debit" | "credit" | "any",
-  "glAccountId": "string — EL ID DE UNA CUENTA REAL DEL PLAN DE CUENTAS PROVISTO. NUNCA lo inventes. Si no estás seguro, elige la cuenta más razonable de la lista y explícalo brevemente.",
-  "autoAdd": false,
-  "priority": "number — prioridad sugerida (menor número = más prioridad). Por defecto 10.",
-  "explanation": "string — breve explicación en español de por qué elegiste esa cuenta y esa condición."
-}
-
-REGLAS ESTRICTAS PARA LA CONDICIÓN (conditionValue):
-- Debe ser una SUBCADENA que REALMENTE EXISTA en la descripción de ejemplo proporcionada.
-- Debe estar en MAYÚSCULAS.
-- No debe ser la frase completa de la transacción (ej. no uses 'ZELLE TO LAURA CONF#'), sino el elemento distintivo (ej. 'LAURA QUIJANO' o 'OMAR MIRA').
-- Si el ejemplo contiene un nombre de persona o entidad, extráelo y úsalo como condición.
-- Si no hay un nombre claro, extrae la palabra más relevante después de "to" o "from".
-
-REGLAS PARA LA CUENTA CONTABLE (glAccountId):
-- Elige una cuenta de la lista provista que se ajuste al tipo de transacción.
-- Para pagos a personas naturales (débito), prefiere cuentas como: "Contractor Services", "Owner's Draw", "Office Expenses", "Vehicle Expenses".
-- Para ingresos (crédito), prefiere cuentas como: "Revenue - Services", "Rental Income", "Sales".
-- Si la transacción es un pago de tarjeta de crédito (ej. "AMERICAN EXPRESS"), sugiere una cuenta de gasto financiero o "Credit Card Payments".
-- Siempre devuelve un glAccountId (nunca cadena vacía). Si realmente no hay coincidencia, devuelve la cuenta de "Suspense" más genérica que encuentres.
-
-PLAN DE CUENTAS DISPONIBLE:
-${accountsText}
-
-Asegúrate de que el JSON sea válido y que todos los campos estén presentes.`;
-
-    try {
-      const rawText = await suggestRuleWithAI(systemPrompt, userMessage);
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Invalid JSON");
-
-      const parsed = JSON.parse(jsonMatch[0]);
-      const suggested = {
-        name: String(parsed.name ?? '').trim(),
-        conditionType: String(parsed.conditionType ?? parsed.condition_type ?? 'contains').trim(),
-        conditionValue: String(parsed.conditionValue ?? parsed.condition_value ?? '').trim().toUpperCase(),
-        transactionDirection: String(parsed.transactionDirection ?? parsed.transaction_direction ?? 'any').trim(),
-        glAccountId: String(parsed.glAccountId ?? parsed.gl_account_id ?? '').trim(),
-        autoAdd: false,
-        priority: Number(parsed.priority ?? 10),
-        explanation: String(parsed.explanation ?? '').trim(),
-      };
-
-      // Validar si la cuenta existe en el catálogo (sin corregir, solo buscar info extra)
-      const validAccount = accounts.find((a: any) => a.id === suggested.glAccountId || a.code === suggested.glAccountId);
-      
-      return {
-        suggested: {
-          ...suggested,
-          glAccountId: validAccount?.id ?? suggested.glAccountId,
-          glAccountCode: validAccount?.code ?? '',
-          glAccountName: validAccount?.name ?? '',
-          priority: nextPriority, // Mantenemos la prioridad secuencial para orden en DB
-        }
-      };
-    } catch (err) {
+  .post("/suggest-rule", async ({ body, set }) => {
+    const { companyId, message: userMessage } = body;
+    const result = await suggestRuleInternal(companyId, userMessage);
+    if (result.error) {
       set.status = 422;
-      return { error: 'No se pudo generar la sugerencia.', details: String(err) };
+      return result;
     }
+    return result;
   }, {
     body: t.Object({ message: t.String(), companyId: t.String() })
   })
-
-  // ── POST /ai/clear-history ──────────────────────────────────
   .post('/clear-history', async ({ body, set }) => {
-    const { companyId } = body as any;
+    const { companyId } = body;
     if (!companyId) { set.status = 400; return { error: 'companyId requerido.' }; }
     await db.delete(aiConversations).where(eq(aiConversations.companyId, companyId));
     return { cleared: true };
@@ -350,7 +301,6 @@ Asegúrate de que el JSON sea válido y que todos los campos estén presentes.`;
     body: t.Object({ companyId: t.String() })
   })
 
-  // ── POST /ai/install ────────────────────────────────────────
   .post("/install", () => {
     (async () => {
       try {
@@ -362,3 +312,84 @@ Asegúrate de que el JSON sea válido y que todos los campos estén presentes.`;
     })();
     return { started: true };
   });
+
+// ── INTERNAL HELPER FOR RULE SUGGESTION ──────────────────────
+async function suggestRuleInternal(companyId: string, userMessage: string) {
+  try {
+    const deterministicCode = await findDeterministicMapping(companyId, userMessage);
+    
+    const accounts = await db.execute(sql`
+      SELECT id, code, name, account_type
+      FROM chart_of_accounts
+      WHERE company_id = ${companyId} AND is_active = true
+      ORDER BY code ASC
+      LIMIT 150
+    `) as unknown as Array<{ id: string, code: string, name: string, account_type: string }>;
+
+    const [priorityRow] = await db.execute(sql`
+      SELECT COALESCE(MAX(priority), 0) AS max_priority
+      FROM bank_rules
+      WHERE company_id = ${companyId}
+    `) as unknown as Array<{ max_priority: string | number }>;
+    const nextPriority = Number(priorityRow.max_priority) + 1;
+
+    const accountsText = accounts
+      .map((a) => `${a.code} | ${a.name} | ${a.account_type} | id:${a.id}`)
+      .join('\n');
+
+    let deterministicAccount = null;
+    if (deterministicCode) {
+      deterministicAccount = accounts.find(a => a.code === deterministicCode);
+    }
+
+    const systemPrompt = `Eres un asistente contable especializado en clasificación bancaria bajo US GAAP.
+Tu tarea es sugerir una regla bancaria para clasificar una transacción.
+
+${deterministicAccount ? `NOTA: Para este tipo de transacción, el sistema ya tiene mapeada la cuenta: ${deterministicAccount.code} - ${deterministicAccount.name}. ÚSALA si es coherente.` : ''}
+
+IMPORTANTE: Responde ÚNICAMENTE con JSON.
+{
+  "name": "string",
+  "conditionType": "contains",
+  "conditionValue": "string (MAYÚSCULAS)",
+  "transactionDirection": "debit" | "credit" | "any",
+  "glAccountId": "string (ID REAL DE LA LISTA)",
+  "autoAdd": false,
+  "priority": number,
+  "explanation": "string (español)"
+}
+
+PLAN DE CUENTAS:
+${accountsText}`;
+
+    const rawText = await suggestRuleWithAI(systemPrompt, userMessage);
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("Invalid JSON from AI");
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const suggested = {
+      name: String(parsed.name ?? '').trim(),
+      conditionType: String(parsed.conditionType ?? 'contains').trim(),
+      conditionValue: String(parsed.conditionValue ?? '').trim().toUpperCase(),
+      transactionDirection: String(parsed.transactionDirection ?? 'any').trim(),
+      glAccountId: String(parsed.glAccountId ?? '').trim(),
+      autoAdd: false,
+      priority: nextPriority,
+      explanation: String(parsed.explanation ?? '').trim(),
+    };
+
+    const validAccount = accounts.find((a) => a.id === suggested.glAccountId || a.code === suggested.glAccountId);
+    
+    return {
+      suggested: {
+        ...suggested,
+        glAccountId: validAccount?.id ?? suggested.glAccountId,
+        glAccountCode: validAccount?.code ?? '',
+        glAccountName: validAccount?.name ?? '',
+      }
+    };
+  } catch (err) {
+    console.error("[AI_SUGGEST] Error:", err);
+    return { error: 'No se pudo generar la sugerencia.', details: String(err) };
+  }
+}

@@ -90,9 +90,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
             rejectedReasons: result.rejectedReasons
           }
         };
-      } catch (error: any) {
+      } catch (err) {
         set.status = 422;
-        return { success: false, error: error.message };
+        const message = err instanceof Error ? err.message : "Error desconocido";
+        return { success: false, error: message };
       }
     },
     {
@@ -150,9 +151,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
             bankAccountId: importResult.bankAccountId
           }
         };
-      } catch (error: any) {
+      } catch (err) {
         set.status = 400;
-        return { success: false, error: error.message };
+        const message = err instanceof Error ? err.message : "Error desconocido";
+        return { success: false, error: message };
       }
     },
     {
@@ -329,7 +331,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
           return { error: "Transacción no encontrada" };
         }
 
-        const updateData: any = {};
+        const updateData: Partial<typeof bankTransactions.$inferSelect> = {};
         if (body.glAccountId !== undefined) {
           updateData.glAccountId = body.glAccountId === "" ? null : body.glAccountId;
           updateData.status = "assigned";
@@ -340,7 +342,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         }
         if (body.transactionDate !== undefined) updateData.transactionDate = body.transactionDate;
         if (body.description !== undefined) updateData.description = body.description;
-        if (body.amount !== undefined) updateData.amount = body.amount;
+        if (body.amount !== undefined) updateData.amount = String(body.amount);
 
         await db.update(bankTransactions)
           .set(updateData)
@@ -379,7 +381,13 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         const ip  = request.headers.get("x-forwarded-for") ?? "unknown";
 
         const l1 = await runAutoMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip, body.limit);
-        const l2 = await runGroupMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip, body.limit);
+        
+        let l2 = { matched: 0, pending: 0, crossed: 0, errors: [] as { transactionId: string, reason: string }[] };
+        const hasMissingGlError = l1.errors.some(e => e.reason.includes("Cuenta Contable (GL) asignada"));
+        
+        if (!hasMissingGlError) {
+          l2 = await runGroupMatch(companyId, body.bankAccountId, body.periodId, uid, sid, ip, body.limit);
+        }
 
         await createAuditEntry({
           companyId,
@@ -400,7 +408,7 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         return {
           success: true,
           matched: l1.matched + l2.matched,
-          pending: l2.pending,
+          pending: hasMissingGlError ? l1.pending : l2.pending,
           errors:  [...l1.errors, ...l2.errors],
         };
       },
@@ -432,9 +440,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
             ipAddress: request.headers.get("x-forwarded-for") ?? "unknown"
           });
           return { success: true };
-        } catch (err: any) {
+        } catch (err) {
           set.status = 400;
-          return { error: err.message };
+          const message = err instanceof Error ? err.message : "Error desconocido";
+          return { error: message };
         }
       },
       {
@@ -464,46 +473,16 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
             ipAddress: request.headers.get("x-forwarded-for") ?? "unknown"
           });
           return { success: true };
-        } catch (err: any) {
+        } catch (err) {
           set.status = 400;
-          return { error: err.message };
+          const message = err instanceof Error ? err.message : "Error desconocido";
+          return { error: message };
         }
       },
       {
         body: t.Object({
           transactionId: t.String(),
           lineIds:       t.Array(t.String())
-        }, { additionalProperties: false })
-      }
-    )
-    // ─────────────────────────────────────────────────────────
-    // 9. UNRECONCILE (bank:approve)
-    // ─────────────────────────────────────────────────────────
-    .post(
-      "/unreconcile",
-      async ({ body, companyId, user, sessionId, request, set }) => {
-        if (!companyId) {
-          set.status = 403;
-          return { error: "No active company in session." };
-        }
-
-        try {
-          await unreconcileTransaction({
-            companyId,
-            transactionId: body.transactionId,
-            userId: user!,
-            sessionId: sessionId!,
-            ipAddress: request.headers.get("x-forwarded-for") ?? "unknown"
-          });
-          return { success: true };
-        } catch (err: any) {
-          set.status = 400;
-          return { error: err.message };
-        }
-      },
-      {
-        body: t.Object({
-          transactionId: t.String()
         }, { additionalProperties: false })
       }
     )
@@ -521,9 +500,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         try {
           const summary = await getBankAccountBalanceSummary(companyId, params.id);
           return summary;
-        } catch (err: any) {
+        } catch (err) {
           set.status = 400;
-          return { error: err.message };
+          const message = err instanceof Error ? err.message : "Error desconocido";
+          return { error: message };
         }
       },
       {
@@ -549,9 +529,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         try {
           const report = await getReconciliationReport(companyId, params.id, query.periodId);
           return report;
-        } catch (err: any) {
+        } catch (err) {
           set.status = 400;
-          return { error: err.message };
+          const message = err instanceof Error ? err.message : "Error desconocido";
+          return { error: message };
         }
       },
       {
@@ -573,9 +554,10 @@ export const bankRoutes = new Elysia({ prefix: "/bank" })
         try {
           const report = await getOpenItemsReport(companyId);
           return report;
-        } catch (err: any) {
+        } catch (err) {
           set.status = 400;
-          return { error: err.message };
+          const message = err instanceof Error ? err.message : "Error desconocido";
+          return { error: message };
         }
       }
     )

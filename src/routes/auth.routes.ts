@@ -172,7 +172,6 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
 
       if (!session) { set.status = 401; return { error: "Invalid session" }; }
       
-      // Permitir re-selección o cambio fluido desde la misma interfaz
       const isSwitch = !!session.companyId;
 
       const [role] = await db
@@ -196,7 +195,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       }
 
       await switchSessionCompany(sessionId, body.companyId);
-
+      
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({
         companyId: body.companyId, userId: user, sessionId,
@@ -238,6 +237,7 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
       }
 
       await switchSessionCompany(sessionId, body.companyId);
+      await db.execute(sql`SET app.current_company_id = ${body.companyId}`);
 
       const ip = request.headers.get("x-forwarded-for") ?? "unknown";
       await createAuditEntry({

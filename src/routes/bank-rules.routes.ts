@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { BankRulesService } from "../services/bank/bank-rules.service";
 import { analyzePendingTransactions } from "../services/bank/rule-generator.service.ts";
+import { applyRuleToTransactions } from "../services/bank/auto-match.service.ts";
 import { authMiddleware, requireAuth } from "../middleware/auth.middleware";
 import { requirePermission } from "../middleware/rbac.middleware.ts";
 import { db } from "../db/connection.ts";
@@ -125,4 +126,24 @@ export const bankRulesRouter = new Elysia({ prefix: "/bank-rules" })
       minGroupSize: t.Optional(t.Number()),
       limit: t.Optional(t.Number()),
     }))
+  })
+
+  .post("/:id/apply-to-pending", async ({ params: { id }, companyId, user, sessionId, request, set }) => {
+    if (!companyId) { set.status = 403; return { error: 'No active company.' }; }
+    
+    try {
+      const result = await applyRuleToTransactions(
+        companyId, 
+        id, 
+        user!, 
+        sessionId!, 
+        request.headers.get("x-forwarded-for") ?? "unknown"
+      );
+      return { success: true, ...result };
+    } catch (err: any) {
+      set.status = 500;
+      return { success: false, error: err.message };
+    }
+  }, {
+    params: t.Object({ id: t.String() })
   });
